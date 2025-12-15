@@ -154,7 +154,7 @@ Goal: Establish database schema, shared types, error handling, and WebSocket rou
 
 ### WebSocket Infrastructure
 
-- [ ] T025_A [P] Create backend admin CLI at `src/backend/bin/admin_cli.rs` with subcommands:
+- [X] T025_A [P] Create backend admin CLI at `src/backend/bin/admin_cli.rs` with subcommands:
   - `users list [--deleted]` - list all users, optionally show deleted accounts
   - `users delete <username>` - soft-delete a user (marks deleted_at, triggers message anonymization)
   - `messages inspect <conversation_id> [--limit=50]` - inspect messages in conversation (diagnostics)
@@ -164,11 +164,11 @@ Goal: Establish database schema, shared types, error handling, and WebSocket rou
   - Acceptance: `cargo run --bin admin_cli -- users list` returns JSON array of users
 - [X] T025 [P] Create WebSocket handler module at `src/backend/handlers/mod.rs` with connection handler skeleton
 - [X] T026 [P] Implement WebSocket handshake validation at `src/backend/handlers/handshake.rs` (JWT token extraction, validation)
-- [ ] T027 [P] Create WebSocket frame parser at `src/backend/handlers/parser.rs` (JSON parsing, error handling)
+- [X] T027 [P] Create WebSocket frame parser at `src/backend/handlers/parser.rs` (JSON parsing, error handling)
 - [X] T028 [P] Create WebSocket message dispatcher at `src/backend/handlers/dispatcher.rs` (route messages by type)
-- [ ] T029 Create warp router setup at `src/backend/server.rs` with routes: /health, /socket (WebSocket upgrade), /auth/*, /conversations/*
+- [X] T029 Create warp router setup at `src/backend/server.rs` with routes: /health, /socket (WebSocket upgrade), /auth/*, /conversations/*
 - [X] T030 [P] Create heartbeat (ping-pong) handler at `src/backend/handlers/heartbeat.rs` (25s interval, 5s timeout)
-- [ ] T032 Create test file at `tests/integration/websocket_handshake_test.rs` with JWT validation tests
+- [X] T032 Create test file at `tests/integration/websocket_handshake_test.rs` with JWT validation tests
 
 ---
 
