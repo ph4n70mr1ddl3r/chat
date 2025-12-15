@@ -8,7 +8,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tokio_tungstenite::tungstenite::Message as WsMessage;
+use warp::ws::Message as WsMessage;
 
 /// WebSocket connection handle
 pub type ConnectionId = String;
@@ -170,7 +170,7 @@ impl ErrorResponse {
             }
         });
 
-        WsMessage::Text(error.to_string())
+        WsMessage::text(error.to_string())
     }
 
     pub fn recipient_not_found(recipient_id: &str) -> WsMessage {
@@ -187,7 +187,7 @@ impl ErrorResponse {
             }
         });
 
-        WsMessage::Text(error.to_string())
+        WsMessage::text(error.to_string())
     }
 
     pub fn unauthorized(reason: &str) -> WsMessage {
@@ -201,7 +201,7 @@ impl ErrorResponse {
             }
         });
 
-        WsMessage::Text(error.to_string())
+        WsMessage::text(error.to_string())
     }
 
     pub fn invalid_json() -> WsMessage {
@@ -215,7 +215,7 @@ impl ErrorResponse {
             }
         });
 
-        WsMessage::Text(error.to_string())
+        WsMessage::text(error.to_string())
     }
 
     pub fn server_error(reason: &str) -> WsMessage {
@@ -229,7 +229,7 @@ impl ErrorResponse {
             }
         });
 
-        WsMessage::Text(error.to_string())
+        WsMessage::text(error.to_string())
     }
 }
 
@@ -355,7 +355,8 @@ mod tests {
     #[test]
     fn test_error_response_invalid_message_length() {
         let response = ErrorResponse::invalid_message_length(5001, 5000);
-        if let WsMessage::Text(text) = response {
+        if response.is_text() {
+            let text = response.to_str().unwrap();
             assert!(text.contains("INVALID_MESSAGE_LENGTH"));
             assert!(text.contains("5001"));
             assert!(text.contains("5000"));
@@ -367,7 +368,8 @@ mod tests {
     #[test]
     fn test_error_response_unauthorized() {
         let response = ErrorResponse::unauthorized("Token expired");
-        if let WsMessage::Text(text) = response {
+        if response.is_text() {
+            let text = response.to_str().unwrap();
             assert!(text.contains("UNAUTHORIZED"));
             assert!(text.contains("Token expired"));
         } else {

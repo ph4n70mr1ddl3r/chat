@@ -5,7 +5,7 @@
 use crate::db::queries;
 use crate::handlers::auth::ErrorResponse;
 use crate::services::AuthService;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tracing::warn;
 use warp::{reply, Rejection, Reply};
@@ -18,6 +18,26 @@ pub struct UserProfileResponse {
     pub created_at: i64,
     pub is_online: bool,
     pub last_seen_at: Option<i64>,
+}
+
+/// User search result item
+#[derive(Debug, Serialize)]
+pub struct UserSearchResult {
+    pub user_id: String,
+    pub username: String,
+    pub is_online: bool,
+}
+
+/// User search query parameters
+#[derive(Debug, Deserialize)]
+pub struct SearchQuery {
+    pub q: String,
+    #[serde(default = "default_limit")]
+    pub limit: u32,
+}
+
+fn default_limit() -> u32 {
+    10
 }
 
 /// Handle GET /user/me
@@ -87,6 +107,61 @@ pub async fn get_current_user(
             is_online: user.is_online,
             last_seen_at: user.last_seen_at,
         }),
+        warp::http::StatusCode::OK,
+    ))
+}
+
+/// Handle GET /users/search?q=<query>&limit=<limit>
+///
+/// Searches for users by username prefix (case-insensitive)
+/// Excludes current user and deleted users
+/// Returns up to `limit` results (max 50, default 10)
+pub async fn search_users(
+    user_id: String,
+    query: SearchQuery,
+    pool: SqlitePool,
+) -> Result<impl Reply, Rejection> {
+    // Validate query length (minimum 1 character)
+    if query.q.is_empty() {
+        return Ok(reply::with_status(
+            reply::json(&ErrorResponse {
+                error: "INVALID_QUERY".to_string(),
+                message: "Search query must be at least 1 character".to_string(),
+            }),
+            warp::http::StatusCode::BAD_REQUEST,
+        ));
+    }
+
+    // Cap limit at 50
+    let limit = query.limit.min(50);
+
+    // Search users (excluding self)
+    let users = match queries::search_users_excluding_self(&pool, &query.q, &user_id, limit).await {
+        Ok(users) => users,
+        Err(e) => {
+            warn!("Failed to search users: {}", e);
+            return Ok(reply::with_status(
+                reply::json(&ErrorResponse {
+                    error: "DATABASE_ERROR".to_string(),
+                    message: "Failed to search users".to_string(),
+                }),
+                warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+            ));
+        }
+    };
+
+    // Map to search results (exclude sensitive data)
+    let results: Vec<UserSearchResult> = users
+        .into_iter()
+        .map(|u| UserSearchResult {
+            user_id: u.id,
+            username: u.username,
+            is_online: u.is_online,
+        })
+        .collect();
+
+    Ok(reply::with_status(
+        reply::json(&results),
         warp::http::StatusCode::OK,
     ))
 }

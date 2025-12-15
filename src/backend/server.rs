@@ -8,7 +8,7 @@
 //! - POST /auth/login - user authentication
 //! - GET /conversations/* - conversation management (stubs for Phase 3+)
 
-use futures::StreamExt;
+use futures::{SinkExt, StreamExt};
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use tracing::{info, warn};
@@ -19,7 +19,9 @@ use warp::http::StatusCode;
 use warp::reject;
 use warp::{Filter, Rejection, Reply};
 
+use crate::handlers::dispatcher::{DispatchResult, MessageDispatcher};
 use crate::handlers::handshake::HandshakeValidator;
+use crate::handlers::messages::MessageHandler;
 use crate::services::auth_service::TokenClaims;
 
 use crate::handlers::auth;
@@ -183,24 +185,73 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
     let user_id = claims.sub.clone();
     info!("WebSocket connection established for user: {}", user_id);
 
+    // Lookup username from database
+    let username = match crate::db::queries::find_user_by_id(&state.pool, &user_id).await {
+        Ok(Some(user)) => user.username,
+        _ => "unknown".to_string(),
+    };
+
     // Register connection with connection manager
-    let connection = websocket::ClientConnection::new(user_id.clone(), "".to_string()); // username unknown
-    let connection_id = state.connection_manager.register(connection).await;
+    let connection = websocket::ClientConnection::new(user_id.clone(), username);
+    let connection_id = state.connection_manager.register(connection.clone()).await;
     info!(
         "Registered connection {} for user {}",
         connection_id, user_id
     );
 
-    let mut socket = socket;
+    // Create message handler
+    let message_handler = MessageHandler::new(state.pool.clone(), state.connection_manager.clone());
 
-    // Wait for messages
-    while let Some(result) = socket.next().await {
+    let (mut ws_tx, mut ws_rx) = socket.split();
+
+    // Process incoming messages
+    while let Some(result) = ws_rx.next().await {
         match result {
             Ok(msg) => {
                 info!(
                     "Received WebSocket message from user {}: {:?}",
                     user_id, msg
                 );
+
+                // Parse and dispatch message
+                let dispatch_result = MessageDispatcher::parse_message(&msg);
+
+                match dispatch_result {
+                    DispatchResult::RequiresAck { envelope, .. } => {
+                        // Handle text message
+                        match message_handler.handle_message(&envelope, &connection).await {
+                            Ok(responses) => {
+                                // Send all responses
+                                for response in responses {
+                                    if let Err(e) = ws_tx.send(response).await {
+                                        warn!("Failed to send response: {}", e);
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                warn!("Message handling error: {}", e);
+                                let error_response = websocket::ErrorResponse::server_error(&e);
+                                if let Err(e) = ws_tx.send(error_response).await {
+                                    warn!("Failed to send error response: {}", e);
+                                }
+                            }
+                        }
+                    }
+                    DispatchResult::Success { msg_type, .. } => {
+                        // Heartbeat, typing, etc. - just log
+                        info!("Handled {} message from {}", msg_type, user_id);
+                    }
+                    DispatchResult::Error { error_msg } => {
+                        // Send error response
+                        if let Err(e) = ws_tx.send(error_msg).await {
+                            warn!("Failed to send error response: {}", e);
+                        }
+                    }
+                    DispatchResult::Close { code, reason } => {
+                        info!("Client requested close: {} - {}", code, reason);
+                        break;
+                    }
+                }
             }
             Err(e) => {
                 warn!("WebSocket error for user {}: {}", user_id, e);

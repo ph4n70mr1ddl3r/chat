@@ -2,32 +2,16 @@
 
 pub mod auth;
 pub mod auth_with_rate_limit;
+pub mod conversation;
 pub mod dispatcher;
 pub mod handshake;
 pub mod heartbeat;
+pub mod messages;
 pub mod parser;
 pub mod refresh;
 pub mod router;
 pub mod user;
 pub mod websocket;
-
-use crate::models::Message;
-
-/// WebSocket message handler
-pub struct MessageHandler;
-
-impl MessageHandler {
-    pub fn new() -> Self {
-        Self
-    }
-
-    /// Handle incoming text message
-    pub async fn handle_message(&self, msg: Message) -> Result<Message, String> {
-        // TODO: Validate message, store in DB, route to recipient
-        msg.validate()?;
-        Ok(msg)
-    }
-}
 
 /// HTTP request/response types
 #[derive(Debug, serde::Deserialize)]

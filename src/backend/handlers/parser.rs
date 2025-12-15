@@ -6,7 +6,7 @@
 use crate::handlers::websocket::{ErrorResponse, MessageValidator};
 use chat_shared::protocol::MessageEnvelope;
 use serde_json::json;
-use tokio_tungstenite::tungstenite::Message as WsMessage;
+use warp::ws::Message as WsMessage;
 
 /// Result of parsing a WebSocket frame
 #[derive(Debug, Clone)]
@@ -44,28 +44,41 @@ pub struct FrameParser;
 impl FrameParser {
     /// Parse incoming WebSocket frame
     pub fn parse(msg: &WsMessage) -> ParseResult {
-        match msg {
-            WsMessage::Text(text) => Self::parse_text_frame(text),
-            WsMessage::Binary(data) => Self::parse_binary_frame(data),
-            WsMessage::Ping(data) => ParseResult::Protocol {
-                frame_type: FrameType::Ping,
-                data: Some(data.clone()),
-            },
-            WsMessage::Pong(data) => ParseResult::Protocol {
-                frame_type: FrameType::Pong,
-                data: Some(data.clone()),
-            },
-            WsMessage::Close(frame) => {
-                let (code, reason) = frame
-                    .as_ref()
-                    .map(|f| (f.code.into(), f.reason.to_string()))
-                    .unwrap_or((1000, "Normal closure".to_string()));
-
-                ParseResult::Close { code, reason }
+        if msg.is_text() {
+            if let Ok(text) = msg.to_str() {
+                return Self::parse_text_frame(text);
             }
-            WsMessage::Frame(_) => ParseResult::Error {
-                error_msg: ErrorResponse::server_error("Raw frames not supported"),
-            },
+        }
+        
+        if msg.is_binary() {
+            return ParseResult::Error {
+                error_msg: ErrorResponse::server_error("Binary frames not supported"),
+            };
+        }
+        
+        if msg.is_ping() {
+            return ParseResult::Protocol {
+                frame_type: FrameType::Ping,
+                data: None,
+            };
+        }
+        
+        if msg.is_pong() {
+            return ParseResult::Protocol {
+                frame_type: FrameType::Pong,
+                data: None,
+            };
+        }
+        
+        if msg.is_close() {
+            return ParseResult::Close {
+                code: 1000,
+                reason: "Normal closure".to_string(),
+            };
+        }
+        
+        ParseResult::Error {
+            error_msg: ErrorResponse::server_error("Unsupported frame type"),
         }
     }
 
@@ -91,13 +104,6 @@ impl FrameParser {
         ParseResult::Parsed {
             envelope,
             frame_type: FrameType::Text,
-        }
-    }
-
-    /// Parse binary frame (not supported)
-    fn parse_binary_frame(_data: &[u8]) -> ParseResult {
-        ParseResult::Error {
-            error_msg: ErrorResponse::server_error("Binary frames not supported"),
         }
     }
 
@@ -172,7 +178,7 @@ impl FrameParser {
             }
         });
 
-        WsMessage::Text(error.to_string())
+        WsMessage::text(error.to_string())
     }
 }
 
@@ -222,7 +228,7 @@ mod tests {
 
     #[test]
     fn test_parse_binary_frame() {
-        let msg = WsMessage::Binary(vec![1, 2, 3]);
+        let msg = WsMessage::binary(vec![1, 2, 3]);
         let result = FrameParser::parse(&msg);
 
         match result {
@@ -233,7 +239,7 @@ mod tests {
 
     #[test]
     fn test_parse_ping() {
-        let msg = WsMessage::Ping(vec![1, 2, 3]);
+        let msg = WsMessage::ping(vec![1, 2, 3]);
         let result = FrameParser::parse(&msg);
 
         match result {
@@ -247,7 +253,7 @@ mod tests {
 
     #[test]
     fn test_parse_pong() {
-        let msg = WsMessage::Pong(vec![4, 5, 6]);
+        let msg = WsMessage::pong(vec![4, 5, 6]);
         let result = FrameParser::parse(&msg);
 
         match result {
@@ -261,7 +267,7 @@ mod tests {
 
     #[test]
     fn test_parse_close() {
-        let msg = WsMessage::Close(None);
+        let msg = WsMessage::close(None);
         let result = FrameParser::parse(&msg);
 
         match result {

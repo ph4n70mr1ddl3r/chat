@@ -6,7 +6,7 @@
 use crate::handlers::websocket::{ErrorResponse, MessageValidator};
 use chat_shared::protocol::MessageEnvelope;
 use serde_json::json;
-use tokio_tungstenite::tungstenite::Message as WsMessage;
+use warp::ws::Message as WsMessage;
 
 /// Message dispatcher routes incoming WebSocket messages to appropriate handlers
 pub struct MessageDispatcher;
@@ -23,6 +23,7 @@ pub enum DispatchResult {
     RequiresAck {
         message_id: String,
         msg_type: String,
+        envelope: MessageEnvelope,
     },
     /// Error occurred during parsing or dispatching
     Error { error_msg: WsMessage },
@@ -34,46 +35,51 @@ impl MessageDispatcher {
     /// Parse and validate incoming WebSocket message frame
     pub fn parse_message(msg: &WsMessage) -> DispatchResult {
         // Only process text messages
-        match msg {
-            WsMessage::Text(text) => Self::parse_text_frame(text),
-            WsMessage::Binary(_) => DispatchResult::Error {
-                error_msg: ErrorResponse::server_error("Binary frames not supported"),
-            },
-            WsMessage::Close(frame) => {
-                let (code, reason) = frame
-                    .as_ref()
-                    .map(|f| (f.code.into(), f.reason.to_string()))
-                    .unwrap_or((1000, "Normal closure".to_string()));
-
-                DispatchResult::Close { code, reason }
+        if msg.is_text() {
+            if let Ok(text) = msg.to_str() {
+                return Self::parse_text_frame(text);
             }
-            WsMessage::Ping(data) => {
-                // Pings are handled at protocol level, but we acknowledge explicitly
-                DispatchResult::Success {
+        }
+        
+        if msg.is_binary() {
+            return DispatchResult::Error {
+                error_msg: WsMessage::text("Binary frames not supported"),
+            };
+        }
+        
+        if msg.is_close() {
+            return DispatchResult::Close {
+                code: 1000,
+                reason: "Normal closure".to_string(),
+            };
+        }
+        
+        if msg.is_ping() {
+            return DispatchResult::Success {
+                msg_type: "ping".to_string(),
+                envelope: MessageEnvelope {
+                    id: uuid::Uuid::new_v4().to_string(),
                     msg_type: "ping".to_string(),
-                    envelope: MessageEnvelope {
-                        id: uuid::Uuid::new_v4().to_string(),
-                        msg_type: "ping".to_string(),
-                        timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                        data: json!({"data": String::from_utf8_lossy(data)}),
-                    },
-                }
-            }
-            WsMessage::Pong(_) => {
-                // Pongs are handled at protocol level
-                DispatchResult::Success {
+                    timestamp: chrono::Utc::now().timestamp_millis() as u64,
+                    data: json!({}),
+                },
+            };
+        }
+        
+        if msg.is_pong() {
+            return DispatchResult::Success {
+                msg_type: "pong".to_string(),
+                envelope: MessageEnvelope {
+                    id: uuid::Uuid::new_v4().to_string(),
                     msg_type: "pong".to_string(),
-                    envelope: MessageEnvelope {
-                        id: uuid::Uuid::new_v4().to_string(),
-                        msg_type: "pong".to_string(),
-                        timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                        data: json!({}),
-                    },
-                }
-            }
-            WsMessage::Frame(_) => DispatchResult::Error {
-                error_msg: ErrorResponse::server_error("Raw frames not supported"),
-            },
+                    timestamp: chrono::Utc::now().timestamp_millis() as u64,
+                    data: json!({}),
+                },
+            };
+        }
+        
+        DispatchResult::Error {
+            error_msg: WsMessage::text("Unsupported message type"),
         }
     }
 
@@ -146,6 +152,7 @@ impl MessageDispatcher {
         DispatchResult::RequiresAck {
             message_id: envelope.id.clone(),
             msg_type: "message".to_string(),
+            envelope: envelope.clone(),
         }
     }
 
@@ -188,13 +195,14 @@ mod tests {
             }
         });
 
-        let msg = WsMessage::Text(json.to_string());
+        let msg = WsMessage::text(json.to_string());
         let result = MessageDispatcher::parse_message(&msg);
 
         match result {
             DispatchResult::RequiresAck {
                 message_id,
                 msg_type,
+                ..
             } => {
                 assert_eq!(message_id, "msg-123");
                 assert_eq!(msg_type, "message");
@@ -215,7 +223,7 @@ mod tests {
             }
         });
 
-        let msg = WsMessage::Text(json.to_string());
+        let msg = WsMessage::text(json.to_string());
         let result = MessageDispatcher::parse_message(&msg);
 
         match result {
@@ -228,7 +236,7 @@ mod tests {
 
     #[test]
     fn test_dispatcher_invalid_json() {
-        let msg = WsMessage::Text("not valid json".to_string());
+        let msg = WsMessage::text("not valid json".to_string());
         let result = MessageDispatcher::parse_message(&msg);
 
         match result {
@@ -250,12 +258,13 @@ mod tests {
             }
         });
 
-        let msg = WsMessage::Text(json.to_string());
+        let msg = WsMessage::text(json.to_string());
         let result = MessageDispatcher::parse_message(&msg);
 
         match result {
             DispatchResult::Error { error_msg } => {
-                if let WsMessage::Text(text) = error_msg {
+                if error_msg.is_text() {
+                    let text = error_msg.to_str().unwrap();
                     assert!(text.contains("INVALID_MESSAGE_LENGTH"));
                 }
             }
@@ -274,7 +283,7 @@ mod tests {
             }
         });
 
-        let msg = WsMessage::Text(json.to_string());
+        let msg = WsMessage::text(json.to_string());
         let result = MessageDispatcher::parse_message(&msg);
 
         match result {
@@ -295,7 +304,7 @@ mod tests {
             }
         });
 
-        let msg = WsMessage::Text(json.to_string());
+        let msg = WsMessage::text(json.to_string());
         let result = MessageDispatcher::parse_message(&msg);
 
         match result {
@@ -313,7 +322,7 @@ mod tests {
             "data": {}
         });
 
-        let msg = WsMessage::Text(json.to_string());
+        let msg = WsMessage::text(json.to_string());
         let result = MessageDispatcher::parse_message(&msg);
 
         match result {

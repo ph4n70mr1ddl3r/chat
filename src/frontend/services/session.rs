@@ -209,6 +209,27 @@ impl SessionManager {
     }
 }
 
+// Global session manager instance (lazy static)
+use std::sync::OnceLock;
+static SESSION_MANAGER: OnceLock<SessionManager> = OnceLock::new();
+
+/// Get the global session manager instance
+pub fn get_session_manager() -> &'static SessionManager {
+    SESSION_MANAGER.get_or_init(|| SessionManager::new())
+}
+
+/// Helper function to get the current token
+pub fn get_token() -> Option<String> {
+    get_session_manager()
+        .get_current_session()
+        .map(|s| s.token)
+}
+
+/// Helper function to check if logged in
+pub fn is_logged_in() -> bool {
+    get_session_manager().is_logged_in()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -187,8 +187,29 @@ pub async fn delete_user(pool: &SqlitePool, user_id: &str) -> Result<(), String>
 
 /// Search users by username prefix (case-insensitive)
 ///
-/// Excludes the current user and deleted users
+/// Excludes deleted users; limit specifies max results
 pub async fn search_users_by_prefix(
+    pool: &SqlitePool,
+    query: &str,
+    limit: u32,
+) -> Result<Vec<User>, String> {
+    let search_pattern = format!("{}%", query);
+
+    sqlx::query_as::<_, User>(
+        "SELECT id, username, password_hash, password_salt, created_at, updated_at, deleted_at, is_online, last_seen_at
+         FROM users
+         WHERE username LIKE ? AND deleted_at IS NULL
+         LIMIT ?"
+    )
+    .bind(search_pattern)
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to search users: {}", e))
+}
+
+/// Search users excluding self
+pub async fn search_users_excluding_self(
     pool: &SqlitePool,
     query: &str,
     current_user_id: &str,
@@ -208,6 +229,254 @@ pub async fn search_users_by_prefix(
     .fetch_all(pool)
     .await
     .map_err(|e| format!("Failed to search users: {}", e))
+}
+
+/// Insert a new conversation
+pub async fn insert_conversation(
+    pool: &SqlitePool,
+    conversation: &Conversation,
+) -> Result<Conversation, String> {
+    sqlx::query(
+        "INSERT INTO conversations (id, user1_id, user2_id, created_at, updated_at, last_message_at, message_count)
+         VALUES (?, ?, ?, ?, ?, ?, ?)"
+    )
+    .bind(&conversation.id)
+    .bind(&conversation.user1_id)
+    .bind(&conversation.user2_id)
+    .bind(conversation.created_at)
+    .bind(conversation.updated_at)
+    .bind(conversation.last_message_at)
+    .bind(conversation.message_count)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Failed to insert conversation: {}", e))?;
+
+    Ok(conversation.clone())
+}
+
+/// Get conversation by user pair (user1_id < user2_id)
+pub async fn get_conversation_by_users(
+    pool: &SqlitePool,
+    user1_id: &str,
+    user2_id: &str,
+) -> Result<Option<Conversation>, String> {
+    sqlx::query_as::<_, Conversation>(
+        "SELECT id, user1_id, user2_id, created_at, updated_at, last_message_at, message_count
+         FROM conversations
+         WHERE user1_id = ? AND user2_id = ?"
+    )
+    .bind(user1_id)
+    .bind(user2_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Failed to get conversation by users: {}", e))
+}
+
+/// Get conversation by ID
+pub async fn get_conversation_by_id(
+    pool: &SqlitePool,
+    conversation_id: &str,
+) -> Result<Option<Conversation>, String> {
+    sqlx::query_as::<_, Conversation>(
+        "SELECT id, user1_id, user2_id, created_at, updated_at, last_message_at, message_count
+         FROM conversations
+         WHERE id = ?"
+    )
+    .bind(conversation_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Failed to get conversation by id: {}", e))
+}
+
+/// Get all conversations for a user (sorted by last_message_at DESC)
+pub async fn get_user_conversations(
+    pool: &SqlitePool,
+    user_id: &str,
+    limit: u32,
+    offset: u32,
+) -> Result<Vec<Conversation>, String> {
+    sqlx::query_as::<_, Conversation>(
+        "SELECT id, user1_id, user2_id, created_at, updated_at, last_message_at, message_count
+         FROM conversations
+         WHERE user1_id = ? OR user2_id = ?
+         ORDER BY updated_at DESC
+         LIMIT ? OFFSET ?"
+    )
+    .bind(user_id)
+    .bind(user_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to get user conversations: {}", e))
+}
+
+// ============================================================================
+// Message Queries
+// ============================================================================
+
+/// Insert a new message
+pub async fn insert_message(pool: &SqlitePool, message: &Message) -> Result<Message, String> {
+    sqlx::query(
+        "INSERT INTO messages (id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, status, is_anonymized)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    )
+    .bind(&message.id)
+    .bind(&message.conversation_id)
+    .bind(&message.sender_id)
+    .bind(&message.recipient_id)
+    .bind(&message.content)
+    .bind(message.created_at)
+    .bind(message.delivered_at)
+    .bind(&message.status)
+    .bind(message.is_anonymized)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Failed to insert message: {}", e))?;
+
+    Ok(message.clone())
+}
+
+/// Find message by ID
+pub async fn find_message_by_id(
+    pool: &SqlitePool,
+    message_id: &str,
+) -> Result<Option<Message>, String> {
+    sqlx::query_as::<_, Message>(
+        "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, status, is_anonymized
+         FROM messages
+         WHERE id = ?"
+    )
+    .bind(message_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Failed to find message by id: {}", e))
+}
+
+/// Get messages by conversation (sorted by created_at DESC)
+pub async fn get_messages_by_conversation(
+    pool: &SqlitePool,
+    conversation_id: &str,
+    limit: u32,
+    offset: u32,
+) -> Result<Vec<Message>, String> {
+    sqlx::query_as::<_, Message>(
+        "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, status, is_anonymized
+         FROM messages
+         WHERE conversation_id = ?
+         ORDER BY created_at DESC
+         LIMIT ? OFFSET ?"
+    )
+    .bind(conversation_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to get messages by conversation: {}", e))
+}
+
+/// Get pending messages for a recipient (status = 'pending' or 'failed')
+pub async fn get_pending_messages(
+    pool: &SqlitePool,
+    recipient_id: &str,
+) -> Result<Vec<Message>, String> {
+    sqlx::query_as::<_, Message>(
+        "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, status, is_anonymized
+         FROM messages
+         WHERE recipient_id = ? AND (status = 'pending' OR status = 'failed')
+         ORDER BY created_at ASC"
+    )
+    .bind(recipient_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to get pending messages: {}", e))
+}
+
+/// Get all pending messages (status = 'pending' or 'failed') for queue initialization
+pub async fn get_all_pending_messages(pool: &SqlitePool) -> Result<Vec<Message>, String> {
+    sqlx::query_as::<_, Message>(
+        "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, status, is_anonymized
+         FROM messages
+         WHERE status = 'pending' OR status = 'failed'
+         ORDER BY created_at ASC"
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to get all pending messages: {}", e))
+}
+
+/// Update message status
+pub async fn update_message_status(
+    pool: &SqlitePool,
+    message_id: &str,
+    status: &str,
+) -> Result<(), String> {
+    let now = chrono::Utc::now().timestamp_millis();
+
+    sqlx::query("UPDATE messages SET status = ? WHERE id = ?")
+        .bind(status)
+        .bind(message_id)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Failed to update message status: {}", e))?;
+
+    Ok(())
+}
+
+/// Mark message as delivered (sets delivered_at and status = 'delivered')
+pub async fn mark_message_delivered(pool: &SqlitePool, message_id: &str) -> Result<(), String> {
+    let now = chrono::Utc::now().timestamp_millis();
+
+    sqlx::query("UPDATE messages SET status = 'delivered', delivered_at = ? WHERE id = ?")
+        .bind(now)
+        .bind(message_id)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Failed to mark message delivered: {}", e))?;
+
+    Ok(())
+}
+
+/// Anonymize messages from a deleted user
+pub async fn anonymize_user_messages(pool: &SqlitePool, user_id: &str) -> Result<(), String> {
+    sqlx::query("UPDATE messages SET is_anonymized = TRUE WHERE sender_id = ?")
+        .bind(user_id)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Failed to anonymize messages: {}", e))?;
+
+    Ok(())
+}
+
+/// Search messages in conversation by content
+pub async fn search_messages_in_conversation(
+    pool: &SqlitePool,
+    conversation_id: &str,
+    search_query: &str,
+    limit: u32,
+) -> Result<Vec<Message>, String> {
+    let search_pattern = format!("%{}%", search_query);
+
+    sqlx::query_as::<_, Message>(
+        "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, status, is_anonymized
+         FROM messages
+         WHERE conversation_id = ? AND content LIKE ?
+         ORDER BY created_at DESC
+         LIMIT ?"
+    )
+    .bind(conversation_id)
+    .bind(search_pattern)
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to search messages: {}", e))
+}
+
+/// Soft delete user helper
+pub async fn soft_delete_user(pool: &SqlitePool, user_id: &str) -> Result<(), String> {
+    delete_user(pool, user_id).await?;
+    anonymize_user_messages(pool, user_id).await?;
+    Ok(())
 }
 
 #[cfg(test)]

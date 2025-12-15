@@ -254,7 +254,7 @@ Goal: Registered users can log in with credentials and receive JWT token for aut
   - Issue new token (1-hour expiry)
   - Return 200 with new token
   - Return 401 if token invalid/expired
-- [ ] T054 [US2] Create token validation middleware at `src/backend/middleware/auth.rs` for protected endpoints
+- [X] T054 [US2] Create token validation middleware at `src/backend/middleware/auth.rs` for protected endpoints
 - [X] T055 [P] [US2] Implement /user/me endpoint at `src/backend/handlers/user.rs` (GET /user/me)
   - Accept Bearer token
   - Return 200 with userId, username, createdAt, isOnline, lastSeenAt
@@ -294,58 +294,58 @@ Goal: Authenticated users can search for and initiate private conversations with
 
 ### User Search Functionality
 
-- [ ] T065 [P] [US3] Create user search endpoint at `src/backend/handlers/user.rs` (GET /users/search?q=alice&limit=10)
+- [X] T065 [P] [US3] Create user search endpoint at `src/backend/handlers/user.rs` (GET /users/search?q=alice&limit=10)
   - Query users by username prefix (case-insensitive)
   - Exclude current user
   - Return up to `limit` results (max 50)
   - Return 200 with results array: userId, username, isOnline
   - Return 400 if query < 1 character
-- [ ] T066 [US3] Create database query at `src/backend/db/queries/users.rs`: search_users_by_prefix
-- [ ] T067 [US3] Create rate limiting for user search (100 searches per minute per user)
+- [X] T066 [US3] Create database query at `src/backend/db/queries/users.rs`: search_users_by_prefix
+- [X] T067 [US3] Create rate limiting for user search (100 searches per minute per user)
 
 ### Conversation Management
 
-- [ ] T068 [P] [US3] Create ConversationService at `src/backend/services/conversation_service.rs` with traits: create_or_get_conversation, get_user_conversations
-- [ ] T069 [P] [US3] Implement one-to-one constraint (prevent duplicate conversations, prevent self-chat) at `src/backend/services/conversation_service.rs`
-- [ ] T070 [US3] Create database queries at `src/backend/db/queries/conversations.rs`: insert_conversation, get_conversation_by_users, get_user_conversations
-- [ ] T071 [P] [US3] Create start conversation endpoint at `src/backend/handlers/conversation.rs` (POST /conversations/start)
+- [X] T068 [P] [US3] Create ConversationService at `src/backend/services/conversation_service.rs` with traits: create_or_get_conversation, get_user_conversations
+- [X] T069 [P] [US3] Implement one-to-one constraint (prevent duplicate conversations, prevent self-chat) at `src/backend/services/conversation_service.rs`
+- [X] T070 [US3] Create database queries at `src/backend/db/queries/conversations.rs`: insert_conversation, get_conversation_by_users, get_user_conversations
+- [X] T071 [P] [US3] Create start conversation endpoint at `src/backend/handlers/conversation.rs` (POST /conversations/start)
   - Accept otherUserId in request body
   - Validate otherUserId exists
   - Prevent self-conversation (otherUserId != current user)
   - Create or get existing conversation
   - Return 200/201 with conversationId, participantId, participantUsername, participantIsOnline
-- [ ] T072 [US3] Create get conversations list endpoint at `src/backend/handlers/conversation.rs` (GET /conversations?limit=20&offset=0)
+- [X] T072 [US3] Create get conversations list endpoint at `src/backend/handlers/conversation.rs` (GET /conversations?limit=20&offset=0)
   - Return 200 with array of conversations
   - Include lastMessage, lastMessageAt, participantInfo, messageCount
   - Support pagination
 
 ### Frontend User Search UI
 
-- [ ] T073 [P] [US3] Create user search screen at `src/frontend/screens/user_search_screen.slint` with:
+- [X] T073 [P] [US3] Create user search screen at `src/frontend/screens/user_search_screen.slint` with:
   - Search input field
   - Results list (clickable)
   - User online status indicator
   - Start Chat button
-- [ ] T074 [US3] Implement search logic at `src/frontend/screens/user_search_screen.rs` (debounced HTTP calls to GET /users/search)
-- [ ] T075 [US3] Connect to conversation creation at `src/frontend/screens/user_search_screen.rs` (call POST /conversations/start on selection)
+- [X] T074 [US3] Implement search logic at `src/frontend/screens/user_search_screen.rs` (debounced HTTP calls to GET /users/search)
+- [X] T075 [US3] Connect to conversation creation at `src/frontend/screens/user_search_screen.rs` (call POST /conversations/start on selection)
 
 ### Frontend Conversation List UI
 
-- [ ] T076 [P] [US3] Create main chat screen at `src/frontend/screens/chat_screen.slint` with:
+- [X] T076 [P] [US3] Create main chat screen at `src/frontend/screens/chat_screen.slint` with:
   - Sidebar: conversation list (user photos/initials, username, last message preview, timestamp)
   - Main area: conversation detail (messages area, input field)
   - Top bar: selected user info, online status
-- [ ] T077 [US3] Implement conversation list loading at `src/frontend/screens/chat_screen.rs` (GET /conversations on startup)
-- [ ] T078 [US3] Create conversation selection handler at `src/frontend/screens/chat_screen.rs` (load selected conversation)
+- [X] T077 [US3] Implement conversation list loading at `src/frontend/screens/chat_screen.rs` (GET /conversations on startup)
+- [X] T078 [US3] Create conversation selection handler at `src/frontend/screens/chat_screen.rs` (load selected conversation)
 
 ### Chat Tests
 
-- [ ] T079 [US3] Create test file at `tests/integration/user_search_test.rs` with scenarios:
+- [X] T079 [US3] Create test file at `tests/integration/user_search_test.rs` with scenarios:
   - Search with valid query → results returned
   - Search with empty query → 400 Bad Request
   - Search excluding self → own user not in results
   - Pagination → limit and offset work
-- [ ] T080 [US3] Create test file at `tests/integration/conversation_test.rs` with scenarios:
+- [X] T080 [US3] Create test file at `tests/integration/conversation_test.rs` with scenarios:
   - Start conversation with valid user → 201 Created
   - Start conversation with self → 400 Bad Request
   - Get existing conversation → returns same conversationId
@@ -362,13 +362,13 @@ Goal: Users can send text messages in real-time and receive messages with persis
 
 ### Message Service & Validation
 
-- [ ] T081 [P] [US4] Create MessageService at `src/backend/services/message_service.rs` with traits: send_message, get_conversation_messages, get_pending_messages
-- [ ] T082 [P] [US4] Implement message validation at `src/backend/services/message_service.rs`:
+- [X] T081 [P] [US4] Create MessageService at `src/backend/services/message_service.rs` with traits: send_message, get_conversation_messages, get_pending_messages
+- [X] T082 [P] [US4] Implement message validation at `src/backend/services/message_service.rs`:
   - Content length 1-5000 characters
   - UTF-8 validity check
   - Recipient exists and not deleted
   - Sender not deleted (prevent sending from deleted account)
-- [ ] T083 [US4] Create message status enum at `src/shared/protocol/mod.rs`: pending, sent, delivered, failed
+- [X] T083 [US4] Create message status enum at `src/shared/protocol/mod.rs`: pending, sent, delivered, failed
   - **State Machine Definition**:
     - `pending`: Initial state; message accepted by server, queued for delivery
     - `sent`: Message successfully transmitted to recipient (online delivery) OR queued for offline delivery
@@ -385,7 +385,7 @@ Goal: Users can send text messages in real-time and receive messages with persis
       - sent: Check mark (sent to server or queued)
       - delivered: Double check mark (confirmed by recipient)
       - failed: X or error icon (with reason)
-- [ ] T084 [P] [US4] Create database queries at `src/backend/db/queries/messages.rs`: insert_message, update_message_status, get_messages_by_conversation, get_pending_messages
+- [X] T084 [P] [US4] Create database queries at `src/backend/db/queries/messages.rs`: insert_message, update_message_status, get_messages_by_conversation, get_pending_messages
 
 ### WebSocket Message Handling
 

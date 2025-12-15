@@ -23,6 +23,9 @@ reqwest = { workspace = true }
 # Internal dependencies
 chat-shared = { path = "../shared" }
 
+[build-dependencies]
+slint-build = "1.5"
+
 [[bin]]
 name = "chat-gui"
 path = "main.rs"
