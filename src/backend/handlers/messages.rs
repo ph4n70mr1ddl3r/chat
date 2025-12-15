@@ -6,7 +6,9 @@
 
 use crate::db::queries;
 use crate::handlers::websocket::{ClientConnection, ConnectionManager, ErrorResponse};
-use crate::services::message_service::{MessageService, MessageStatus};
+use crate::services::{
+    message_queue::MessageQueueService, message_service::{MessageService, MessageStatus},
+};
 use chat_shared::protocol::{MessageEnvelope, TextMessageData};
 use serde_json::json;
 use sqlx::SqlitePool;
@@ -18,18 +20,21 @@ pub struct MessageHandler {
     pool: SqlitePool,
     message_service: MessageService,
     connection_manager: Arc<ConnectionManager>,
+    message_queue: MessageQueueService,
 }
 
 impl MessageHandler {
     pub fn new(
         pool: SqlitePool,
         connection_manager: Arc<ConnectionManager>,
+        message_queue: MessageQueueService,
     ) -> Self {
         let message_service = MessageService::new(pool.clone());
         Self {
             pool,
             message_service,
             connection_manager,
+            message_queue,
         }
     }
 
@@ -99,25 +104,35 @@ impl MessageHandler {
                     &data.recipient_id,
                     &data.content,
                     &conversation_id,
-                    "sent",
+                    "delivered",
                 );
 
-                responses.push(WsMessage::text(
-                    serde_json::to_string(&delivery_message).unwrap(),
-                ));
+                self.connection_manager
+                    .send_to_user(
+                        &data.recipient_id,
+                        WsMessage::text(serde_json::to_string(&delivery_message).unwrap()),
+                    )
+                    .await;
 
-                // Update message status to 'sent'
+                // Update message status to 'delivered'
                 self.message_service
-                    .update_message_status(&message.id, MessageStatus::Sent)
+                    .mark_delivered(&message.id)
                     .await?;
             } else {
-                // Recipient offline - message stays as 'pending' and will be queued
-                // The message queue service will handle retry logic
+                // Recipient offline - queue for retry
+                self.message_queue
+                    .queue_message(message.id.clone(), data.recipient_id.clone())
+                    .await;
             }
         }
 
         // Send acknowledgement to sender
-        let ack = self.build_ack_envelope(&envelope.id, &conversation_id, &message.id);
+        let ack_status = if was_created && self.connection_manager.is_user_online(&data.recipient_id).await {
+            "delivered"
+        } else {
+            "sent"
+        };
+        let ack = self.build_ack_envelope(&envelope.id, &conversation_id, &message.id, ack_status);
         responses.push(WsMessage::text(serde_json::to_string(&ack).unwrap()));
 
         Ok(responses)
@@ -179,13 +194,14 @@ impl MessageHandler {
         original_message_id: &str,
         conversation_id: &str,
         stored_message_id: &str,
+        status: &str,
     ) -> MessageEnvelope {
         MessageEnvelope {
             id: uuid::Uuid::new_v4().to_string(),
             msg_type: "ack".to_string(),
             timestamp: chrono::Utc::now().timestamp_millis() as u64,
             data: json!({
-                "status": "received",
+                "status": status,
                 "conversationId": conversation_id,
                 "messageId": stored_message_id,
                 "originalMessageId": original_message_id,
@@ -199,7 +215,9 @@ impl MessageHandler {
 mod tests {
     use super::*;
     use crate::handlers::websocket::ConnectionManager;
+    use crate::services::MessageQueueService;
     use crate::models::User;
+    use tokio::sync::mpsc;
 
     async fn setup_test_db() -> SqlitePool {
         let pool = sqlx::sqlite::SqlitePoolOptions::new()
@@ -219,7 +237,8 @@ mod tests {
     async fn test_handle_message_creates_conversation() {
         let pool = setup_test_db().await;
         let conn_mgr = Arc::new(ConnectionManager::new());
-        let handler = MessageHandler::new(pool.clone(), conn_mgr.clone());
+        let queue = MessageQueueService::new(pool.clone(), conn_mgr.clone());
+        let handler = MessageHandler::new(pool.clone(), conn_mgr.clone(), queue);
 
         // Create users
         let user1 = User::new("alice".to_string(), "hash1".to_string(), "salt1".to_string());
@@ -257,7 +276,8 @@ mod tests {
     async fn test_handle_message_to_online_recipient() {
         let pool = setup_test_db().await;
         let conn_mgr = Arc::new(ConnectionManager::new());
-        let handler = MessageHandler::new(pool.clone(), conn_mgr.clone());
+        let queue = MessageQueueService::new(pool.clone(), conn_mgr.clone());
+        let handler = MessageHandler::new(pool.clone(), conn_mgr.clone(), queue);
 
         // Create users
         let user1 = User::new("alice".to_string(), "hash1".to_string(), "salt1".to_string());
@@ -268,7 +288,8 @@ mod tests {
 
         // Register recipient as online
         let recipient_conn = ClientConnection::new(user2.id.clone(), user2.username.clone());
-        conn_mgr.register(recipient_conn).await;
+        let (tx, _rx) = mpsc::unbounded_channel();
+        conn_mgr.register(recipient_conn, tx).await;
 
         // Create sender connection
         let sender = ClientConnection::new(user1.id.clone(), user1.username.clone());
@@ -287,15 +308,16 @@ mod tests {
         // Handle message
         let responses = handler.handle_message(&envelope, &sender).await.unwrap();
 
-        // Should get delivery message + acknowledgement
-        assert_eq!(responses.len(), 2);
+        // Should get acknowledgement
+        assert_eq!(responses.len(), 1);
     }
 
     #[tokio::test]
     async fn test_handle_message_idempotency() {
         let pool = setup_test_db().await;
         let conn_mgr = Arc::new(ConnectionManager::new());
-        let handler = MessageHandler::new(pool.clone(), conn_mgr.clone());
+        let queue = MessageQueueService::new(pool.clone(), conn_mgr.clone());
+        let handler = MessageHandler::new(pool.clone(), conn_mgr.clone(), queue);
 
         // Create users
         let user1 = User::new("alice".to_string(), "hash1".to_string(), "salt1".to_string());

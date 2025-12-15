@@ -335,7 +335,7 @@ mod tests {
 
     #[test]
     fn test_dispatcher_binary_frame() {
-        let msg = WsMessage::Binary(vec![1, 2, 3]);
+        let msg = WsMessage::binary(vec![1, 2, 3]);
         let result = MessageDispatcher::parse_message(&msg);
 
         match result {
@@ -346,7 +346,7 @@ mod tests {
 
     #[test]
     fn test_dispatcher_ping() {
-        let msg = WsMessage::Ping(vec![]);
+        let msg = WsMessage::ping(vec![]);
         let result = MessageDispatcher::parse_message(&msg);
 
         match result {
@@ -359,7 +359,7 @@ mod tests {
 
     #[test]
     fn test_dispatcher_pong() {
-        let msg = WsMessage::Pong(vec![]);
+        let msg = WsMessage::pong(vec![]);
         let result = MessageDispatcher::parse_message(&msg);
 
         match result {

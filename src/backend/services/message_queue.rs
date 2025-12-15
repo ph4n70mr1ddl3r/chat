@@ -14,6 +14,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::{sleep, Duration};
+use warp::ws::Message as WsMessage;
 
 /// Retry schedule in seconds
 const RETRY_SCHEDULE: &[u64] = &[0, 1, 3, 7, 15, 30, 60];
@@ -28,6 +29,7 @@ struct QueuedMessage {
 }
 
 /// Message queue service
+#[derive(Clone)]
 pub struct MessageQueueService {
     pool: SqlitePool,
     message_service: MessageService,
@@ -105,6 +107,7 @@ impl MessageQueueService {
                         match Self::deliver_message(
                             &pool,
                             &message_service,
+                            connection_manager.as_ref(),
                             &queued_msg.message_id,
                         )
                         .await
@@ -155,6 +158,7 @@ impl MessageQueueService {
     async fn deliver_message(
         pool: &SqlitePool,
         message_service: &MessageService,
+        connection_manager: &ConnectionManager,
         message_id: &str,
     ) -> Result<(), String> {
         // Load message from database
@@ -175,9 +179,62 @@ impl MessageQueueService {
             return Err("Recipient deleted".to_string());
         }
 
-        // Message would be sent via WebSocket here
-        // (In actual implementation, this would broadcast via ConnectionManager)
-        
+        // Build delivery payload
+        let sender = queries::find_user_by_id(pool, &message.sender_id)
+            .await?
+            .ok_or_else(|| "Sender not found".to_string())?;
+
+        let envelope = MessageEnvelope {
+            id: message.id.clone(),
+            msg_type: "message".to_string(),
+            timestamp: chrono::Utc::now().timestamp_millis() as u64,
+            data: json!({
+                "senderId": sender.id,
+                "senderUsername": sender.username,
+                "recipientId": message.recipient_id,
+                "content": message.content,
+                "conversationId": message.conversation_id,
+                "status": "delivered",
+            }),
+        };
+
+        let outbound = WsMessage::text(
+            serde_json::to_string(&envelope)
+                .map_err(|e| format!("Failed to serialize message: {}", e))?,
+        );
+
+        // Attempt to send to recipient
+        let delivered = connection_manager
+            .send_to_user(&recipient.id, outbound.clone())
+            .await;
+        if delivered == 0 {
+            return Err("Recipient offline".to_string());
+        }
+
+        // Mark delivered and send ack to sender if connected
+        message_service
+            .mark_delivered(&message.id)
+            .await?;
+
+        let ack = MessageEnvelope {
+            id: uuid::Uuid::new_v4().to_string(),
+            msg_type: "ack".to_string(),
+            timestamp: chrono::Utc::now().timestamp_millis() as u64,
+            data: json!({
+                "status": "delivered",
+                "messageId": message.id,
+                "conversationId": message.conversation_id,
+                "serverTimestamp": chrono::Utc::now().timestamp_millis(),
+            }),
+        };
+        let ack_msg = WsMessage::text(
+            serde_json::to_string(&ack)
+                .map_err(|e| format!("Failed to serialize ack: {}", e))?,
+        );
+        let _ = connection_manager
+            .send_to_user(&sender.id, ack_msg)
+            .await;
+
         Ok(())
     }
 

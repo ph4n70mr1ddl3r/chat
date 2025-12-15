@@ -1,6 +1,7 @@
 # Rust
 target/
 debug/
+release/
 *.rs.bk
 *.rlib
 *.prof*
@@ -24,6 +25,7 @@ Thumbs.db
 
 # Environment
 .env
+.env.*
 .env.local
 
 # Logs
@@ -36,3 +38,5 @@ logs/
 
 # Git
 .git/
+
+.codex/

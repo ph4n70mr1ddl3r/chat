@@ -1,0 +1,69 @@
+import { VerticalBox, HorizontalBox, Rectangle, Text } from "std-widgets.slint";
+
+// Single chat message bubble with status indicator
+export component MessageBubble {
+    in property <string> sender_username;
+    in property <string> content;
+    in property <string> timestamp;
+    in property <string> status;
+    in property <bool> is_own;
+
+    HorizontalBox {
+        alignment: root.is_own ? end : start;
+
+        Rectangle {
+            max-width: 480px;
+            background: root.is_own ? #DCF8C6 : #FFFFFF;
+            border-radius: 8px;
+            border-width: root.is_own ? 0px : 1px;
+            border-color: #E0E0E0;
+            drop-shadow-color: #00000018;
+            drop-shadow-offset-x: 0px;
+            drop-shadow-offset-y: 1px;
+            drop-shadow-blur: 4px;
+
+            VerticalBox {
+                padding: 10px;
+                spacing: 6px;
+
+                if !root.is_own: Text {
+                    text: root.sender_username;
+                    font-size: 12px;
+                    font-weight: bold;
+                    color: #4CAF50;
+                }
+
+                Text {
+                    text: root.content;
+                    font-size: 14px;
+                    wrap: word-wrap;
+                }
+
+                HorizontalBox {
+                    spacing: 8px;
+
+                    Text {
+                        text: root.timestamp;
+                        font-size: 10px;
+                        color: #999;
+                    }
+
+                    if root.is_own: Text {
+                        text: {
+                            if root.status == "delivered" { "✓✓" }
+                            else if root.status == "sent" { "✓" }
+                            else if root.status == "failed" { "⚠" }
+                            else { "⏱" }
+                        };
+                        font-size: 10px;
+                        color: {
+                            if root.status == "delivered" { #4CAF50 }
+                            else if root.status == "failed" { #E53935 }
+                            else { #999 }
+                        };
+                    }
+                }
+            }
+        }
+    }
+}

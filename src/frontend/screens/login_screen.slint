@@ -1,13 +1,13 @@
-import { VerticalBox, HorizontalBox, LineEdit, Button, Text } from "std-widgets.slint";
+import { VerticalBox, HorizontalBox, LineEdit, Button } from "std-widgets.slint";
 
 export component LoginScreenComponent {
-    in property <string> username;
-    in property <string> password;
+    in-out property <string> username;
+    in-out property <string> password;
     in property <string> error_message;
     in property <bool> is_loading;
     
     callback login();
-    callback navigate-to-signup();
+    callback navigate_to_signup();
     
     VerticalBox {
         alignment: start;
@@ -17,7 +17,7 @@ export component LoginScreenComponent {
         Text {
             text: "Login";
             font-size: 24px;
-            font-weight: bold;
+            font-weight: 700;
             color: #333;
         }
         
@@ -29,7 +29,7 @@ export component LoginScreenComponent {
             }
             LineEdit {
                 placeholder-text: "Enter username";
-                text: <=> root.username;
+                text <=> root.username;
                 enabled: !root.is_loading;
             }
         }
@@ -42,8 +42,8 @@ export component LoginScreenComponent {
             }
             LineEdit {
                 placeholder-text: "Enter password";
-                text: <=> root.password;
-                input-type: password;
+                text <=> root.password;
+                input-type: InputType.password;
                 enabled: !root.is_loading;
             }
         }
@@ -53,14 +53,14 @@ export component LoginScreenComponent {
             clicked => {
                 root.login();
             }
-            enabled: root.username.length > 0 && root.password.length > 0 && !root.is_loading;
+            enabled: root.username != "" && root.password != "" && !root.is_loading;
         }
         
         Text {
             text: root.error_message;
             color: red;
             font-size: 12px;
-            visible: root.error_message.length > 0;
+            visible: root.error_message != "";
         }
         
         HorizontalBox {
@@ -70,7 +70,7 @@ export component LoginScreenComponent {
             Button {
                 text: "Sign Up";
                 clicked => {
-                    root.navigate-to-signup();
+                    root.navigate_to_signup();
                 }
                 enabled: !root.is_loading;
             }

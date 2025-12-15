@@ -1,0 +1,70 @@
+import { VerticalBox, HorizontalBox, LineEdit, Button, Text } from "std-widgets.slint";
+
+// Message input field with character counter and error display
+export component MessageInput {
+    in property <string> placeholder;
+    in property <string> error_text;
+    in property <bool> is_sending;
+    in property <int> max_chars;
+    in-out property <string> text;
+
+    /// Triggered when user requests to send the message content
+    callback send(string);
+    /// Emitted when the user starts/stops typing
+    callback typing(bool);
+
+    VerticalBox {
+        spacing: 6px;
+
+        HorizontalBox {
+            spacing: 8px;
+
+            LineEdit {
+                placeholder-text: root.placeholder;
+                text: <=> root.text;
+                horizontal-stretch: 1;
+                enabled: !root.is_sending;
+                maximum-length: root.max_chars;
+
+                text-changed => {
+                    root.typing(root.text.length > 0);
+                }
+
+                accepted => {
+                    if (root.text.length > 0 && root.text.length <= root.max_chars) {
+                        root.send(root.text);
+                        root.text = "";
+                        root.typing(false);
+                    }
+                }
+            }
+
+            Button {
+                text: root.is_sending ? "Sending..." : "Send";
+                enabled: root.text.length > 0 && root.text.length <= root.max_chars && !root.is_sending;
+                clicked => {
+                    root.send(root.text);
+                    root.text = "";
+                    root.typing(false);
+                }
+            }
+        }
+
+        HorizontalBox {
+            spacing: 8px;
+
+            Text {
+                text: (root.max_chars - root.text.length).to_string() + " chars left";
+                font-size: 11px;
+                color: root.text.length > root.max_chars ? red : #666;
+            }
+
+            if root.error_text.length > 0: Text {
+                text: root.error_text;
+                font-size: 11px;
+                color: red;
+                horizontal-stretch: 1;
+            }
+        }
+    }
+}

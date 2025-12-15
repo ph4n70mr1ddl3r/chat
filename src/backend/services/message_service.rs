@@ -28,6 +28,7 @@ impl MessageStatus {
     }
 }
 
+#[derive(Clone)]
 /// Message service
 pub struct MessageService {
     pool: SqlitePool,

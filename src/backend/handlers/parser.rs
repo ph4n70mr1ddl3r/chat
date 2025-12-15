@@ -199,7 +199,7 @@ mod tests {
             }
         });
 
-        let msg = WsMessage::Text(json.to_string());
+        let msg = WsMessage::text(json.to_string());
         let result = FrameParser::parse(&msg);
 
         match result {
@@ -217,7 +217,7 @@ mod tests {
 
     #[test]
     fn test_parse_invalid_json() {
-        let msg = WsMessage::Text("not valid json".to_string());
+        let msg = WsMessage::text("not valid json".to_string());
         let result = FrameParser::parse(&msg);
 
         match result {
@@ -267,7 +267,7 @@ mod tests {
 
     #[test]
     fn test_parse_close() {
-        let msg = WsMessage::close(None);
+        let msg = WsMessage::close();
         let result = FrameParser::parse(&msg);
 
         match result {
@@ -387,12 +387,10 @@ mod tests {
             Some(json!({"detail": "extra"})),
         );
 
-        if let WsMessage::Text(text) = response {
-            assert!(text.contains("TEST_ERROR"));
-            assert!(text.contains("Test message"));
-            assert!(text.contains("extra"));
-        } else {
-            panic!("Expected text message");
-        }
+        assert!(response.is_text(), "Expected text message");
+        let text = response.to_str().unwrap_or_default();
+        assert!(text.contains("TEST_ERROR"));
+        assert!(text.contains("Test message"));
+        assert!(text.contains("extra"));
     }
 }

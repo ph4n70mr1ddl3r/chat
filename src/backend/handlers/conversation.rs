@@ -54,6 +54,14 @@ fn default_messages_limit() -> u32 {
     50
 }
 
+/// Search query parameters
+#[derive(Debug, Deserialize)]
+pub struct SearchMessagesQuery {
+    pub q: String,
+    #[serde(default = "default_messages_limit")]
+    pub limit: u32,
+}
+
 /// Message response
 #[derive(Debug, Serialize)]
 pub struct MessageResponse {
@@ -311,6 +319,107 @@ pub async fn get_conversation_messages(
                 warn!("Failed to fetch sender info: {}", e);
                 continue;
             }
+        };
+
+        responses.push(MessageResponse {
+            id: msg.id,
+            sender_id: msg.sender_id,
+            sender_username: sender.username,
+            recipient_id: msg.recipient_id,
+            content: msg.content,
+            created_at: msg.created_at,
+            delivered_at: msg.delivered_at,
+            status: msg.status,
+        });
+    }
+
+    Ok(reply::with_status(
+        reply::json(&responses),
+        warp::http::StatusCode::OK,
+    ))
+}
+
+/// Handle GET /conversations/{id}/search?q=keyword
+///
+/// Searches messages within a conversation by keyword
+pub async fn search_messages(
+    user_id: String,
+    conversation_id: String,
+    query: SearchMessagesQuery,
+    pool: SqlitePool,
+) -> Result<impl Reply, Rejection> {
+    if query.q.trim().is_empty() {
+        return Ok(reply::with_status(
+            reply::json(&ErrorResponse {
+                error: "INVALID_QUERY".to_string(),
+                message: "Search query must not be empty".to_string(),
+            }),
+            warp::http::StatusCode::BAD_REQUEST,
+        ));
+    }
+
+    let limit = query.limit.min(100);
+
+    // Verify conversation exists and user is participant
+    let conversation = match queries::get_conversation_by_id(&pool, &conversation_id).await {
+        Ok(Some(conv)) => conv,
+        Ok(None) => {
+            return Ok(reply::with_status(
+                reply::json(&ErrorResponse {
+                    error: "CONVERSATION_NOT_FOUND".to_string(),
+                    message: "The specified conversation does not exist".to_string(),
+                }),
+                warp::http::StatusCode::NOT_FOUND,
+            ));
+        }
+        Err(e) => {
+            warn!("Failed to get conversation: {}", e);
+            return Ok(reply::with_status(
+                reply::json(&ErrorResponse {
+                    error: "DATABASE_ERROR".to_string(),
+                    message: "Failed to retrieve conversation".to_string(),
+                }),
+                warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+            ));
+        }
+    };
+
+    if conversation.user1_id != user_id && conversation.user2_id != user_id {
+        return Ok(reply::with_status(
+            reply::json(&ErrorResponse {
+                error: "FORBIDDEN".to_string(),
+                message: "You are not a participant in this conversation".to_string(),
+            }),
+            warp::http::StatusCode::FORBIDDEN,
+        ));
+    }
+
+    let messages = match queries::search_messages_in_conversation(
+        &pool,
+        &conversation_id,
+        &query.q,
+        limit,
+    )
+    .await
+    {
+        Ok(msgs) => msgs,
+        Err(e) => {
+            warn!("Failed to search messages: {}", e);
+            return Ok(reply::with_status(
+                reply::json(&ErrorResponse {
+                    error: "DATABASE_ERROR".to_string(),
+                    message: "Failed to search messages".to_string(),
+                }),
+                warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+            ));
+        }
+    };
+
+    let mut responses = Vec::new();
+    for msg in messages {
+        let sender = match queries::find_user_by_id(&pool, &msg.sender_id).await {
+            Ok(Some(user)) => user,
+            _ => continue,
         };
 
         responses.push(MessageResponse {

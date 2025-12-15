@@ -8,10 +8,12 @@
 //! - POST /auth/login - user authentication
 //! - GET /conversations/* - conversation management (stubs for Phase 3+)
 
+use anyhow::Error;
 use futures::{SinkExt, StreamExt};
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use tracing::{info, warn};
+use tokio::sync::mpsc;
 use warp::filters::body::BodyDeserializeError;
 use warp::filters::ws::ws;
 use warp::filters::ws::{WebSocket, Ws};
@@ -23,9 +25,10 @@ use crate::handlers::dispatcher::{DispatchResult, MessageDispatcher};
 use crate::handlers::handshake::HandshakeValidator;
 use crate::handlers::messages::MessageHandler;
 use crate::services::auth_service::TokenClaims;
+use crate::services::{MessageQueueService, PresenceService};
 
-use crate::handlers::auth;
-use crate::handlers::websocket;
+use crate::handlers::{auth, conversation, websocket};
+use crate::middleware::auth as auth_middleware;
 
 /// Server configuration
 #[derive(Clone)]
@@ -49,14 +52,23 @@ pub struct ServerState {
     pub pool: SqlitePool,
     pub config: ServerConfig,
     pub connection_manager: Arc<websocket::ConnectionManager>,
+    pub presence_service: PresenceService,
+    pub message_queue: MessageQueueService,
 }
 
 impl ServerState {
     pub fn new(pool: SqlitePool, config: ServerConfig) -> Self {
+        let connection_manager = Arc::new(websocket::ConnectionManager::new());
+        let pool_for_services = pool.clone();
         Self {
             pool,
             config,
-            connection_manager: Arc::new(websocket::ConnectionManager::new()),
+            presence_service: PresenceService::new(
+                pool_for_services.clone(),
+                connection_manager.clone(),
+            ),
+            message_queue: MessageQueueService::new(pool_for_services, connection_manager.clone()),
+            connection_manager,
         }
     }
 }
@@ -65,7 +77,13 @@ impl ServerState {
 pub fn create_routes(
     state: ServerState,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    let state_filter = warp::any().map(move || state.clone());
+    let state_clone_for_filter = state.clone();
+    let state_filter = warp::any().map(move || state_clone_for_filter.clone());
+
+    let auth_service = Arc::new(crate::services::auth_service::AuthService::new(
+        state.config.jwt_secret.clone(),
+    ));
+    let with_auth = auth_middleware::with_auth(auth_service.clone());
 
     // Health endpoint
     let health_route = warp::path!("health").and(warp::get()).map(|| {
@@ -106,16 +124,23 @@ pub fn create_routes(
         // GET /conversations (list conversations)
         warp::get()
             .and(warp::path::end())
+            .and(with_auth.clone())
+            .and(warp::query::<conversation::ConversationsQuery>())
             .and(state_filter.clone())
-            .and_then(handle_list_conversations)
+            .and_then(|user_id, query, state: ServerState| async move {
+                conversation::get_conversations(user_id, query, state.pool).await
+            })
             .or(
                 // POST /conversations/start (start new conversation)
                 warp::post()
                     .and(warp::path("start"))
                     .and(warp::path::end())
+                    .and(with_auth.clone())
                     .and(warp::body::json())
                     .and(state_filter.clone())
-                    .and_then(handle_start_conversation),
+                    .and_then(|user_id, body, state: ServerState| async move {
+                        conversation::start_conversation(user_id, body, state.pool).await
+                    }),
             )
             .or(
                 // GET /conversations/{id}/messages (get conversation messages)
@@ -123,8 +148,41 @@ pub fn create_routes(
                     .and(warp::path::param())
                     .and(warp::path("messages"))
                     .and(warp::path::end())
+                    .and(with_auth.clone())
+                    .and(warp::query::<conversation::MessagesQuery>())
                     .and(state_filter.clone())
-                    .and_then(handle_get_conversation_messages),
+                    .and_then(
+                        |conversation_id: String, user_id, query, state: ServerState| async move {
+                            conversation::get_conversation_messages(
+                                user_id,
+                                conversation_id,
+                                query,
+                                state.pool,
+                            )
+                            .await
+                        },
+                    ),
+            )
+            .or(
+                // GET /conversations/{id}/search?q=keyword
+                warp::get()
+                    .and(warp::path::param())
+                    .and(warp::path("search"))
+                    .and(warp::path::end())
+                    .and(with_auth.clone())
+                    .and(warp::query::<conversation::SearchMessagesQuery>())
+                    .and(state_filter.clone())
+                    .and_then(
+                        |conversation_id: String, user_id, query, state: ServerState| async move {
+                            conversation::search_messages(
+                                user_id,
+                                conversation_id,
+                                query,
+                                state.pool,
+                            )
+                            .await
+                        },
+                    ),
             ),
     );
 
@@ -193,16 +251,42 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
 
     // Register connection with connection manager
     let connection = websocket::ClientConnection::new(user_id.clone(), username);
-    let connection_id = state.connection_manager.register(connection.clone()).await;
+
+    // Channel used by other parts of the system to push frames to this socket
+    let (tx, mut rx) = mpsc::unbounded_channel::<warp::ws::Message>();
+    let connection_id = state
+        .connection_manager
+        .register(connection.clone(), tx.clone())
+        .await;
     info!(
         "Registered connection {} for user {}",
         connection_id, user_id
     );
 
-    // Create message handler
-    let message_handler = MessageHandler::new(state.pool.clone(), state.connection_manager.clone());
+    if let Err(e) = state.presence_service.mark_online(&user_id).await {
+        warn!("Failed to mark presence online: {}", e);
+    }
 
-    let (mut ws_tx, mut ws_rx) = socket.split();
+    // Create message handler
+    let message_handler = MessageHandler::new(
+        state.pool.clone(),
+        state.connection_manager.clone(),
+        state.message_queue.clone(),
+    );
+
+    let (ws_tx, mut ws_rx) = socket.split();
+    let ws_tx = Arc::new(tokio::sync::Mutex::new(ws_tx));
+
+    // Forward messages from channel to websocket sink
+    let ws_tx_forward = ws_tx.clone();
+    tokio::spawn(async move {
+        while let Some(msg) = rx.recv().await {
+            let mut sender = ws_tx_forward.lock().await;
+            if sender.send(msg).await.is_err() {
+                break;
+            }
+        }
+    });
 
     // Process incoming messages
     while let Some(result) = ws_rx.next().await {
@@ -223,7 +307,8 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
                             Ok(responses) => {
                                 // Send all responses
                                 for response in responses {
-                                    if let Err(e) = ws_tx.send(response).await {
+                                    let mut sender = ws_tx.lock().await;
+                                    if let Err(e) = sender.send(response).await {
                                         warn!("Failed to send response: {}", e);
                                     }
                                 }
@@ -231,7 +316,8 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
                             Err(e) => {
                                 warn!("Message handling error: {}", e);
                                 let error_response = websocket::ErrorResponse::server_error(&e);
-                                if let Err(e) = ws_tx.send(error_response).await {
+                                let mut sender = ws_tx.lock().await;
+                                if let Err(e) = sender.send(error_response).await {
                                     warn!("Failed to send error response: {}", e);
                                 }
                             }
@@ -243,7 +329,8 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
                     }
                     DispatchResult::Error { error_msg } => {
                         // Send error response
-                        if let Err(e) = ws_tx.send(error_msg).await {
+                        let mut sender = ws_tx.lock().await;
+                        if let Err(e) = sender.send(error_msg).await {
                             warn!("Failed to send error response: {}", e);
                         }
                     }
@@ -265,6 +352,10 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
         .connection_manager
         .unregister(&user_id, &connection_id)
         .await;
+
+    if let Err(e) = state.presence_service.mark_offline(&user_id).await {
+        warn!("Failed to mark presence offline: {}", e);
+    }
     info!("WebSocket connection closed for user: {}", user_id);
 }
 
@@ -290,54 +381,6 @@ async fn handle_login(
     auth::login_handler(req, state.pool, state.config.jwt_secret).await
 }
 
-/// Handle list conversations (stub)
-async fn handle_list_conversations(_state: ServerState) -> Result<impl Reply, Rejection> {
-    info!("List conversations request");
-
-    // Stub implementation for Phase 3
-    Ok(warp::reply::with_status(
-        warp::reply::json(&serde_json::json!({
-            "conversations": [],
-            "total": 0,
-        })),
-        warp::http::StatusCode::OK,
-    ))
-}
-
-/// Handle start conversation (stub)
-async fn handle_start_conversation(
-    _body: serde_json::Value,
-    _state: ServerState,
-) -> Result<impl Reply, Rejection> {
-    info!("Start conversation request");
-
-    // Stub implementation for Phase 3
-    Ok(warp::reply::with_status(
-        warp::reply::json(&serde_json::json!({
-            "error": "Not implemented",
-            "message": "Conversation endpoints will be implemented in Phase 3",
-        })),
-        warp::http::StatusCode::NOT_IMPLEMENTED,
-    ))
-}
-
-/// Handle get conversation messages (stub)
-async fn handle_get_conversation_messages(
-    _conversation_id: String,
-    _state: ServerState,
-) -> Result<impl Reply, Rejection> {
-    info!("Get conversation messages request");
-
-    // Stub implementation for Phase 3
-    Ok(warp::reply::with_status(
-        warp::reply::json(&serde_json::json!({
-            "error": "Not implemented",
-            "message": "Conversation endpoints will be implemented in Phase 3",
-        })),
-        warp::http::StatusCode::NOT_IMPLEMENTED,
-    ))
-}
-
 /// Handle rejections (errors) and convert to JSON responses
 async fn handle_rejection(err: Rejection) -> Result<impl Reply, Rejection> {
     warn!("Request rejected: {:?}", err);
@@ -347,6 +390,11 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Rejection> {
     let (code, message) = if let Some(auth_err) = err.find::<WebSocketAuthError>() {
         eprintln!("DEBUG: Found WebSocketAuthError: {:?}", auth_err);
         (auth_err.status, auth_err.message.clone())
+    } else if err.find::<auth_middleware::Unauthorized>().is_some() {
+        (
+            warp::http::StatusCode::UNAUTHORIZED,
+            "Unauthorized".to_string(),
+        )
     } else if err.is_not_found() {
         (warp::http::StatusCode::NOT_FOUND, "Not Found".to_string())
     } else if let Some(_) = err.find::<warp::filters::body::BodyDeserializeError>() {
@@ -383,6 +431,15 @@ pub async fn start_server(
 ) -> anyhow::Result<()> {
     let config = config.unwrap_or_default();
     let state = ServerState::new(pool, config);
+
+    // Start background workers (offline delivery)
+    state
+        .message_queue
+        .load_pending_messages()
+        .await
+        .map_err(Error::msg)?;
+    state.message_queue.start().await;
+
     let routes = create_routes(state);
 
     info!("Starting HTTP server on port {}", port);

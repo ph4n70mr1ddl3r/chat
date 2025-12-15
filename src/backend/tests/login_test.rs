@@ -3,7 +3,7 @@
 use warp::test::request;
 use warp::Filter;
 
-use crate::handlers::auth_with_rate_limit;
+use crate::handlers::{auth, auth_with_rate_limit};
 use crate::middleware::rate_limit::RateLimiter;
 use serde_json;
 use sqlx::sqlite::SqlitePoolOptions;
@@ -43,7 +43,7 @@ async fn test_login_success() {
         .and(warp::body::json())
         .and(warp::any().map(move || pool_clone.clone()))
         .and(warp::any().map(move || jwt_secret_clone.clone()))
-        .and_then(crate::handlers::auth::signup_handler);
+        .and_then(auth::signup_handler);
     
     request()
         .method("POST")
@@ -101,7 +101,7 @@ async fn test_login_invalid_password() {
         .and(warp::body::json())
         .and(warp::any().map(move || pool_clone.clone()))
         .and(warp::any().map(move || jwt_secret_clone.clone()))
-        .and_then(crate::handlers::auth::signup_handler);
+        .and_then(auth::signup_handler);
     
     request()
         .method("POST")
@@ -186,7 +186,7 @@ async fn test_login_rate_limiting() {
         .and(warp::body::json())
         .and(warp::any().map(move || pool_clone.clone()))
         .and(warp::any().map(move || jwt_secret_clone.clone()))
-        .and_then(crate::handlers::auth::signup_handler);
+        .and_then(auth::signup_handler);
     
     request()
         .method("POST")
@@ -272,7 +272,7 @@ async fn test_login_deleted_account() {
         .and(warp::body::json())
         .and(warp::any().map(move || pool_clone.clone()))
         .and(warp::any().map(move || jwt_secret_clone.clone()))
-        .and_then(crate::handlers::auth::signup_handler);
+        .and_then(auth::signup_handler);
     
     request()
         .method("POST")

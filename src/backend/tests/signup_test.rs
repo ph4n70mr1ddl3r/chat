@@ -4,7 +4,6 @@ use warp::test::request;
 use warp::Filter;
 
 use crate::handlers::auth;
-use sqlx::sqlite::SqlitePoolOptions;
 use serde_json;
 
 /// Test successful user signup

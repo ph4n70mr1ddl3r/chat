@@ -389,7 +389,7 @@ Goal: Users can send text messages in real-time and receive messages with persis
 
 ### WebSocket Message Handling
 
-- [ ] T085 [P] [US4] Implement message handler at `src/backend/handlers/messages.rs` (handle incoming message frames)
+- [X] T085 [P] [US4] Implement message handler at `src/backend/handlers/messages.rs` (handle incoming message frames)
   - Validate JWT token (extract user_id)
   - Parse message JSON (id, recipientId, content)
   - Validate message
@@ -397,57 +397,57 @@ Goal: Users can send text messages in real-time and receive messages with persis
   - If recipient online: push via WebSocket
   - If recipient offline: queue for retry (exponential backoff)
   - Send ACK to sender (status='sent')
-- [ ] T086 [P] [US4] Implement offline message queue at `src/backend/services/message_queue.rs` with:
+- [X] T086 [P] [US4] Implement offline message queue at `src/backend/services/message_queue.rs` with:
   - Exponential backoff: 0.5-1.5s, 1.5-3.5s, 3-7s, 7-15s, 15-30s, 30-60s
   - Indefinite retry until recipient online or deleted
   - Track retry attempts
-- [ ] T087 [US4] Implement presence tracking at `src/backend/services/presence.rs` (track online users, broadcast presence changes)
-- [ ] T088 [P] [US4] Implement message delivery confirmation at `src/backend/handlers/messages.rs` (update status='delivered' when recipient receives)
+- [X] T087 [US4] Implement presence tracking at `src/backend/services/presence.rs` (track online users, broadcast presence changes)
+- [X] T088 [P] [US4] Implement message delivery confirmation at `src/backend/handlers/messages.rs` (update status='delivered' when recipient receives)
 
 ### Message History & Retrieval
 
-- [ ] T089 [US4] Create get conversation messages endpoint at `src/backend/handlers/conversation.rs` (GET /conversations/{conversationId}/messages?limit=50&offset=0)
+- [X] T089 [US4] Create get conversation messages endpoint at `src/backend/handlers/conversation.rs` (GET /conversations/{conversationId}/messages?limit=50&offset=0)
   - Validate user is participant
   - Return messages sorted by created_at DESC
   - Include sender info, recipient info, status
   - Support pagination
   - Return 403 if not participant
-- [ ] T090 [US4] Create message search endpoint at `src/backend/handlers/conversation.rs` (GET /conversations/{conversationId}/search?q=keyword)
+- [X] T090 [US4] Create message search endpoint at `src/backend/handlers/conversation.rs` (GET /conversations/{conversationId}/search?q=keyword)
   - Full-text search within conversation
   - Return matching messages with context
   - Support limit/offset
 
 ### Frontend Message UI
 
-- [ ] T091 [P] [US4] Create message input component at `src/frontend/components/message_input.slint` with:
+- [X] T091 [P] [US4] Create message input component at `src/frontend/components/message_input.slint` with:
   - Text input field (max 5000 chars, show remaining count)
   - Send button (disabled if empty or over limit)
   - Error display
-- [ ] T092 [US4] Implement message sending at `src/frontend/services/websocket_client.rs` (send message over WebSocket)
-- [ ] T093 [US4] Create message display component at `src/frontend/components/message_bubble.slint` with:
+- [X] T092 [US4] Implement message sending at `src/frontend/services/websocket_client.rs` (send message over WebSocket)
+- [X] T093 [US4] Create message display component at `src/frontend/components/message_bubble.slint` with:
   - Sender name, timestamp, content
   - Delivery status indicator (pending clock, delivered checkmark)
   - Sender/recipient styling (different colors)
-- [ ] T094 [P] [US4] Implement message list at `src/frontend/screens/chat_screen.rs` with:
+- [X] T094 [P] [US4] Implement message list at `src/frontend/screens/chat_screen.rs` with:
   - Load on conversation selection (GET /conversations/{id}/messages)
   - Auto-scroll to latest message
   - Append new messages on WebSocket receive
   - Handle offline messages (show pending, update to delivered)
-- [ ] T095 [US4] Create typing indicator at `src/frontend/services/websocket_client.rs` (send/receive typing notifications)
+- [X] T095 [US4] Create typing indicator at `src/frontend/services/websocket_client.rs` (send/receive typing notifications)
 
 ### Message Tests
 
-- [ ] T096 [US4] Create test file at `tests/integration/message_delivery_test.rs` with scenarios:
+- [X] T096 [US4] Create test file at `tests/integration/message_delivery_test.rs` with scenarios:
   - Online delivery: message appears in recipient's client within 2 seconds
   - Offline delivery: message queued, delivered on reconnection
   - Message history: 100 messages loaded correctly with pagination
   - Duplicate prevention: same message ID rejected
   - Rate limiting: 100 msgs/min enforced
-- [ ] T097 [US4] Create unit test at `tests/unit/message_validation_test.rs` for:
+- [X] T097 [US4] Create unit test at `tests/unit/message_validation_test.rs` for:
   - Content length validation
   - UTF-8 validity
   - Recipient authorization
-- [ ] T098 [US4] Create contract test at `tests/contract/message_schema_test.rs` for WebSocket message JSON schema validation
+- [X] T098 [US4] Create contract test at `tests/contract/message_schema_test.rs` for WebSocket message JSON schema validation
 
 ---
 
