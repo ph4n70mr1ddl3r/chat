@@ -1,0 +1,311 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Chat Application Message Schema",
+  "description": "JSON schema for all WebSocket message types in the private chat application",
+  "version": "1.0",
+  "definitions": {
+    "baseMessage": {
+      "type": "object",
+      "required": ["id", "type", "timestamp"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique message identifier (UUID v4)",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["message", "typing", "presence", "ack", "error", "heartbeat"],
+          "description": "Message type determining the payload structure"
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Unix timestamp in milliseconds",
+          "minimum": 0
+        }
+      }
+    },
+    "textMessage": {
+      "allOf": [
+        { "$ref": "#/definitions/baseMessage" },
+        {
+          "type": "object",
+          "required": ["data"],
+          "properties": {
+            "type": {
+              "const": "message"
+            },
+            "data": {
+              "type": "object",
+              "required": ["recipientId", "content"],
+              "properties": {
+                "recipientId": {
+                  "type": "string",
+                  "description": "UUID of the message recipient"
+                },
+                "senderUsername": {
+                  "type": "string",
+                  "description": "Username of sender (server-provided on received messages)"
+                },
+                "content": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 5000,
+                  "description": "Message content"
+                },
+                "conversationId": {
+                  "type": "string",
+                  "description": "UUID of the conversation (server-provided)"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["pending", "sent", "delivered", "failed"],
+                  "description": "Message delivery status (server-provided)"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "typingIndicator": {
+      "allOf": [
+        { "$ref": "#/definitions/baseMessage" },
+        {
+          "type": "object",
+          "required": ["data"],
+          "properties": {
+            "type": {
+              "const": "typing"
+            },
+            "data": {
+              "type": "object",
+              "required": ["recipientId", "isTyping"],
+              "properties": {
+                "recipientId": {
+                  "type": "string",
+                  "description": "UUID of the recipient"
+                },
+                "isTyping": {
+                  "type": "boolean",
+                  "description": "True if user is currently typing"
+                },
+                "senderId": {
+                  "type": "string",
+                  "description": "UUID of the sender (server-provided on received)"
+                },
+                "senderUsername": {
+                  "type": "string",
+                  "description": "Username of the sender (server-provided on received)"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "presenceUpdate": {
+      "allOf": [
+        { "$ref": "#/definitions/baseMessage" },
+        {
+          "type": "object",
+          "required": ["data"],
+          "properties": {
+            "type": {
+              "const": "presence"
+            },
+            "data": {
+              "type": "object",
+              "required": ["userId", "username", "isOnline"],
+              "properties": {
+                "userId": {
+                  "type": "string",
+                  "description": "UUID of the user"
+                },
+                "username": {
+                  "type": "string",
+                  "description": "Username of the user"
+                },
+                "isOnline": {
+                  "type": "boolean",
+                  "description": "True if user is currently online"
+                },
+                "lastSeenAt": {
+                  "type": "integer",
+                  "description": "Unix timestamp of last activity"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "acknowledgement": {
+      "allOf": [
+        { "$ref": "#/definitions/baseMessage" },
+        {
+          "type": "object",
+          "required": ["data"],
+          "properties": {
+            "type": {
+              "const": "ack"
+            },
+            "data": {
+              "type": "object",
+              "required": ["status", "messageId"],
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["sent", "delivered", "failed"],
+                  "description": "Current delivery status"
+                },
+                "messageId": {
+                  "type": "string",
+                  "description": "UUID of the acknowledged message"
+                },
+                "conversationId": {
+                  "type": "string",
+                  "description": "UUID of the conversation"
+                },
+                "serverTimestamp": {
+                  "type": "integer",
+                  "description": "Server-assigned timestamp (authoritative)"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "errorMessage": {
+      "allOf": [
+        { "$ref": "#/definitions/baseMessage" },
+        {
+          "type": "object",
+          "required": ["data"],
+          "properties": {
+            "type": {
+              "const": "error"
+            },
+            "data": {
+              "type": "object",
+              "required": ["code", "message"],
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "INVALID_MESSAGE_LENGTH",
+                    "RECIPIENT_NOT_FOUND",
+                    "RECIPIENT_DELETED",
+                    "INVALID_JSON",
+                    "RATE_LIMIT_EXCEEDED",
+                    "UNAUTHORIZED",
+                    "SERVER_ERROR"
+                  ],
+                  "description": "Error code"
+                },
+                "message": {
+                  "type": "string",
+                  "description": "Human-readable error message"
+                },
+                "details": {
+                  "type": "object",
+                  "description": "Additional error context"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "heartbeat": {
+      "allOf": [
+        { "$ref": "#/definitions/baseMessage" },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "heartbeat"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/definitions/textMessage" },
+    { "$ref": "#/definitions/typingIndicator" },
+    { "$ref": "#/definitions/presenceUpdate" },
+    { "$ref": "#/definitions/acknowledgement" },
+    { "$ref": "#/definitions/errorMessage" },
+    { "$ref": "#/definitions/heartbeat" }
+  ],
+  "examples": {
+    "textMessageClientSend": {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "type": "message",
+      "timestamp": 1702657890000,
+      "data": {
+        "recipientId": "user-456",
+        "content": "Hello, World!"
+      }
+    },
+    "textMessageServerReceive": {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "type": "message",
+      "timestamp": 1702657890123,
+      "data": {
+        "senderId": "user-123",
+        "senderUsername": "alice",
+        "recipientId": "user-456",
+        "content": "Hello, World!",
+        "conversationId": "conv-789",
+        "status": "delivered"
+      }
+    },
+    "typingIndicator": {
+      "id": "550e8400-e29b-41d4-a716-446655440001",
+      "type": "typing",
+      "timestamp": 1702657890000,
+      "data": {
+        "recipientId": "user-456",
+        "isTyping": true
+      }
+    },
+    "presenceUpdate": {
+      "id": "550e8400-e29b-41d4-a716-446655440002",
+      "type": "presence",
+      "timestamp": 1702657890000,
+      "data": {
+        "userId": "user-123",
+        "username": "alice",
+        "isOnline": true,
+        "lastSeenAt": 1702657890000
+      }
+    },
+    "acknowledgement": {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "type": "ack",
+      "timestamp": 1702657890124,
+      "data": {
+        "status": "delivered",
+        "messageId": "550e8400-e29b-41d4-a716-446655440000",
+        "conversationId": "conv-789",
+        "serverTimestamp": 1702657890123
+      }
+    },
+    "errorMessage": {
+      "id": "550e8400-e29b-41d4-a716-446655440003",
+      "type": "error",
+      "timestamp": 1702657890000,
+      "data": {
+        "code": "INVALID_MESSAGE_LENGTH",
+        "message": "Message content exceeds 5000 character limit",
+        "details": {
+          "sentLength": 5001,
+          "maxLength": 5000
+        }
+      }
+    }
+  }
+}

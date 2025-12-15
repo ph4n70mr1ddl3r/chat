@@ -1,0 +1,535 @@
+================================================================================
+DESKTOP CHAT APPLICATION - ARCHITECTURE DIAGRAMS
+Rust + Slint + WebSocket
+================================================================================
+
+================================================================================
+1. COMPONENT HIERARCHY (Slint UI)
+================================================================================
+
+AppWindow (main export)
+│
+├─── TopBar
+│    ├── WindowControls (minimize, maximize, close)
+│    ├── UserProfile
+│    │   ├── Avatar (Image)
+│    │   ├── Username (Text)
+│    │   └── StatusIndicator (Circle)
+│    ├── ConnectionStatus
+│    │   └── Dot + "Connected" / "Connecting" / "Offline"
+│    └── SettingsMenu
+│        ├── Profile
+│        ├── Preferences
+│        └── About
+│
+├─── SplitLayout (HorizontalLayout, 20%-80% split)
+│    │
+│    ├─── Sidebar (20% width)
+│    │    │
+│    │    ├── SearchBar
+│    │    │   └── TextField (filter conversations)
+│    │    │
+│    │    ├── ConversationList (ListView)
+│    │    │   └── for conversation in conversations:
+│    │    │       ConversationItem
+│    │    │       ├── Avatar (Image)
+│    │    │       ├── Name (Text)
+│    │    │       ├── LastMessage (Text, 1 line)
+│    │    │       ├── Timestamp (Text, small)
+│    │    │       └── UnreadBadge (Text, circle)
+│    │    │
+│    │    └── UserList (optional, collapsible)
+│    │        └── for user in online-users:
+│    │            UserItem
+│    │            ├── Avatar (Image)
+│    │            ├── Username (Text)
+│    │            └── StatusDot (Circle)
+│    │
+│    └─── ChatPanel (80% width)
+│         │
+│         ├── MessageArea
+│         │   └── MessageList (ScrollView + ListView)
+│         │       └── for message in messages:
+│         │           ├── DateSeparator (if new day)
+│         │           │   └── "Today" / "Yesterday" / "2 days ago"
+│         │           └── MessageBubble
+│         │               ├── Avatar (if different sender)
+│         │               ├── Sender Name (Text, small)
+│         │               ├── Message Text (Text, wrap)
+│         │               ├── Timestamp (Text, tiny)
+│         │               ├── Read Status (checkmarks)
+│         │               └── Reactions (optional, emoji)
+│         │
+│         ├── TypingIndicator
+│         │   └── "Alice is typing..."
+│         │
+│         └── InputArea
+│             ├── InputField (TextField)
+│             ├── EmojiPicker (optional, PopupMenu)
+│             ├── FileAttachButton (Button)
+│             ├── FileDropArea (DropArea)
+│             └── SendButton (Button)
+
+
+================================================================================
+2. DATA FLOW (Synchronous & Asynchronous)
+================================================================================
+
+User Interaction → UI Callbacks → Network Commands → Server
+                                       ↓
+                               WebSocket Send
+
+Server → WebSocket Receive → ClientEvent → Event Broadcast
+                                       ↓
+                           invoke_from_event_loop()
+                                       ↓
+                              UI State Update
+                                       ↓
+                              Slint Re-render
+
+
+Timeline Example: User Sends Message
+───────────────────────────────────────────────────────────────────────────
+
+UI Thread                    Async Task (Tokio)         WebSocket
+┌──────────────────┐                                    ┌─────────┐
+│ User types text  │                                    │         │
+│ Presses Send     │─── on_send_message callback ───→  │         │
+└──────────────────┘                                    │         │
+        ↓                                               │         │
+    └─→ Spawn tokio::spawn                             │         │
+        └─→ tx.send(Command)                           │         │
+                         ↓                              │         │
+                    CommandRx receives                  │         │
+                    │                                   │         │
+                    ├─ Validates message               │         │
+                    │                                   │         │
+                    ├─ Serializes to JSON              │         │
+                    │                                   │         │
+                    └─→ WebSocket.send() ─────────────→│         │
+                                                       │ Forward │
+                                                       │ to server
+                                                       │         │
+                        ← ← ← ← ← ← ← ← ← ← ← ← ← ← ← ← Echo
+                        (server echoes back)
+                                                       │         │
+EventRx receives ←──────────────────────────────────── │         │
+│                                                      │         │
+├─ Parse JSON                                          │         │
+│                                                      │         │
+├─ Create ClientEvent::MessageReceived                │         │
+│                                                      └─────────┘
+└─ invoke_from_event_loop()
+    │
+    └─→ UI Thread
+        │
+        ├─ Add message to messages array
+        ├─ Trigger ListView re-render
+        │
+        └─→ User sees message appear!
+
+
+================================================================================
+3. THREADING MODEL
+================================================================================
+
+Main Thread (UI Event Loop)
+┌─────────────────────────────────────────────────────┐
+│                                                     │
+│  Slint Window                                       │
+│  ├── Keyboard/Mouse Input                           │
+│  ├── Render/Layout                                  │
+│  └── Property Bindings                              │
+│                                                     │
+│  UI Callbacks (non-blocking)                        │
+│  ├── on_send_message() ─→ spawn async task          │
+│  ├── on_select_conversation() ─→ spawn async task   │
+│  └── ...                                            │
+│                                                     │
+│  invoke_from_event_loop() Queue                     │
+│  ├── MessageReceived → ui.set_messages()            │
+│  ├── UserJoined → ui.set_online_users()             │
+│  └── ...                                            │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+         ↕ (channel communication)
+
+Tokio Runtime (Work-stealing thread pool)
+┌─────────────────────────────────────────────────────┐
+│                                                     │
+│  WebSocket Connection Task                          │
+│  ├── ws.read() [blocking on network I/O]            │
+│  ├── Parse incoming frames                          │
+│  └── Broadcast events                               │
+│                                                     │
+│  Event Listener Task                                │
+│  ├── event_rx.recv() [blocking on channel]          │
+│  └── Call invoke_from_event_loop()                  │
+│                                                     │
+│  Command Handler Tasks (spawned per command)        │
+│  ├── SendMessage → encode → ws.send()               │
+│  ├── Authenticate → send auth token                 │
+│  └── ...                                            │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+         ↕ (MPSC channels)
+
+Other Threads (Optional)
+┌─────────────────────────────────────────────────────┐
+│  Image Loader Thread (for avatar/image loading)    │
+│  File Upload/Download Threads                      │
+│  Database Threads (if using blocking DB)            │
+└─────────────────────────────────────────────────────┘
+
+
+================================================================================
+4. STATE ARCHITECTURE (Layered)
+================================================================================
+
+Layer 1: PERSISTENT STATE (Disk/Database)
+┌──────────────────────────────────────────┐
+│  User Profile (name, ID, settings)       │
+│  Conversation History (from DB)          │
+│  User Preferences (theme, language)      │
+│  Auth Credentials (encrypted)            │
+└──────────────────────────────────────────┘
+         ↕ (Load/Save on startup)
+
+Layer 2: APPLICATION STATE (Arc<RwLock<>>)
+┌──────────────────────────────────────────┐
+│  AuthState                               │
+│  ├── current_user_id                     │
+│  ├── username                            │
+│  ├── auth_token                          │
+│  └── is_authenticated                    │
+│                                          │
+│  ConversationState                       │
+│  ├── conversations: HashMap              │
+│  ├── current_conversation_id             │
+│  └── message_cache: LruCache             │
+│                                          │
+│  UserState                               │
+│  ├── online_users: HashSet               │
+│  └── user_info: HashMap                  │
+└──────────────────────────────────────────┘
+         ↕ (Sync via StateSync)
+
+Layer 3: UI STATE (Slint Properties)
+┌──────────────────────────────────────────┐
+│  application-state: Global               │
+│  ├── current_user_id                     │
+│  ├── is_authenticated                    │
+│  ├── connection_status                   │
+│  └── error_message                       │
+│                                          │
+│  AppWindow Properties                    │
+│  ├── conversations: [ConversationData]   │
+│  ├── messages: [MessageData]             │
+│  ├── online_users: [UserData]            │
+│  └── sidebar_expanded: bool              │
+└──────────────────────────────────────────┘
+
+Layer 4: TRANSIENT STATE (Channels/Events)
+┌──────────────────────────────────────────┐
+│  Typing Indicators (broadcast)           │
+│  Presence Changes (broadcast)            │
+│  Scroll Position (component-local)       │
+│  Search Query (component-local)          │
+└──────────────────────────────────────────┘
+
+
+================================================================================
+5. MESSAGE VIRTUALIZATION (ListView)
+================================================================================
+
+Total Messages: 10,000
+User sees: ~20 at a time
+
+Physical Memory Layout:
+┌────────────────────────────────────────┐
+│ Recycled DOM nodes (30-40 nodes)       │
+│ - Reused as user scrolls               │
+│ - Old data replaced with new data      │
+│ - No allocation/deallocation during    │
+│   scroll                               │
+│                                        │
+│  ┌─────────────────────────────┐       │
+│  │ Message 10,000 (top)        │       │
+│  ├─────────────────────────────┤       │
+│  │ ...                         │       │
+│  ├─────────────────────────────┤       │
+│  │ Message 9,990 (visible)     │ ← ← ← User viewport
+│  │ Message 9,991 (visible)     │
+│  │ ...                         │
+│  │ Message 10,010 (visible)    │ ← ← ← User viewport
+│  ├─────────────────────────────┤
+│  │ ...                         │
+│  ├─────────────────────────────┤
+│  │ Message 1 (bottom)          │
+│  └─────────────────────────────┘
+│                                        │
+│ Unused data (not rendered)             │
+└────────────────────────────────────────┘
+
+Performance: O(1) scroll, 60 FPS regardless of list size
+
+
+================================================================================
+6. WEBSOCKET CLIENT ARCHITECTURE
+================================================================================
+
+┌──────────────────────────────────┐
+│  WebSocketClient (Arc)           │
+├──────────────────────────────────┤
+│  command_tx: MPSC Sender         │
+│  event_tx: broadcast Sender      │
+│  connection_state: Arc<State>    │
+└──────────────────────────────────┘
+         ↕
+      MPSC
+    Channel
+    (bounded)
+         ↓
+
+┌──────────────────────────────────────────┐
+│  WebSocket Connection Loop (Tokio)       │
+├──────────────────────────────────────────┤
+│                                          │
+│  1. CONNECT                              │
+│     TcpStream → TLS → WebSocket          │
+│                                          │
+│  2. READ LOOP (concurrent)               │
+│     websocket.read() → parse → broadcast │
+│                                          │
+│  3. COMMAND LOOP (concurrent)            │
+│     command_rx.recv() → websocket.send() │
+│                                          │
+│  4. KEEPALIVE LOOP (concurrent)          │
+│     Tokio::time::interval() → ping       │
+│                                          │
+│  5. RECONNECT LOGIC                      │
+│     On disconnect → exponential backoff  │
+│                                          │
+└──────────────────────────────────────────┘
+         ↓
+    Broadcast
+    Channel
+         ↓
+
+┌──────────────────────────────────────────┐
+│  Event Listeners (subscribers)           │
+├──────────────────────────────────────────┤
+│  - UI Bridge (updates Slint)             │
+│  - State Manager (updates AppState)      │
+│  - Custom Handlers (user-defined)        │
+└──────────────────────────────────────────┘
+
+
+================================================================================
+7. WINDOWS PLATFORM INTEGRATION
+================================================================================
+
+System Tray Icon
+├── Context Menu
+│   ├── Show Window
+│   ├── Status
+│   └── Quit
+└── Notification Badge (unread count)
+
+Desktop Notifications
+├── New Message Notification
+│   ├── Author name
+│   ├── Message preview
+│   └── Click → Bring to focus
+├── Connection Status Changes
+└── Error Alerts
+
+Hotkeys (Optional)
+├── Ctrl+Alt+C: Focus chat window
+├── Ctrl+Alt+M: Toggle mute
+└── Ctrl+Alt+S: Send message
+
+Window Management
+├── Minimize/Restore
+├── Always on top (optional)
+├── Snap assist support
+└── Dark mode integration
+
+File Drag-Drop
+├── Drop files to send
+├── Upload to server
+└── Show progress
+
+
+================================================================================
+8. MESSAGE SENDING - COMPLETE FLOW
+================================================================================
+
+Step 1: UI Input
+┌───────────────┐
+│ User types    │
+│ Presses Send  │
+└───────┬───────┘
+        ↓
+Step 2: Slint Callback
+┌───────────────────────────────────────┐
+│ on_send_message(text: String)         │
+│ Called by Slint when button pressed   │
+└───────────┬───────────────────────────┘
+            ↓
+Step 3: Spawn Async Task
+┌──────────────────────────────────────────────────┐
+│ tokio::spawn(async {                             │
+│   command_tx.send(ClientCommand::SendMessage {   │
+│     content: text,                               │
+│     conversation_id: current_conv_id             │
+│   }).await                                       │
+│ })                                               │
+└──────────────┬───────────────────────────────────┘
+               ↓
+Step 4: Network Send
+┌────────────────────────────────────┐
+│ Command Handler receives           │
+│ Serializes to JSON                 │
+│ Sends via WebSocket                │
+└────────────┬─────────────────────┘
+             ↓
+Step 5: Server Processing
+    [Network boundary]
+             ↓
+Step 6: Server Echo
+┌─────────────────────────┐
+│ Server processes        │
+│ Broadcasts to all users │
+│ Echoes back to sender   │
+└────────────┬────────────┘
+             ↓
+Step 7: Client Receives Echo
+┌──────────────────────────────────┐
+│ WebSocket.read()                 │
+│ Parses incoming JSON             │
+│ Creates ClientEvent              │
+│ Broadcasts via broadcast channel │
+└────────────┬─────────────────────┘
+             ↓
+Step 8: Event Listener Receives
+┌─────────────────────────────────────┐
+│ event_rx.recv()                     │
+│ Extracts MessageReceived event      │
+│ Calls invoke_from_event_loop()      │
+└──────────────┬──────────────────────┘
+               ↓
+Step 9: UI Update (Main Thread)
+┌────────────────────────────────────┐
+│ messages.push(new_message)         │
+│ ListView property changed          │
+│ Slint re-renders                   │
+└──────────────┬─────────────────────┘
+               ↓
+Step 10: User Sees Message
+┌──────────────────────────┐
+│ Message appears in list  │
+│ Auto-scrolls to bottom   │
+│ User sees their message  │
+└──────────────────────────┘
+
+Total Time: ~100-200ms (depends on network latency)
+
+
+================================================================================
+9. PERFORMANCE CRITICAL SECTIONS
+================================================================================
+
+Hot Path #1: Message Reception
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WebSocket.read() → JSON.parse() → Broadcast → UI.set_messages()
+
+Optimization:
+✓ Use serde for fast JSON parsing
+✓ Pre-allocate message buffer
+✓ Batch multiple messages before UI update
+✗ Avoid string allocations in hot path
+
+
+Hot Path #2: List Scrolling
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+User scrolls → ListView.on_scroll() → Render visible items
+
+Optimization:
+✓ Slint virtualizes automatically
+✓ Only render 20-40 visible items
+✓ Recycle DOM nodes
+✗ Don't compute all item heights upfront
+
+
+Hot Path #3: Message Cache Lookup
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+User loads conversation → Query cache → Load from DB if miss
+
+Optimization:
+✓ LRU cache for 10 most recent conversations
+✓ Keep 1000-5000 messages per conversation in memory
+✓ Lazy load older messages on demand
+✗ Don't load entire history at startup
+
+
+Hot Path #4: Typing Indicator
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+User types → Debounce → Send typing event → Broadcast → UI
+
+Optimization:
+✓ Debounce typing events (only send every 500ms)
+✓ Use broadcast (low overhead)
+✓ Drop if queue full
+✗ Don't send every keystroke
+
+
+================================================================================
+10. ERROR HANDLING FLOW
+================================================================================
+
+Network Error
+┌─────────────────────────┐
+│ WebSocket I/O error     │
+└────────────┬────────────┘
+             ↓
+┌──────────────────────────────────────┐
+│ Check error type:                    │
+│ - Timeout? → Retry                   │
+│ - Closed? → Reconnect                │
+│ - Protocol? → Log & disconnect       │
+└────────────┬─────────────────────────┘
+             ↓
+┌──────────────────────────────────────┐
+│ Broadcast ClientEvent::Error         │
+└────────────┬─────────────────────────┘
+             ↓
+┌──────────────────────────────────────┐
+│ Event Listener receives              │
+│ invoke_from_event_loop() to UI       │
+└────────────┬─────────────────────────┘
+             ↓
+┌──────────────────────────────────────┐
+│ UI.set_error("Connection lost")      │
+│ Show error banner                    │
+│ Disable input                        │
+│ Show "Reconnecting..." spinner       │
+└──────────────────────────────────────┘
+             ↓
+┌──────────────────────────────────────┐
+│ Exponential backoff:                 │
+│ 1s, 2s, 4s, 8s, 16s, ...             │
+│ Cap at 30s                           │
+└──────────────────────────────────────┘
+             ↓
+┌──────────────────────────────────────┐
+│ Successful reconnect:                │
+│ Clear error                          │
+│ Re-sync state                        │
+│ Resume normal operation              │
+└──────────────────────────────────────┘
+
+
+================================================================================
+End of Architecture Diagrams
+================================================================================
