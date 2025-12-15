@@ -1,7 +1,8 @@
 //! Backend services
 
-/// Authentication service placeholder
-pub struct AuthService;
+pub mod auth_service;
+
+pub use auth_service::AuthService;
 
 /// Message service placeholder
 pub struct MessageService;

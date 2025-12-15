@@ -46,5 +46,8 @@ thiserror = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 log = "0.4"
 
+# JSON Schema validation
+jsonschema = "0.17"
+
 # UI (Slint for frontend)
 slint = "1.5"

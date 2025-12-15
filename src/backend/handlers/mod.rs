@@ -1,6 +1,12 @@
 //! Message handlers for WebSocket and HTTP endpoints
 
-use crate::models::{User, Conversation, Message};
+pub mod websocket;
+pub mod handshake;
+pub mod dispatcher;
+pub mod heartbeat;
+pub mod router;
+
+use crate::models::Message;
 
 /// WebSocket message handler
 pub struct MessageHandler;

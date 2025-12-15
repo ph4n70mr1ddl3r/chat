@@ -7,3 +7,5 @@ pub mod services;
 pub mod handlers;
 pub mod db;
 
+#[cfg(test)]
+mod tests;
