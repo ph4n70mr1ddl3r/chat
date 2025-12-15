@@ -1,11 +1,14 @@
 //! Message handlers for WebSocket and HTTP endpoints
 
 pub mod auth;
+pub mod auth_with_rate_limit;
 pub mod dispatcher;
 pub mod handshake;
 pub mod heartbeat;
 pub mod parser;
+pub mod refresh;
 pub mod router;
+pub mod user;
 pub mod websocket;
 
 use crate::models::Message;

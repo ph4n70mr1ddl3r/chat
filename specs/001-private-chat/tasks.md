@@ -184,44 +184,44 @@ Goal: Users can create accounts with username and password (meeting strength req
 
 ### Authentication Service Setup
 
-- [ ] T033 [P] [US1] Create authentication service at `src/backend/services/auth_service.rs` with traits: create_user, authenticate, verify_token
-- [ ] T034 [P] [US1] Implement password hashing using bcrypt at `src/backend/services/auth_service.rs` with salt generation
-- [ ] T035 [P] [US1] Implement password validation (min 8 chars, 1 uppercase, 1 lowercase, 1 digit) at `src/backend/services/auth_service.rs`
-- [ ] T036 [P] [US1] Create JWT token generation at `src/backend/services/auth_service.rs` with 1-hour expiration, subject, audience claims
-- [ ] T037 [US1] Create database queries module at `src/backend/db/queries/users.rs` with: insert_user, find_user_by_username, find_user_by_id
+- [X] T033 [P] [US1] Create authentication service at `src/backend/services/auth_service.rs` with traits: create_user, authenticate, verify_token
+- [X] T034 [P] [US1] Implement password hashing using bcrypt at `src/backend/services/auth_service.rs` with salt generation
+- [X] T035 [P] [US1] Implement password validation (min 8 chars, 1 uppercase, 1 lowercase, 1 digit) at `src/backend/services/auth_service.rs`
+- [X] T036 [P] [US1] Create JWT token generation at `src/backend/services/auth_service.rs` with 1-hour expiration, subject, audience claims
+- [X] T037 [US1] Create database queries module at `src/backend/db/queries/users.rs` with: insert_user, find_user_by_username, find_user_by_id
 
 ### Signup Endpoint & Validation
 
-- [ ] T038 [P] [US1] Create signup request/response types at `src/backend/handlers/auth.rs`: SignupRequest, LoginResponse
-- [ ] T039 [P] [US1] Implement signup endpoint at `src/backend/handlers/auth.rs` (POST /auth/signup)
+- [X] T038 [P] [US1] Create signup request/response types at `src/backend/handlers/auth.rs`: SignupRequest, LoginResponse
+- [X] T039 [P] [US1] Implement signup endpoint at `src/backend/handlers/auth.rs` (POST /auth/signup)
   - Validate username (1-50 chars, alphanumeric + underscore, unique)
   - Validate password strength
   - Create user, issue token
   - Return 201 with userId, username, token, expiresIn
   - Return 409 if username exists
   - Return 400 if invalid password
-- [ ] T040 [US1] Create validation module at `src/backend/validators/mod.rs` with reusable validators: validate_username, validate_password, validate_email
-- [ ] T041 [P] [US1] Create error responses at `src/backend/handlers/auth.rs` for SignupError: UsernameTaken, InvalidPassword, DatabaseError
+- [X] T040 [US1] Create validation module at `src/backend/validators/mod.rs` with reusable validators: validate_username, validate_password, validate_email
+- [X] T041 [P] [US1] Create error responses at `src/backend/handlers/auth.rs` for SignupError: UsernameTaken, InvalidPassword, DatabaseError
 
 ### User Account Tests
 
-- [ ] T042 [US1] Create test file at `tests/integration/signup_test.rs` with scenarios:
+- [X] T042 [US1] Create test file at `tests/integration/signup_test.rs` with scenarios:
   - Happy path: valid signup → 201 with token
   - Duplicate username → 409 Conflict
   - Invalid password → 400 Bad Request
   - Username too long → 400 Bad Request
-- [ ] T043 [US1] Create unit test at `tests/unit/auth_service_test.rs` for:
+- [X] T043 [US1] Create unit test at `tests/unit/auth_service_test.rs` for:
   - Password hashing consistency (same password hashes differently)
   - Password validation (valid/invalid cases)
   - JWT encoding/decoding
 
 ### Frontend Signup UI
 
-- [ ] T044 [P] [US1] Create signup screen layout at `src/frontend/screens/signup_screen.slint` with fields: username input, password input, confirm password, create account button
-- [ ] T045 [US1] Create signup logic at `src/frontend/screens/signup_screen.rs` handling UI state and validation
-- [ ] T046 [US1] Implement HTTP client wrapper at `src/frontend/services/http_client.rs` (POST /auth/signup)
-- [ ] T047 [US1] Connect UI to backend signup at `src/frontend/screens/signup_screen.rs` (call http_client, store token, navigate to login)
-- [ ] T048 [US1] Create error display at `src/frontend/screens/signup_screen.slint` for validation errors, duplicate username, server errors
+- [X] T044 [P] [US1] Create signup screen layout at `src/frontend/screens/signup_screen.slint` with fields: username input, password input, confirm password, create account button
+- [X] T045 [US1] Create signup logic at `src/frontend/screens/signup_screen.rs` handling UI state and validation
+- [X] T046 [US1] Implement HTTP client wrapper at `src/frontend/services/http_client.rs` (POST /auth/signup)
+- [X] T047 [US1] Connect UI to backend signup at `src/frontend/screens/signup_screen.rs` (call http_client, store token, navigate to login)
+- [X] T048 [US1] Create error display at `src/frontend/screens/signup_screen.slint` for validation errors, duplicate username, server errors
 
 ---
 
@@ -234,8 +234,8 @@ Goal: Registered users can log in with credentials and receive JWT token for aut
 
 ### Login Endpoint & Validation
 
-- [ ] T049 [P] [US2] Create login request type at `src/backend/handlers/auth.rs`: LoginRequest with username, password
-- [ ] T050 [P] [US2] Implement login endpoint at `src/backend/handlers/auth.rs` (POST /auth/login)
+- [X] T049 [P] [US2] Create login request type at `src/backend/handlers/auth.rs`: LoginRequest with username, password
+- [X] T050 [P] [US2] Implement login endpoint at `src/backend/handlers/auth.rs` (POST /auth/login)
   - Fetch user by username
   - Verify password hash matches
   - Check user not deleted
@@ -243,45 +243,45 @@ Goal: Registered users can log in with credentials and receive JWT token for aut
   - Return 200 with userId, username, token, expiresIn
   - Return 401 if credentials invalid
   - Return 404 if account deleted
-- [ ] T051 [US2] Create rate limiting for login at `src/backend/middleware/rate_limit.rs` (5 failed attempts per IP per 15 minutes)
-- [ ] T052 [P] [US2] Create failed login tracking at `src/backend/db/queries/auth_logs.rs` (insert_failed_login, get_failed_attempts)
+- [X] T051 [US2] Create rate limiting for login at `src/backend/middleware/rate_limit.rs` (5 failed attempts per IP per 15 minutes)
+- [X] T052 [P] [US2] Create failed login tracking at `src/backend/db/queries/auth_logs.rs` (insert_failed_login, get_failed_attempts)
 
 ### Session & Token Management
 
-- [ ] T053 [P] [US2] Implement token refresh endpoint at `src/backend/handlers/auth.rs` (POST /auth/refresh)
+- [X] T053 [P] [US2] Implement token refresh endpoint at `src/backend/handlers/refresh.rs` (POST /auth/refresh)
   - Accept Bearer token in Authorization header
   - Validate token (signature, expiration)
   - Issue new token (1-hour expiry)
   - Return 200 with new token
   - Return 401 if token invalid/expired
 - [ ] T054 [US2] Create token validation middleware at `src/backend/middleware/auth.rs` for protected endpoints
-- [ ] T055 [P] [US2] Implement /user/me endpoint at `src/backend/handlers/user.rs` (GET /user/me)
+- [X] T055 [P] [US2] Implement /user/me endpoint at `src/backend/handlers/user.rs` (GET /user/me)
   - Accept Bearer token
   - Return 200 with userId, username, createdAt, isOnline, lastSeenAt
   - Return 401 if token invalid
 
 ### Login Tests
 
-- [ ] T056 [US2] Create test file at `tests/integration/login_test.rs` with scenarios:
+- [X] T056 [US2] Create test file at `tests/integration/login_test.rs` with scenarios:
   - Happy path: valid login → 200 with token
   - Invalid password → 401 Unauthorized
   - User not found → 401 Unauthorized
   - Deleted account → 404 Account Deleted
   - Rate limiting → 429 after 5 attempts
-- [ ] T057 [US2] Create unit test at `tests/unit/password_verification_test.rs` for bcrypt verification, timing attacks mitigation
+- [X] T057 [US2] Create unit test at `tests/unit/password_verification_test.rs` for bcrypt verification, timing attacks mitigation
 
 ### Frontend Login UI
 
-- [ ] T058 [P] [US2] Create login screen at `src/frontend/screens/login_screen.slint` with: username input, password input, login button, signup link
-- [ ] T059 [US2] Implement login logic at `src/frontend/screens/login_screen.rs` (call POST /auth/login, store token)
-- [ ] T060 [US2] Create session storage at `src/frontend/services/session.rs` (store JWT token in secure location, retrieve on app start)
-- [ ] T061 [US2] Implement token refresh at `src/frontend/services/session.rs` (auto-refresh before expiration)
-- [ ] T062 [US2] Create error display at `src/frontend/screens/login_screen.slint` for invalid credentials, server errors
+- [X] T058 [P] [US2] Create login screen at `src/frontend/screens/login_screen.slint` with: username input, password input, login button, signup link
+- [X] T059 [US2] Implement login logic at `src/frontend/screens/login_screen.rs` (call POST /auth/login, store token)
+- [X] T060 [US2] Create session storage at `src/frontend/services/session.rs` (store JWT token in secure location, retrieve on app start)
+- [X] T061 [US2] Implement token refresh at `src/frontend/services/session.rs` (auto-refresh before expiration)
+- [X] T062 [US2] Create error display at `src/frontend/screens/login_screen.slint` for invalid credentials, server errors
 
 ### Session Persistence
 
-- [ ] T063 [US2] Implement automatic login at app startup at `src/frontend/main.rs` (check stored token, connect WebSocket if valid)
-- [ ] T064 [US2] Create logout flow at `src/frontend/screens/main_screen.slint` (clear token, disconnect WebSocket, return to login)
+- [X] T063 [US2] Implement automatic login at app startup at `src/frontend/main.rs` (check stored token, connect WebSocket if valid)
+- [X] T064 [US2] Create logout flow at `src/frontend/screens/main_screen.slint` (clear token, disconnect WebSocket, return to login)
 
 ---
 

@@ -1,3 +1,4 @@
-//! Frontend screens placeholder
+//! Frontend screens
 
+pub mod login_screen;
 pub mod signup_screen;

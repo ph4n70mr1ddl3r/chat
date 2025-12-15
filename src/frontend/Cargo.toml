@@ -18,6 +18,7 @@ log = { workspace = true }
 slint = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+reqwest = { workspace = true }
 
 # Internal dependencies
 chat-shared = { path = "../shared" }

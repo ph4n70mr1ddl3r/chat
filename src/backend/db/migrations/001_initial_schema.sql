@@ -62,6 +62,21 @@ CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON messages(sender_id, created
 CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status) WHERE status IN ('pending', 'failed');
 CREATE INDEX IF NOT EXISTS idx_messages_delivered_at ON messages(delivered_at) WHERE delivered_at IS NULL;
 
+-- Auth logs table (for tracking failed login attempts)
+CREATE TABLE IF NOT EXISTS auth_logs (
+  id TEXT PRIMARY KEY,
+  ip_address TEXT NOT NULL,
+  username TEXT,
+  event_type TEXT NOT NULL CHECK (event_type IN ('login_success', 'login_failed', 'signup', 'logout')),
+  created_at INTEGER NOT NULL DEFAULT (cast(strftime('%s', 'now') as integer) * 1000),
+  user_agent TEXT,
+  details TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_logs_ip_address ON auth_logs(ip_address, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_auth_logs_username ON auth_logs(username, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_auth_logs_event_type ON auth_logs(event_type, created_at DESC);
+
 -- Metadata table for schema versioning
 CREATE TABLE IF NOT EXISTS schema_metadata (
   version INTEGER PRIMARY KEY,
@@ -69,4 +84,4 @@ CREATE TABLE IF NOT EXISTS schema_metadata (
   applied_at INTEGER NOT NULL DEFAULT (cast(strftime('%s', 'now') as integer) * 1000)
 );
 
-INSERT OR IGNORE INTO schema_metadata (version, description) VALUES (1, 'Initial schema with users, conversations, messages tables');
+INSERT OR IGNORE INTO schema_metadata (version, description) VALUES (1, 'Initial schema with users, conversations, messages, auth_logs tables');

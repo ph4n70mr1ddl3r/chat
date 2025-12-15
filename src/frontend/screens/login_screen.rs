@@ -1,58 +1,53 @@
-//! Signup screen UI and logic
+//! Login screen UI and logic
 
 use crate::services::{HttpClient, SessionManager};
 use std::sync::Arc;
 
 slint::include_modules!();
 
-/// Signup screen controller
-pub struct SignupScreen {
-    ui: SignupScreenComponent,
+/// Login screen controller
+pub struct LoginScreen {
+    ui: LoginScreenComponent,
     http_client: Arc<HttpClient>,
     session_manager: Arc<SessionManager>,
 }
 
-impl SignupScreen {
+impl LoginScreen {
     pub fn new(base_url: String) -> Self {
-        let ui = SignupScreenComponent::new().unwrap();
+        let ui = LoginScreenComponent::new().unwrap();
         let http_client = Arc::new(HttpClient::new(base_url));
         let session_manager = Arc::new(SessionManager::new());
         
         let ui_weak = ui.as_weak();
         let client = http_client.clone();
         let session_mgr = session_manager.clone();
-        ui.on_signup(move || {
+        ui.on_login(move || {
             let ui_handle = ui_weak.unwrap();
             let username = ui_handle.get_username().to_string();
             let password = ui_handle.get_password().to_string();
-            let confirm_password = ui_handle.get_confirm_password().to_string();
             
             // Validate inputs
-            if password != confirm_password {
-                ui_handle.set_error_message("Passwords do not match".into());
-                return;
-            }
-            
             if username.is_empty() {
                 ui_handle.set_error_message("Username cannot be empty".into());
                 return;
             }
             
-            if password.len() < 8 {
-                ui_handle.set_error_message("Password must be at least 8 characters".into());
+            if password.is_empty() {
+                ui_handle.set_error_message("Password cannot be empty".into());
                 return;
             }
             
             // Clear previous error
             ui_handle.set_error_message("".into());
+            ui_handle.set_is_loading(true);
             
-            // Call backend signup endpoint in background thread
+            // Call backend login endpoint in background thread
             let ui_weak_inner = ui_weak.clone();
             let http_client = client.clone();
             let session_manager = session_mgr.clone();
             std::thread::spawn(move || {
                 let runtime = tokio::runtime::Runtime::new().unwrap();
-                match runtime.block_on(http_client.signup(username.clone(), password.clone())) {
+                match runtime.block_on(http_client.login(username.clone(), password.clone())) {
                     Ok(response) => {
                         // Save session to disk
                         if let Err(e) = session_manager.save_session_sync(
@@ -67,14 +62,15 @@ impl SignupScreen {
                         // Success! Update UI from event loop
                         slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_weak_inner.upgrade() {
+                                ui.set_is_loading(false);
                                 ui.set_error_message(
                                     format!(
-                                        "Account created! Welcome, {}",
+                                        "Login successful! Welcome, {}",
                                         response.username
                                     )
                                     .into(),
                                 );
-                                // TODO: Navigate to chat screen after successful signup
+                                // TODO: Navigate to chat screen after successful login
                             }
                         })
                         .ok();
@@ -82,6 +78,7 @@ impl SignupScreen {
                     Err(e) => {
                         slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_weak_inner.upgrade() {
+                                ui.set_is_loading(false);
                                 ui.set_error_message(e.into());
                             }
                         })
@@ -92,9 +89,9 @@ impl SignupScreen {
         });
         
         let ui_weak = ui.as_weak();
-        ui.on_navigate_to_login(move || {
-            // TODO: Navigate to login screen
-            println!("Navigate to login");
+        ui.on_navigate_to_signup(move || {
+            // TODO: Navigate to signup screen
+            println!("Navigate to signup");
         });
         
         Self { ui, http_client, session_manager }

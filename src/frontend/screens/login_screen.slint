@@ -1,13 +1,13 @@
 import { VerticalBox, HorizontalBox, LineEdit, Button, Text } from "std-widgets.slint";
 
-export component SignupScreenComponent {
+export component LoginScreenComponent {
     in property <string> username;
     in property <string> password;
-    in property <string> confirm_password;
     in property <string> error_message;
+    in property <bool> is_loading;
     
-    callback signup();
-    callback navigate-to-login();
+    callback login();
+    callback navigate-to-signup();
     
     VerticalBox {
         alignment: start;
@@ -15,7 +15,7 @@ export component SignupScreenComponent {
         padding: 20px;
         
         Text {
-            text: "Create Account";
+            text: "Login";
             font-size: 24px;
             font-weight: bold;
             color: #333;
@@ -28,8 +28,9 @@ export component SignupScreenComponent {
                 vertical-alignment: center;
             }
             LineEdit {
-                placeholder-text: "Enter username (1-50 chars)";
+                placeholder-text: "Enter username";
                 text: <=> root.username;
+                enabled: !root.is_loading;
             }
         }
         
@@ -43,28 +44,16 @@ export component SignupScreenComponent {
                 placeholder-text: "Enter password";
                 text: <=> root.password;
                 input-type: password;
-            }
-        }
-        
-        HorizontalBox {
-            Text {
-                text: "Confirm Password:";
-                width: 120px;
-                vertical-alignment: center;
-            }
-            LineEdit {
-                placeholder-text: "Re-enter password";
-                text: <=> root.confirm_password;
-                input-type: password;
+                enabled: !root.is_loading;
             }
         }
         
         Button {
-            text: "Sign Up";
+            text: root.is_loading ? "Logging in..." : "Log In";
             clicked => {
-                root.signup();
+                root.login();
             }
-            enabled: root.username.length > 0 && root.password.length > 0 && root.confirm_password.length > 0;
+            enabled: root.username.length > 0 && root.password.length > 0 && !root.is_loading;
         }
         
         Text {
@@ -76,13 +65,14 @@ export component SignupScreenComponent {
         
         HorizontalBox {
             Text {
-                text: "Already have an account? ";
+                text: "Don't have an account? ";
             }
             Button {
-                text: "Log In";
+                text: "Sign Up";
                 clicked => {
-                    root.navigate-to-login();
+                    root.navigate-to-signup();
                 }
+                enabled: !root.is_loading;
             }
         }
     }
