@@ -9,6 +9,8 @@
 
 The data model consists of three core entities: **User**, **Conversation**, and **Message**. Relationships enforce one-to-one conversation constraints, message ordering, and user lifecycle (deletion with anonymization).
 
+**Note on Sessions**: Sessions are JWT-based and stateless (no Session entity required). Authentication is stateless: clients send JWT tokens in WebSocket handshake, server validates token signature and expiration, then establishes connection. No session table is needed; token validity is verified at connection time.
+
 ---
 
 ## Entity: User
@@ -147,6 +149,7 @@ CREATE INDEX idx_conversations_updated_at ON conversations(updated_at DESC);
 | `created_at` | TIMESTAMP | NOT NULL, DEFAULT NOW() | Server-assigned timestamp (authoritative) |
 | `delivered_at` | TIMESTAMP | NULL | When message first delivered to recipient (online or via retry) |
 | `status` | ENUM | NOT NULL, DEFAULT 'pending' | pending / sent / delivered / failed |
+| `is_anonymized` | BOOLEAN | NOT NULL, DEFAULT FALSE | True if sender account deleted; used to filter display name as "Deleted User" |
 
 ### Validation Rules
 
@@ -161,6 +164,7 @@ CREATE INDEX idx_conversations_updated_at ON conversations(updated_at DESC);
 - **sender authorization**: Only the sender can update their own message (immutable after creation)
 - **recipient authorization**: Only the recipient can see messages in a conversation (checked at query time)
 - **created_at immutable**: Server timestamp is authoritative; prevents clock skew attacks
+- **is_anonymized flag**: Set to TRUE when sender account is deleted; used by app layer to display "Deleted User" instead of sender's username; prevents direct username lookups on deleted accounts
 - **status transitions**: pending → sent → delivered (or failed if offline too long)
 
 ### Note on Status Lifecycle
@@ -182,8 +186,9 @@ Read receipts (tracking when user reads a message) are NOT implemented in MVP.
 
 When a user deletes their account:
 - All messages from that user remain in conversation history
-- `sender_id` is NOT changed (references deleted user)
-- App layer displays "Deleted User" instead of resolving user name
+- `sender_id` is NOT changed (references deleted user record)
+- `is_anonymized` flag is set to TRUE (marks message as from deleted account)
+- App layer displays "Deleted User" instead of resolving sender's username when `is_anonymized=TRUE`
 - This preserves message thread coherence while respecting privacy
 
 ### SQLite Schema
@@ -198,6 +203,7 @@ CREATE TABLE messages (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   delivered_at TIMESTAMP,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'delivered', 'failed')),
+  is_anonymized BOOLEAN NOT NULL DEFAULT FALSE,
   FOREIGN KEY (conversation_id) REFERENCES conversations(id),
   FOREIGN KEY (sender_id) REFERENCES users(id),
   FOREIGN KEY (recipient_id) REFERENCES users(id),
@@ -237,7 +243,7 @@ Client creates message (UUID assigned)
 - **Indefinite retry**: Message never expires while recipient account exists
 - **Exponential backoff**: 0.5-60s (from research.md)
 - **Delivery guarantee**: At-least-once (client deduplicates via UUID)
-- **Account deletion edge case**: If sender deleted while message pending, deliver normally (sender_id preserved); if recipient deleted, stop retrying and mark failed
+- **Account deletion edge case**: If sender deleted while message pending, set `is_anonymized=TRUE` (mark for display as "Deleted User"); if recipient deleted, stop retrying and mark failed
 
 ---
 

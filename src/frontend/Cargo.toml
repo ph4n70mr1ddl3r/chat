@@ -1,0 +1,27 @@
+[package]
+name = "chat-frontend"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio-tungstenite = { workspace = true }
+uuid = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+log = { workspace = true }
+slint = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# Internal dependencies
+chat-shared = { path = "../shared" }
+
+[[bin]]
+name = "chat-gui"
+path = "main.rs"

@@ -60,17 +60,17 @@ Goal: Initialize Rust workspace, configure dependencies, and establish CI/CD inf
 
 ### Setup Tasks
 
-- [ ] T001 Create Cargo workspace root at `/home/riddler/chat/Cargo.toml` with three members: `backend`, `frontend`, `shared`
-- [ ] T002 [P] Initialize backend crate at `src/backend/Cargo.toml` with dependencies: tokio (full), sqlx (sqlite, runtime-tokio), tungstenite, serde, jsonwebtoken
-- [ ] T003 [P] Initialize frontend crate at `src/frontend/Cargo.toml` with dependencies: slint, tokio, tungstenite-client, serde
-- [ ] T004 [P] Initialize shared crate at `src/shared/Cargo.toml` with dependencies: serde, serde_json, jsonwebtoken
-- [ ] T005 [P] Create backend main entry point at `src/backend/main.rs` with clap CLI argument parser (port, db-path, log-level)
-- [ ] T006 [P] Create frontend main entry point at `src/frontend/main.rs` with Slint window initialization
-- [ ] T007 [P] Configure workspace-level Cargo.toml with shared dependencies and workspace settings
-- [ ] T008 Create `.gitignore` in repository root (ignore: target/, *.db, *.db-wal, *.db-shm, .env, .DS_Store)
-- [ ] T009 Create GitHub Actions workflow at `.github/workflows/rust.yml` for CI/CD (test, clippy, fmt checks on PR)
-- [ ] T010 [P] Initialize SQLite database schema migrations folder at `src/backend/db/migrations/` (empty; migrations created in Phase 2)
-- [ ] T011 Verify `cargo build --workspace` compiles all crates without warnings or errors
+- [X] T001 Create Cargo workspace root at `/home/riddler/chat/Cargo.toml` with three members: `backend`, `frontend`, `shared`
+- [X] T002 [P] Initialize backend crate at `src/backend/Cargo.toml` with dependencies: tokio (full), sqlx (sqlite, runtime-tokio), tungstenite, serde, jsonwebtoken
+- [X] T003 [P] Initialize frontend crate at `src/frontend/Cargo.toml` with dependencies: slint, tokio, tungstenite-client, serde
+- [X] T004 [P] Initialize shared crate at `src/shared/Cargo.toml` with dependencies: serde, serde_json, jsonwebtoken
+- [X] T005 [P] Create backend main entry point at `src/backend/main.rs` with clap CLI argument parser (port, db-path, log-level)
+- [X] T006 [P] Create frontend main entry point at `src/frontend/main.rs` with Slint window initialization
+- [X] T007 [P] Configure workspace-level Cargo.toml with shared dependencies and workspace settings
+- [X] T008 Create `.gitignore` in repository root (ignore: target/, *.db, *.db-wal, *.db-shm, .env, .DS_Store)
+- [X] T009 Create GitHub Actions workflow at `.github/workflows/rust.yml` for CI/CD (test, clippy, fmt checks on PR)
+- [X] T010 [P] Initialize SQLite database schema migrations folder at `src/backend/db/migrations/` (empty; migrations created in Phase 2)
+- [X] T011 Verify `cargo build --workspace` compiles all crates without warnings or errors
 
 ---
 
@@ -833,8 +833,8 @@ Every task follows this strict format:
 5. **Description**: Clear action with file path(s)
 
 **Examples**:
-- ✅ `- [ ] T001 Create Cargo workspace root at /home/riddler/chat/Cargo.toml`
-- ✅ `- [ ] T002 [P] Initialize backend crate at src/backend/Cargo.toml`
+- ✅ `- [X] T001 Create Cargo workspace root at /home/riddler/chat/Cargo.toml`
+- ✅ `- [X] T002 [P] Initialize backend crate at src/backend/Cargo.toml`
 - ✅ `- [ ] T031_A [P] Create contract test framework at tests/contract/schema_validator.rs`
 - ❌ `T001 Create workspace` (missing checkbox, ID, file path)
 - ❌ `- [ ] Create workspace` (missing ID)
