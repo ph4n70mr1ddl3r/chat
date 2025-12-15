@@ -162,12 +162,12 @@ Goal: Establish database schema, shared types, error handling, and WebSocket rou
   - `server stats` - get throughput metrics (msgs/sec), connection count, database size
   - Output in JSON format; support `--output=human` for readable format
   - Acceptance: `cargo run --bin admin_cli -- users list` returns JSON array of users
-- [ ] T025 [P] Create WebSocket handler module at `src/backend/handlers/mod.rs` with connection handler skeleton
-- [ ] T026 [P] Implement WebSocket handshake validation at `src/backend/handlers/handshake.rs` (JWT token extraction, validation)
+- [X] T025 [P] Create WebSocket handler module at `src/backend/handlers/mod.rs` with connection handler skeleton
+- [X] T026 [P] Implement WebSocket handshake validation at `src/backend/handlers/handshake.rs` (JWT token extraction, validation)
 - [ ] T027 [P] Create WebSocket frame parser at `src/backend/handlers/parser.rs` (JSON parsing, error handling)
-- [ ] T028 [P] Create WebSocket message dispatcher at `src/backend/handlers/dispatcher.rs` (route messages by type)
+- [X] T028 [P] Create WebSocket message dispatcher at `src/backend/handlers/dispatcher.rs` (route messages by type)
 - [ ] T029 Create warp router setup at `src/backend/server.rs` with routes: /health, /socket (WebSocket upgrade), /auth/*, /conversations/*
-- [ ] T030 [P] Create heartbeat (ping-pong) handler at `src/backend/handlers/heartbeat.rs` (25s interval, 5s timeout)
+- [X] T030 [P] Create heartbeat (ping-pong) handler at `src/backend/handlers/heartbeat.rs` (25s interval, 5s timeout)
 - [ ] T032 Create test file at `tests/integration/websocket_handshake_test.rs` with JWT validation tests
 
 ---

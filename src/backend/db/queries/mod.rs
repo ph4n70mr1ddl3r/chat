@@ -2,8 +2,8 @@
 //!
 //! Provides database operations for user management including insertion, lookup, and updates.
 
+use crate::models::{Conversation, Message, User};
 use sqlx::SqlitePool;
-use crate::models::User;
 
 /// Insert a new user into the database
 ///
@@ -32,7 +32,10 @@ pub async fn insert_user(pool: &SqlitePool, user: &User) -> Result<User, String>
 /// Find a user by username
 ///
 /// Returns the user if found, None if not found
-pub async fn find_user_by_username(pool: &SqlitePool, username: &str) -> Result<Option<User>, String> {
+pub async fn find_user_by_username(
+    pool: &SqlitePool,
+    username: &str,
+) -> Result<Option<User>, String> {
     sqlx::query_as::<_, User>(
         "SELECT id, username, password_hash, password_salt, created_at, updated_at, deleted_at, is_online, last_seen_at
          FROM users
@@ -60,19 +63,21 @@ pub async fn find_user_by_id(pool: &SqlitePool, user_id: &str) -> Result<Option<
 }
 
 /// Update user online status
-pub async fn update_online_status(pool: &SqlitePool, user_id: &str, is_online: bool) -> Result<(), String> {
+pub async fn update_online_status(
+    pool: &SqlitePool,
+    user_id: &str,
+    is_online: bool,
+) -> Result<(), String> {
     let now = chrono::Utc::now().timestamp_millis();
-    
-    sqlx::query(
-        "UPDATE users SET is_online = ?, last_seen_at = ?, updated_at = ? WHERE id = ?"
-    )
-    .bind(is_online)
-    .bind(now)
-    .bind(now)
-    .bind(user_id)
-    .execute(pool)
-    .await
-    .map_err(|e| format!("Failed to update online status: {}", e))?;
+
+    sqlx::query("UPDATE users SET is_online = ?, last_seen_at = ?, updated_at = ? WHERE id = ?")
+        .bind(is_online)
+        .bind(now)
+        .bind(now)
+        .bind(user_id)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Failed to update online status: {}", e))?;
 
     Ok(())
 }
@@ -80,16 +85,14 @@ pub async fn update_online_status(pool: &SqlitePool, user_id: &str, is_online: b
 /// Update user last seen timestamp
 pub async fn update_last_seen(pool: &SqlitePool, user_id: &str) -> Result<(), String> {
     let now = chrono::Utc::now().timestamp_millis();
-    
-    sqlx::query(
-        "UPDATE users SET last_seen_at = ?, updated_at = ? WHERE id = ?"
-    )
-    .bind(now)
-    .bind(now)
-    .bind(user_id)
-    .execute(pool)
-    .await
-    .map_err(|e| format!("Failed to update last seen: {}", e))?;
+
+    sqlx::query("UPDATE users SET last_seen_at = ?, updated_at = ? WHERE id = ?")
+        .bind(now)
+        .bind(now)
+        .bind(user_id)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Failed to update last seen: {}", e))?;
 
     Ok(())
 }
@@ -97,16 +100,14 @@ pub async fn update_last_seen(pool: &SqlitePool, user_id: &str) -> Result<(), St
 /// Soft delete a user (mark deleted_at)
 pub async fn delete_user(pool: &SqlitePool, user_id: &str) -> Result<(), String> {
     let now = chrono::Utc::now().timestamp_millis();
-    
-    sqlx::query(
-        "UPDATE users SET deleted_at = ?, updated_at = ? WHERE id = ?"
-    )
-    .bind(now)
-    .bind(now)
-    .bind(user_id)
-    .execute(pool)
-    .await
-    .map_err(|e| format!("Failed to delete user: {}", e))?;
+
+    sqlx::query("UPDATE users SET deleted_at = ?, updated_at = ? WHERE id = ?")
+        .bind(now)
+        .bind(now)
+        .bind(user_id)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Failed to delete user: {}", e))?;
 
     Ok(())
 }
@@ -121,7 +122,7 @@ pub async fn search_users_by_prefix(
     limit: u32,
 ) -> Result<Vec<User>, String> {
     let search_pattern = format!("{}%", query);
-    
+
     sqlx::query_as::<_, User>(
         "SELECT id, username, password_hash, password_salt, created_at, updated_at, deleted_at, is_online, last_seen_at
          FROM users

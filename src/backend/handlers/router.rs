@@ -3,10 +3,10 @@
 //! Sets up HTTP and WebSocket endpoints using Warp framework.
 //! Implements per-user token bucket rate limiting (100 messages/60 seconds).
 
-use std::sync::Arc;
-use tokio::sync::RwLock;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::sync::RwLock;
 
 /// Rate limit error
 #[derive(Debug, Clone)]
@@ -20,7 +20,7 @@ struct TokenBucket {
     capacity: f64,
     tokens: f64,
     last_refill: u64,
-    refill_rate: f64,  // tokens per second
+    refill_rate: f64, // tokens per second
 }
 
 impl TokenBucket {
@@ -81,7 +81,7 @@ impl RateLimiter {
     /// Check if user can send a message
     pub async fn check_limit(&self, user_id: &str) -> Result<(), RateLimitError> {
         let mut buckets = self.buckets.write().await;
-        
+
         let bucket = buckets
             .entry(user_id.to_string())
             .or_insert_with(|| TokenBucket::new(100.0, 100.0 / 60.0));
@@ -105,10 +105,7 @@ impl RateLimiter {
     /// Get remaining tokens for user
     pub async fn get_remaining_tokens(&self, user_id: &str) -> f64 {
         let buckets = self.buckets.read().await;
-        buckets
-            .get(user_id)
-            .map(|b| b.tokens)
-            .unwrap_or(100.0)
+        buckets.get(user_id).map(|b| b.tokens).unwrap_or(100.0)
     }
 
     /// Reset user's rate limit (for testing)
@@ -171,26 +168,26 @@ mod tests {
     #[tokio::test]
     async fn test_rate_limiter_tracks_per_user() {
         let limiter = RateLimiter::new();
-        
+
         // User 1 sends one message
         assert!(limiter.check_limit("user1").await.is_ok());
-        
+
         // User 2 sends one message (independent bucket)
         assert!(limiter.check_limit("user2").await.is_ok());
-        
+
         let tokens1 = limiter.get_remaining_tokens("user1").await;
         let tokens2 = limiter.get_remaining_tokens("user2").await;
-        
+
         assert_eq!(tokens1, tokens2); // Both should have same remaining tokens
     }
 
     #[tokio::test]
     async fn test_rate_limiter_get_remaining_tokens() {
         let limiter = RateLimiter::new();
-        
+
         let initial = limiter.get_remaining_tokens("user1").await;
         assert_eq!(initial, 100.0);
-        
+
         limiter.check_limit("user1").await.unwrap();
         let after_one = limiter.get_remaining_tokens("user1").await;
         assert_eq!(after_one, 99.0);
@@ -199,11 +196,11 @@ mod tests {
     #[tokio::test]
     async fn test_rate_limiter_reset() {
         let limiter = RateLimiter::new();
-        
+
         limiter.check_limit("user1").await.unwrap();
         let tokens_before = limiter.get_remaining_tokens("user1").await;
         assert_eq!(tokens_before, 99.0);
-        
+
         limiter.reset("user1").await;
         let tokens_after = limiter.get_remaining_tokens("user1").await;
         assert_eq!(tokens_after, 100.0);
@@ -212,15 +209,15 @@ mod tests {
     #[tokio::test]
     async fn test_rate_limiter_clear_all() {
         let limiter = RateLimiter::new();
-        
+
         limiter.check_limit("user1").await.unwrap();
         limiter.check_limit("user2").await.unwrap();
-        
+
         assert_eq!(limiter.get_remaining_tokens("user1").await, 99.0);
         assert_eq!(limiter.get_remaining_tokens("user2").await, 99.0);
-        
+
         limiter.clear_all().await;
-        
+
         assert_eq!(limiter.get_remaining_tokens("user1").await, 100.0);
         assert_eq!(limiter.get_remaining_tokens("user2").await, 100.0);
     }
@@ -228,16 +225,16 @@ mod tests {
     #[tokio::test]
     async fn test_rate_limiter_capacity_check() {
         let limiter = RateLimiter::new();
-        
+
         // Consume 100 tokens
         for _ in 0..100 {
             assert!(limiter.check_limit("user1").await.is_ok());
         }
-        
+
         // 101st should fail
         let result = limiter.check_limit("user1").await;
         assert!(result.is_err());
-        
+
         match result {
             Err(RateLimitError::ExceededLimit { retry_after_secs }) => {
                 assert!(retry_after_secs > 0);

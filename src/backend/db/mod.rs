@@ -1,9 +1,9 @@
 //! Database initialization and migration management
 
-use sqlx::sqlite::{SqlitePool, SqlitePoolOptions, SqliteConnectOptions};
+use anyhow::Result;
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 use std::path::Path;
 use std::str::FromStr;
-use anyhow::Result;
 use tracing::info;
 
 pub mod queries;
@@ -11,7 +11,7 @@ pub mod queries;
 /// Initialize SQLite database and run migrations
 pub async fn init_db(db_path: impl AsRef<Path>) -> Result<SqlitePool> {
     let db_path = db_path.as_ref();
-    
+
     // Create parent directory if it doesn't exist
     if let Some(parent) = db_path.parent() {
         if !parent.as_os_str().is_empty() {
@@ -19,10 +19,7 @@ pub async fn init_db(db_path: impl AsRef<Path>) -> Result<SqlitePool> {
         }
     }
 
-    let db_url = format!(
-        "sqlite://{}?mode=rwc",
-        db_path.display()
-    );
+    let db_url = format!("sqlite://{}?mode=rwc", db_path.display());
 
     info!("Initializing database: {}", db_url);
 
@@ -52,12 +49,10 @@ async fn run_migrations(pool: &SqlitePool) -> Result<()> {
 
     // Read and execute the initial schema
     let schema_sql = include_str!("migrations/001_initial_schema.sql");
-    
+
     // Split schema into individual statements
     for statement in schema_sql.split(';').filter(|s| !s.trim().is_empty()) {
-        sqlx::query(statement)
-            .execute(pool)
-            .await?;
+        sqlx::query(statement).execute(pool).await?;
     }
 
     info!("Migrations completed");
@@ -72,12 +67,14 @@ mod tests {
     async fn test_db_init() -> Result<()> {
         let db_path = ":memory:";
         let pool = init_db(db_path).await?;
-        
+
         // Verify tables were created
-        let result: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='users'")
-            .fetch_one(&pool)
-            .await?;
-        
+        let result: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='users'",
+        )
+        .fetch_one(&pool)
+        .await?;
+
         assert_eq!(result.0, 1, "users table should exist");
         Ok(())
     }

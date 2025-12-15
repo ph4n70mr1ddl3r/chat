@@ -3,10 +3,10 @@
 //! Parses incoming WebSocket frames and routes messages to appropriate handlers.
 //! Validates message format, extracts message types, and dispatches to service layer.
 
-use tokio_tungstenite::tungstenite::Message as WsMessage;
-use serde_json::json;
+use crate::handlers::websocket::{ErrorResponse, MessageValidator};
 use chat_shared::protocol::MessageEnvelope;
-use crate::handlers::websocket::{MessageValidator, ErrorResponse};
+use serde_json::json;
+use tokio_tungstenite::tungstenite::Message as WsMessage;
 
 /// Message dispatcher routes incoming WebSocket messages to appropriate handlers
 pub struct MessageDispatcher;
@@ -25,14 +25,9 @@ pub enum DispatchResult {
         msg_type: String,
     },
     /// Error occurred during parsing or dispatching
-    Error {
-        error_msg: WsMessage,
-    },
+    Error { error_msg: WsMessage },
     /// Connection should be closed
-    Close {
-        code: u16,
-        reason: String,
-    },
+    Close { code: u16, reason: String },
 }
 
 impl MessageDispatcher {
@@ -41,17 +36,15 @@ impl MessageDispatcher {
         // Only process text messages
         match msg {
             WsMessage::Text(text) => Self::parse_text_frame(text),
-            WsMessage::Binary(_) => {
-                DispatchResult::Error {
-                    error_msg: ErrorResponse::server_error("Binary frames not supported"),
-                }
-            }
+            WsMessage::Binary(_) => DispatchResult::Error {
+                error_msg: ErrorResponse::server_error("Binary frames not supported"),
+            },
             WsMessage::Close(frame) => {
                 let (code, reason) = frame
                     .as_ref()
                     .map(|f| (f.code.into(), f.reason.to_string()))
                     .unwrap_or((1000, "Normal closure".to_string()));
-                
+
                 DispatchResult::Close { code, reason }
             }
             WsMessage::Ping(data) => {
@@ -78,11 +71,9 @@ impl MessageDispatcher {
                     },
                 }
             }
-            WsMessage::Frame(_) => {
-                DispatchResult::Error {
-                    error_msg: ErrorResponse::server_error("Raw frames not supported"),
-                }
-            }
+            WsMessage::Frame(_) => DispatchResult::Error {
+                error_msg: ErrorResponse::server_error("Raw frames not supported"),
+            },
         }
     }
 
@@ -107,18 +98,12 @@ impl MessageDispatcher {
 
         // Dispatch based on message type
         match envelope.msg_type.as_str() {
-            "message" => {
-                Self::dispatch_text_message(&envelope)
-            }
-            "typing" => {
-                Self::dispatch_typing(&envelope)
-            }
-            "heartbeat" => {
-                DispatchResult::Success {
-                    msg_type: "heartbeat".to_string(),
-                    envelope,
-                }
-            }
+            "message" => Self::dispatch_text_message(&envelope),
+            "typing" => Self::dispatch_typing(&envelope),
+            "heartbeat" => DispatchResult::Success {
+                msg_type: "heartbeat".to_string(),
+                envelope,
+            },
             "ack" | "presence" | "error" => {
                 // These are typically server-sent, but could be received
                 DispatchResult::Success {
@@ -126,14 +111,12 @@ impl MessageDispatcher {
                     envelope,
                 }
             }
-            _ => {
-                DispatchResult::Error {
-                    error_msg: ErrorResponse::server_error(&format!(
-                        "Unknown message type: {}",
-                        envelope.msg_type
-                    )),
-                }
-            }
+            _ => DispatchResult::Error {
+                error_msg: ErrorResponse::server_error(&format!(
+                    "Unknown message type: {}",
+                    envelope.msg_type
+                )),
+            },
         }
     }
 
@@ -142,13 +125,12 @@ impl MessageDispatcher {
         // Extract required fields from data
         let data = &envelope.data;
 
-        let recipient_id = data.get("recipientId")
+        let recipient_id = data
+            .get("recipientId")
             .and_then(|v| v.as_str())
             .unwrap_or("");
 
-        let content = data.get("content")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let content = data.get("content").and_then(|v| v.as_str()).unwrap_or("");
 
         // Validate message data
         if let Err(e) = MessageValidator::validate_text_message(content, recipient_id) {
@@ -171,7 +153,8 @@ impl MessageDispatcher {
     fn dispatch_typing(envelope: &MessageEnvelope) -> DispatchResult {
         let data = &envelope.data;
 
-        let recipient_id = data.get("recipientId")
+        let recipient_id = data
+            .get("recipientId")
             .and_then(|v| v.as_str())
             .unwrap_or("");
 
@@ -209,7 +192,10 @@ mod tests {
         let result = MessageDispatcher::parse_message(&msg);
 
         match result {
-            DispatchResult::RequiresAck { message_id, msg_type } => {
+            DispatchResult::RequiresAck {
+                message_id,
+                msg_type,
+            } => {
                 assert_eq!(message_id, "msg-123");
                 assert_eq!(msg_type, "message");
             }

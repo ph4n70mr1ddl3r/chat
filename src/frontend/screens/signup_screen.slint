@@ -1,0 +1,89 @@
+import { VerticalBox, HorizontalBox, LineEdit, Button, Text } from "std-widgets.slint";
+
+export component SignupScreen {
+    in property <string> username;
+    in property <string> password;
+    in property <string> confirm_password;
+    in property <string> error_message;
+    
+    callback signup();
+    callback navigate-to-login();
+    
+    VerticalBox {
+        alignment: start;
+        spacing: 10px;
+        padding: 20px;
+        
+        Text {
+            text: "Create Account";
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        HorizontalBox {
+            Text {
+                text: "Username:";
+                width: 120px;
+                vertical-alignment: center;
+            }
+            LineEdit {
+                placeholder-text: "Enter username (1-50 chars)";
+                text: <=> root.username;
+            }
+        }
+        
+        HorizontalBox {
+            Text {
+                text: "Password:";
+                width: 120px;
+                vertical-alignment: center;
+            }
+            LineEdit {
+                placeholder-text: "Enter password";
+                text: <=> root.password;
+                input-type: password;
+            }
+        }
+        
+        HorizontalBox {
+            Text {
+                text: "Confirm Password:";
+                width: 120px;
+                vertical-alignment: center;
+            }
+            LineEdit {
+                placeholder-text: "Re-enter password";
+                text: <=> root.confirm_password;
+                input-type: password;
+            }
+        }
+        
+        Button {
+            text: "Sign Up";
+            clicked => {
+                root.signup();
+            }
+            enabled: root.username.length > 0 && root.password.length > 0 && root.confirm_password.length > 0;
+        }
+        
+        Text {
+            text: root.error_message;
+            color: red;
+            font-size: 12px;
+            visible: root.error_message.length > 0;
+        }
+        
+        HorizontalBox {
+            Text {
+                text: "Already have an account? ";
+            }
+            Button {
+                text: "Log In";
+                clicked => {
+                    root.navigate-to-login();
+                }
+            }
+        }
+    }
+}

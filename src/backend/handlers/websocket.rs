@@ -3,12 +3,12 @@
 //! Manages WebSocket connections, message routing, and real-time delivery.
 //! Handles authentication, message validation, and client-server communication.
 
+use chat_shared::protocol::MessageEnvelope;
+use serde_json::json;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use std::collections::HashMap;
 use tokio_tungstenite::tungstenite::Message as WsMessage;
-use serde_json::json;
-use chat_shared::protocol::MessageEnvelope;
 
 /// WebSocket connection handle
 pub type ConnectionId = String;
@@ -26,7 +26,7 @@ impl ClientConnection {
     pub fn new(user_id: String, username: String) -> Self {
         let connection_id = uuid::Uuid::new_v4().to_string();
         let connected_at = chrono::Utc::now().timestamp_millis() as u64;
-        
+
         Self {
             user_id,
             username,
@@ -53,22 +53,22 @@ impl ConnectionManager {
     pub async fn register(&self, client: ClientConnection) -> ConnectionId {
         let mut conns = self.connections.write().await;
         let connection_id = client.connection_id.clone();
-        
+
         conns
             .entry(client.user_id.clone())
             .or_insert_with(Vec::new)
             .push(client);
-        
+
         connection_id
     }
 
     /// Unregister a connection
     pub async fn unregister(&self, user_id: &str, connection_id: &str) {
         let mut conns = self.connections.write().await;
-        
+
         if let Some(user_conns) = conns.get_mut(user_id) {
             user_conns.retain(|c| c.connection_id != connection_id);
-            
+
             // Remove user entry if no connections remain
             if user_conns.is_empty() {
                 conns.remove(user_id);
@@ -127,10 +127,7 @@ impl MessageValidator {
     }
 
     /// Validate text message data
-    pub fn validate_text_message(
-        content: &str,
-        recipient_id: &str,
-    ) -> Result<(), String> {
+    pub fn validate_text_message(content: &str, recipient_id: &str) -> Result<(), String> {
         if content.is_empty() || content.len() > 5000 {
             return Err(format!(
                 "Message content must be 1-5000 characters, got {}",
@@ -341,24 +338,18 @@ mod tests {
 
     #[test]
     fn test_message_validator_text_message_empty() {
-        assert!(
-            MessageValidator::validate_text_message("", "recipient-456").is_err()
-        );
+        assert!(MessageValidator::validate_text_message("", "recipient-456").is_err());
     }
 
     #[test]
     fn test_message_validator_text_message_too_long() {
         let long_content = "a".repeat(5001);
-        assert!(
-            MessageValidator::validate_text_message(&long_content, "recipient-456").is_err()
-        );
+        assert!(MessageValidator::validate_text_message(&long_content, "recipient-456").is_err());
     }
 
     #[test]
     fn test_message_validator_text_message_no_recipient() {
-        assert!(
-            MessageValidator::validate_text_message("Hello", "").is_err()
-        );
+        assert!(MessageValidator::validate_text_message("Hello", "").is_err());
     }
 
     #[test]

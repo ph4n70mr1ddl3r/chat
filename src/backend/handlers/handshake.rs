@@ -3,9 +3,9 @@
 //! Validates JWT tokens from query parameters and manages the WebSocket upgrade process.
 //! Ensures only authenticated users can establish WebSocket connections.
 
-use warp::http::StatusCode;
-use crate::services::AuthService;
 use crate::services::auth_service::TokenClaims;
+use crate::services::AuthService;
+use warp::http::StatusCode;
 
 /// Extract JWT token from WebSocket upgrade request query string
 pub fn extract_token_from_query(query: &str) -> Result<String, String> {
@@ -20,7 +20,7 @@ pub fn extract_token_from_query(query: &str) -> Result<String, String> {
             return Ok(decoded);
         }
     }
-    
+
     Err("Token parameter not found in query string".to_string())
 }
 
@@ -28,7 +28,7 @@ pub fn extract_token_from_query(query: &str) -> Result<String, String> {
 fn percent_decode(s: &str) -> String {
     let mut result = String::new();
     let mut chars = s.chars().peekable();
-    
+
     while let Some(ch) = chars.next() {
         if ch == '%' {
             // Try to read two hex digits
@@ -52,7 +52,7 @@ fn percent_decode(s: &str) -> String {
             result.push(ch);
         }
     }
-    
+
     result
 }
 
@@ -71,26 +71,33 @@ impl HandshakeValidator {
     /// Validate WebSocket upgrade request and extract user claims
     pub fn validate_upgrade(&self, query: &str) -> Result<TokenClaims, (StatusCode, String)> {
         // Extract token from query string
-        let token = extract_token_from_query(query)
-            .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+        let token = extract_token_from_query(query).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
 
         // Verify token with auth service
-        let claims = self.auth_service.verify_token(&token)
-            .map_err(|e| {
-                if e.contains("expired") || e.contains("Expiration") {
-                    (StatusCode::UNAUTHORIZED, "Token has expired".to_string())
-                } else {
-                    (StatusCode::UNAUTHORIZED, "Invalid or malformed token".to_string())
-                }
-            })?;
+        let claims = self.auth_service.verify_token(&token).map_err(|e| {
+            if e.contains("expired") || e.contains("Expiration") {
+                (StatusCode::UNAUTHORIZED, "Token has expired".to_string())
+            } else {
+                (
+                    StatusCode::UNAUTHORIZED,
+                    "Invalid or malformed token".to_string(),
+                )
+            }
+        })?;
 
         // Validate required claims
         if claims.sub.is_empty() {
-            return Err((StatusCode::UNAUTHORIZED, "Token missing subject claim".to_string()));
+            return Err((
+                StatusCode::UNAUTHORIZED,
+                "Token missing subject claim".to_string(),
+            ));
         }
 
         if claims.aud != "chat-app" {
-            return Err((StatusCode::UNAUTHORIZED, "Token audience mismatch".to_string()));
+            return Err((
+                StatusCode::UNAUTHORIZED,
+                "Token audience mismatch".to_string(),
+            ));
         }
 
         // Check token expiration explicitly
@@ -112,10 +119,7 @@ mod tests {
         let query = "token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9";
         let result = extract_token_from_query(query);
         assert!(result.is_ok());
-        assert_eq!(
-            result.unwrap(),
-            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
-        );
+        assert_eq!(result.unwrap(), "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9");
     }
 
     #[test]
@@ -155,17 +159,25 @@ mod tests {
     fn test_handshake_validator_new() {
         let validator = HandshakeValidator::new("test_secret".to_string());
         // Just verify it constructs without error
-        assert!(!validator.auth_service.generate_token("user123".to_string()).unwrap().0.is_empty());
+        assert!(!validator
+            .auth_service
+            .generate_token("user123".to_string())
+            .unwrap()
+            .0
+            .is_empty());
     }
 
     #[test]
     fn test_handshake_validator_valid_token() {
         let validator = HandshakeValidator::new("test_secret".to_string());
-        let (token, _) = validator.auth_service.generate_token("user123".to_string()).unwrap();
-        
+        let (token, _) = validator
+            .auth_service
+            .generate_token("user123".to_string())
+            .unwrap();
+
         let query = format!("token={}", token);
         let result = validator.validate_upgrade(&query);
-        
+
         assert!(result.is_ok());
         let claims = result.unwrap();
         assert_eq!(claims.sub, "user123");
@@ -177,7 +189,7 @@ mod tests {
         let validator = HandshakeValidator::new("test_secret".to_string());
         let query = "foo=bar";
         let result = validator.validate_upgrade(query);
-        
+
         assert!(result.is_err());
         let (status, msg) = result.unwrap_err();
         assert_eq!(status, StatusCode::BAD_REQUEST);
@@ -189,7 +201,7 @@ mod tests {
         let validator = HandshakeValidator::new("test_secret".to_string());
         let query = "token=invalid.token.here";
         let result = validator.validate_upgrade(query);
-        
+
         assert!(result.is_err());
         let (status, msg) = result.unwrap_err();
         assert_eq!(status, StatusCode::UNAUTHORIZED);
@@ -199,12 +211,15 @@ mod tests {
     #[test]
     fn test_handshake_validator_wrong_secret() {
         let validator1 = HandshakeValidator::new("secret1".to_string());
-        let (token, _) = validator1.auth_service.generate_token("user123".to_string()).unwrap();
-        
+        let (token, _) = validator1
+            .auth_service
+            .generate_token("user123".to_string())
+            .unwrap();
+
         let validator2 = HandshakeValidator::new("secret2".to_string());
         let query = format!("token={}", token);
         let result = validator2.validate_upgrade(&query);
-        
+
         assert!(result.is_err());
         let (status, _) = result.unwrap_err();
         assert_eq!(status, StatusCode::UNAUTHORIZED);

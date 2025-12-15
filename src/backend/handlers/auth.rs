@@ -2,13 +2,13 @@
 //!
 //! Implements POST /auth/signup and POST /auth/login endpoints
 
-use warp::{Reply, Rejection, reply};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tracing::{info, warn};
+use warp::{reply, Rejection, Reply};
 
-use crate::services::AuthService;
 use crate::db::queries;
+use crate::services::AuthService;
 use crate::validators;
 
 /// Signup request payload
@@ -49,8 +49,11 @@ pub struct HttpResponse {
 
 impl Reply for HttpResponse {
     fn into_response(self) -> warp::reply::Response {
-        reply::with_status(self.body, warp::http::StatusCode::from_u16(self.status).unwrap())
-            .into_response()
+        reply::with_status(
+            self.body,
+            warp::http::StatusCode::from_u16(self.status).unwrap(),
+        )
+        .into_response()
     }
 }
 
@@ -113,7 +116,10 @@ pub async fn signup_handler(
 
     // Create user
     let auth_service = AuthService::new(jwt_secret);
-    let user = match auth_service.create_user(req.username.clone(), req.password).await {
+    let user = match auth_service
+        .create_user(req.username.clone(), req.password)
+        .await
+    {
         Ok(user) => user,
         Err(e) => {
             warn!("Failed to create user: {}", e);

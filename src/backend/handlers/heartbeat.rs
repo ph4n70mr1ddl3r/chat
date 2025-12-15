@@ -3,8 +3,8 @@
 //! Manages RFC 6455 ping-pong frames for connection health checking.
 //! Sends periodic PING frames and monitors client PONG responses.
 
-use std::time::{Duration, Instant};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use tokio_tungstenite::tungstenite::Message as WsMessage;
 
@@ -20,8 +20,8 @@ pub struct HeartbeatConfig {
 impl Default for HeartbeatConfig {
     fn default() -> Self {
         Self {
-            ping_interval: 25,    // RFC 6455 recommendation
-            pong_timeout: 5,      // Allow 5 second response time
+            ping_interval: 25, // RFC 6455 recommendation
+            pong_timeout: 5,   // Allow 5 second response time
         }
     }
 }
@@ -122,9 +122,7 @@ impl HeartbeatManager {
     /// Get last activity timestamp (either PONG or initial connection)
     pub async fn get_last_activity(&self) -> Instant {
         let state = self.state.read().await;
-        state
-            .last_pong_received
-            .unwrap_or(state.created_at)
+        state.last_pong_received.unwrap_or(state.created_at)
     }
 }
 
@@ -193,7 +191,7 @@ mod tests {
     async fn test_heartbeat_manager_handle_pong() {
         let manager = HeartbeatManager::new(HeartbeatConfig::default());
         manager.handle_pong().await;
-        
+
         let state = manager.state.read().await;
         assert!(state.last_pong_received.is_some());
     }
@@ -202,7 +200,7 @@ mod tests {
     async fn test_heartbeat_manager_mark_ping_sent() {
         let manager = HeartbeatManager::new(HeartbeatConfig::default());
         manager.mark_ping_sent().await;
-        
+
         let state = manager.state.read().await;
         assert!(state.last_ping_sent.is_some());
     }
@@ -211,7 +209,7 @@ mod tests {
     async fn test_heartbeat_manager_mark_dead() {
         let manager = HeartbeatManager::new(HeartbeatConfig::default());
         assert!(manager.is_healthy().await);
-        
+
         manager.mark_dead().await;
         assert!(!manager.is_healthy().await);
     }
@@ -219,10 +217,10 @@ mod tests {
     #[tokio::test]
     async fn test_heartbeat_manager_get_uptime() {
         let manager = HeartbeatManager::new(HeartbeatConfig::default());
-        
+
         // Wait a bit
         tokio::time::sleep(Duration::from_millis(10)).await;
-        
+
         let uptime = manager.get_uptime().await;
         // uptime should be >= 0 (in fact it's a u64 so always >= 0)
         let _ = uptime;
@@ -244,10 +242,10 @@ mod tests {
             pong_timeout: 10,
         };
         let scheduler = HeartbeatScheduler::new(config);
-        
+
         let interval = scheduler.get_ping_interval();
         assert_eq!(interval.as_secs(), 30);
-        
+
         let timeout = scheduler.get_pong_timeout();
         assert_eq!(timeout.as_secs(), 10);
     }
@@ -259,13 +257,13 @@ mod tests {
             pong_timeout: 1,
         };
         let manager = HeartbeatManager::new(config);
-        
+
         // Mark ping sent
         manager.mark_ping_sent().await;
-        
+
         // Wait longer than pong timeout
         tokio::time::sleep(Duration::from_secs(2)).await;
-        
+
         // Check health - should be unhealthy due to no pong response
         assert!(!manager.is_healthy().await);
     }
@@ -277,13 +275,13 @@ mod tests {
             pong_timeout: 5,
         };
         let manager = HeartbeatManager::new(config);
-        
+
         // Mark ping sent
         manager.mark_ping_sent().await;
-        
+
         // Quickly handle pong
         manager.handle_pong().await;
-        
+
         // Should still be healthy
         assert!(manager.is_healthy().await);
     }

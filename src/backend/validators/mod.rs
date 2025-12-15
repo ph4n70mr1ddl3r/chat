@@ -3,7 +3,7 @@
 //! Provides reusable validators for usernames, passwords, emails, and other inputs
 
 /// Validate username
-/// 
+///
 /// Rules:
 /// - 1-50 characters
 /// - Alphanumeric + underscore only
@@ -12,11 +12,13 @@ pub fn validate_username(username: &str) -> Result<(), String> {
     if username.is_empty() || username.len() > 50 {
         return Err("Username must be between 1 and 50 characters".to_string());
     }
-    
+
     if !username.chars().all(|c| c.is_alphanumeric() || c == '_') {
-        return Err("Username can only contain alphanumeric characters and underscores".to_string());
+        return Err(
+            "Username can only contain alphanumeric characters and underscores".to_string(),
+        );
     }
-    
+
     Ok(())
 }
 
@@ -31,19 +33,19 @@ pub fn validate_password(password: &str) -> Result<(), String> {
     if password.len() < 8 {
         return Err("Password must be at least 8 characters".to_string());
     }
-    
+
     if !password.chars().any(|c| c.is_uppercase()) {
         return Err("Password must contain at least one uppercase letter".to_string());
     }
-    
+
     if !password.chars().any(|c| c.is_lowercase()) {
         return Err("Password must contain at least one lowercase letter".to_string());
     }
-    
+
     if !password.chars().any(|c| c.is_numeric()) {
         return Err("Password must contain at least one digit".to_string());
     }
-    
+
     Ok(())
 }
 
@@ -52,20 +54,20 @@ pub fn validate_email(email: &str) -> Result<(), String> {
     if email.is_empty() {
         return Err("Email cannot be empty".to_string());
     }
-    
+
     if !email.contains('@') {
         return Err("Email must contain @ symbol".to_string());
     }
-    
+
     let parts: Vec<&str> = email.split('@').collect();
     if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() {
         return Err("Email format is invalid".to_string());
     }
-    
+
     if !parts[1].contains('.') {
         return Err("Email domain must contain a dot".to_string());
     }
-    
+
     Ok(())
 }
 
