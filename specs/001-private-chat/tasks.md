@@ -84,13 +84,13 @@ Goal: Establish database schema, shared types, error handling, and WebSocket rou
 
 ### Database & Schema Tasks
 
-- [ ] T012 [P] Create SQLite schema migration file at `src/backend/db/migrations/001_initial_schema.sql` with users, conversations, messages tables (per data-model.md)
-- [ ] T013 Create database initialization module at `src/backend/db/mod.rs` with `Pool`, `init_db()`, and migration runner
-- [ ] T014 [P] Implement User model struct at `src/backend/models/user.rs` with fields: id, username, password_hash, password_salt, created_at, updated_at, deleted_at, is_online, last_seen_at
-- [ ] T015 [P] Implement Conversation model struct at `src/backend/models/conversation.rs` with fields: id, user1_id, user2_id, created_at, updated_at, last_message_at, message_count
-- [ ] T016 [P] Implement Message model struct at `src/backend/models/message.rs` with fields: id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, status
-- [ ] T017 Create models module at `src/backend/models/mod.rs` exporting User, Conversation, Message
-- [ ] T018 [P] Create test file at `tests/unit/models_test.rs` with unit tests for model validation (user creation, conversation constraints, message length)
+- [X] T012 [P] Create SQLite schema migration file at `src/backend/db/migrations/001_initial_schema.sql` with users, conversations, messages tables (per data-model.md)
+- [X] T013 Create database initialization module at `src/backend/db/mod.rs` with `Pool`, `init_db()`, and migration runner
+- [X] T014 [P] Implement User model struct at `src/backend/models/user.rs` with fields: id, username, password_hash, password_salt, created_at, updated_at, deleted_at, is_online, last_seen_at
+- [X] T015 [P] Implement Conversation model struct at `src/backend/models/conversation.rs` with fields: id, user1_id, user2_id, created_at, updated_at, last_message_at, message_count
+- [X] T016 [P] Implement Message model struct at `src/backend/models/message.rs` with fields: id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, status
+- [X] T017 Create models module at `src/backend/models/mod.rs` exporting User, Conversation, Message
+- [X] T018 [P] Create test file at `tests/unit/models_test.rs` with unit tests for model validation (user creation, conversation constraints, message length)
 
 ### Shared Types & Error Handling
 
@@ -134,7 +134,7 @@ Goal: Establish database schema, shared types, error handling, and WebSocket rou
     - Schema file (`message-envelope-schema.json`) matches implemented validators
     - Code coverage ≥ 90% for validator module
   - This gate ensures all WebSocket messages conform to contract before Phase 3 begins
-- [ ] T031_B [P] Create WebSocket protocol contract JSON schema file at `specs/001-private-chat/contracts/message-envelope-schema.json`
+- [X] T031_B [P] Create WebSocket protocol contract JSON schema file at `specs/001-private-chat/contracts/message-envelope-schema.json`
   - Define JSON Schema (draft-7) for message envelope:
     ```json
     {
