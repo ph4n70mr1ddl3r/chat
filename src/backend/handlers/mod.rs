@@ -5,6 +5,7 @@ pub mod handshake;
 pub mod dispatcher;
 pub mod heartbeat;
 pub mod router;
+pub mod auth;
 
 use crate::models::Message;
 

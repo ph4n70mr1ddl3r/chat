@@ -6,6 +6,8 @@ use std::str::FromStr;
 use anyhow::Result;
 use tracing::info;
 
+pub mod queries;
+
 /// Initialize SQLite database and run migrations
 pub async fn init_db(db_path: impl AsRef<Path>) -> Result<SqlitePool> {
     let db_path = db_path.as_ref();

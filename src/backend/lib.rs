@@ -6,6 +6,7 @@ pub mod models;
 pub mod services;
 pub mod handlers;
 pub mod db;
+pub mod validators;
 
 #[cfg(test)]
 mod tests;
