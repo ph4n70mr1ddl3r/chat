@@ -583,9 +583,9 @@ Goal: Implement observability, security hardening, performance optimization, and
 
 ### Error Handling & Recovery
 
-- [ ] T127 [P] Create comprehensive error handling at `src/backend/handlers/mod.rs` with error mapping to HTTP status codes
-- [ ] T128 [P] Implement connection error recovery at `src/frontend/services/websocket_client.rs` (auto-reconnect with exponential backoff)
-- [ ] T128_A [P] Implement WebSocket auto-reconnection with exponential backoff at `src/frontend/services/websocket_client.rs`
+- [X] T127 [P] Create comprehensive error handling at `src/backend/handlers/mod.rs` with error mapping to HTTP status codes
+- [X] T128 [P] Implement connection error recovery at `src/frontend/services/websocket_client.rs` (auto-reconnect with exponential backoff)
+- [X] T128_A [P] Implement WebSocket auto-reconnection with exponential backoff at `src/frontend/services/websocket_client.rs`
   - On connection lost, implement retry loop:
     - First retry: 0.5-1.5 seconds (random backoff)
     - Second retry: 1.5-3.5 seconds
@@ -600,7 +600,7 @@ Goal: Implement observability, security hardening, performance optimization, and
     - Re-send pending messages using idempotent message IDs (duplicate-safe)
   - Display reconnection status to user: "Connecting..." → "Connected" (green indicator)
   - Test: Manually kill server/network; verify client auto-reconnects within retry window
-- [ ] T129 Create user-facing error messages at `src/frontend/screens/error_dialog.slint`
+- [X] T129 Create user-facing error messages at `src/frontend/screens/error_dialog.slint`
 
 ### Logging & Observability
 

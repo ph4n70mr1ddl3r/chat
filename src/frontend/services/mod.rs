@@ -6,4 +6,4 @@ pub mod websocket_client;
 
 pub use http_client::HttpClient;
 pub use session::SessionManager;
-pub use websocket_client::{WebSocketClient, WebSocketEvent};
+pub use websocket_client::{ConnectionStatus, WebSocketClient, WebSocketEvent};

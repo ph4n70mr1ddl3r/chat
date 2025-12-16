@@ -1,11 +1,13 @@
+use crate::services::ConnectionStatus;
+use crate::ui::{ChatScreenComponent, ConversationItem, MessageItem};
 use slint::{ComponentHandle, Model, ModelRc, VecModel};
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 use uuid::Uuid;
-use crate::ui::{ChatScreenComponent, MessageItem, ConversationItem};
 
 #[derive(Clone, Debug)]
 pub struct ConversationData {
@@ -58,6 +60,11 @@ impl ChatScreen {
         let selected_participant_id = Arc::new(Mutex::new(None::<String>));
         let typing_state = Arc::new(Mutex::new(false));
         let typing_indicator_token = Arc::new(Mutex::new(String::new()));
+        ui.set_connection_status("Connecting...".into());
+        ui.set_connection_online(false);
+        ui.set_show_error_dialog(false);
+        ui.set_error_dialog_title("Something went wrong".into());
+        ui.set_error_dialog_message("".into());
 
         // WebSocket client bootstrap
         let ui_weak = ui.as_weak();
@@ -77,6 +84,8 @@ impl ChatScreen {
             selected_participant_id.clone(),
             typing_indicator_token.clone(),
             current_user_id.clone(),
+            runtime.clone(),
+            websocket_client.clone(),
         );
 
         // Logout callback
@@ -493,10 +502,110 @@ fn spawn_event_listener(
     selected_participant_id: Arc<Mutex<Option<String>>>,
     typing_indicator_token: Arc<Mutex<String>>,
     current_user_id: String,
+    runtime: Arc<Runtime>,
+    websocket_client: Option<crate::services::WebSocketClient>,
 ) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
         while let Some(event) = event_rx.blocking_recv() {
             match event {
+                crate::services::WebSocketEvent::ConnectionState(state) => {
+                    let ui_for_status = ui_weak.clone();
+                    match state {
+                        ConnectionStatus::Connecting => {
+                            slint::invoke_from_event_loop(move || {
+                                if let Some(ui) = ui_for_status.upgrade() {
+                                    ui.set_connection_status("Connecting...".into());
+                                    ui.set_connection_online(false);
+                                }
+                            })
+                            .ok();
+                        }
+                        ConnectionStatus::Reconnecting { retry_in_ms } => {
+                            let status_text = format!(
+                                "Reconnecting... retry in {}s",
+                                (retry_in_ms as f64 / 1000.0).ceil() as u64
+                            );
+                            slint::invoke_from_event_loop(move || {
+                                if let Some(ui) = ui_for_status.upgrade() {
+                                    ui.set_connection_status(status_text.clone().into());
+                                    ui.set_connection_online(false);
+                                }
+                            })
+                            .ok();
+                        }
+                        ConnectionStatus::Connected => {
+                            let ui_for_status = ui_weak.clone();
+                            slint::invoke_from_event_loop(move || {
+                                if let Some(ui) = ui_for_status.upgrade() {
+                                    ui.set_connection_status("Connected".into());
+                                    ui.set_connection_online(true);
+                                    ui.set_error_message("".into());
+                                    ui.set_show_error_dialog(false);
+                                    ui.set_error_dialog_message("".into());
+                                }
+                            })
+                            .ok();
+
+                            // Refresh conversations/messages and retry any pending sends.
+                            let conversations_refresh = conversations.clone();
+                            let messages_refresh = messages.clone();
+                            let selected_conv_refresh = selected_conversation_id.clone();
+                            let ui_refresh = ui_weak.clone();
+                            let ws_for_resend = websocket_client.clone();
+                            let runtime_refresh = runtime.clone();
+
+                            runtime_refresh.spawn(async move {
+                                if let Ok(fresh_conversations) = load_conversations().await {
+                                    {
+                                        let mut cache = conversations_refresh.lock().unwrap();
+                                        *cache = fresh_conversations.clone();
+                                    }
+                                    render_conversations(ui_refresh.clone(), conversations_refresh.clone());
+                                }
+
+                                if let Some(active_conv) =
+                                    selected_conv_refresh.lock().unwrap().clone()
+                                {
+                                    if let Ok(fresh_messages) = load_messages(&active_conv).await {
+                                        {
+                                            let mut cache = messages_refresh.lock().unwrap();
+                                            *cache = fresh_messages.clone();
+                                        }
+                                        render_messages_for_conversation(
+                                            ui_refresh.clone(),
+                                            messages_refresh.clone(),
+                                            active_conv,
+                                        );
+                                    }
+                                }
+
+                                if let Some(ws) = ws_for_resend {
+                                    resend_pending_messages(
+                                        &ws,
+                                        &messages_refresh,
+                                        &conversations_refresh,
+                                    );
+                                }
+                            });
+                        }
+                        ConnectionStatus::Disconnected { reason } => {
+                            let ui_for_status = ui_weak.clone();
+                            slint::invoke_from_event_loop({
+                                let reason = reason.clone();
+                                move || {
+                                if let Some(ui) = ui_for_status.upgrade() {
+                                    ui.set_connection_status(format!("Disconnected: {}", reason).into());
+                                    ui.set_connection_online(false);
+                                    ui.set_error_dialog_title("Disconnected".into());
+                                    ui.set_error_dialog_message(reason.clone().into());
+                                    ui.set_show_error_dialog(true);
+                                }
+                                }
+                            })
+                            .ok();
+                        }
+                    }
+                }
                 crate::services::WebSocketEvent::Presence { user_id, username: _, is_online, last_seen_at: _ } => {
                     // Update conversation list
                     let mut needs_refresh = false;
@@ -511,27 +620,7 @@ fn spawn_event_listener(
                     }
                     
                     if needs_refresh {
-                        let conversations_clone = conversations.clone();
-                        let ui_weak_refresh = ui_weak.clone();
-                        slint::invoke_from_event_loop(move || {
-                            if let Some(ui) = ui_weak_refresh.upgrade() {
-                                let cache = conversations_clone.lock().unwrap();
-                                let slint_conversations: Vec<ConversationItem> = cache
-                                    .iter()
-                                    .map(|c| ConversationItem {
-                                        conversation_id: c.conversation_id.clone().into(),
-                                        participant_id: c.participant_id.clone().into(),
-                                        participant_username: c.participant_username.clone().into(),
-                                        participant_is_online: c.participant_is_online,
-                                        last_message: c.last_message.clone().into(),
-                                        last_message_time: c.last_message_time.clone().into(),
-                                        message_count: c.message_count,
-                                    })
-                                    .collect();
-                                let model = Rc::new(VecModel::from(slint_conversations));
-                                ui.set_conversations(ModelRc::from(model));
-                            }
-                        }).ok();
+                        render_conversations(ui_weak.clone(), conversations.clone());
                     }
 
                     // Update selected conversation status
@@ -665,6 +754,9 @@ fn spawn_event_listener(
                     slint::invoke_from_event_loop(move || {
                         if let Some(ui) = ui_weak_err.upgrade() {
                             ui.set_error_message(err.clone().into());
+                            ui.set_error_dialog_title("Connection issue".into());
+                            ui.set_error_dialog_message(err.clone().into());
+                            ui.set_show_error_dialog(true);
                         }
                     })
                     .ok();
@@ -703,6 +795,65 @@ fn render_messages_for_conversation(
         }
     })
     .ok();
+}
+
+fn render_conversations(
+    ui_weak: slint::Weak<ChatScreenComponent>,
+    conversations: Arc<Mutex<Vec<ConversationData>>>,
+) {
+    let snapshot = conversations.lock().unwrap().clone();
+    let slint_conversations: Vec<ConversationItem> = snapshot
+        .into_iter()
+        .map(|c| ConversationItem {
+            conversation_id: c.conversation_id.into(),
+            participant_id: c.participant_id.into(),
+            participant_username: c.participant_username.into(),
+            participant_is_online: c.participant_is_online,
+            last_message: c.last_message.into(),
+            last_message_time: c.last_message_time.into(),
+            message_count: c.message_count,
+        })
+        .collect();
+
+    slint::invoke_from_event_loop(move || {
+        if let Some(ui) = ui_weak.upgrade() {
+            let model = Rc::new(VecModel::from(slint_conversations));
+            ui.set_conversations(ModelRc::from(model));
+        }
+    })
+    .ok();
+}
+
+fn resend_pending_messages(
+    websocket_client: &crate::services::WebSocketClient,
+    messages: &Arc<Mutex<Vec<MessageData>>>,
+    conversations: &Arc<Mutex<Vec<ConversationData>>>,
+) {
+    let participants: HashMap<String, String> = conversations
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|c| (c.conversation_id.clone(), c.participant_id.clone()))
+        .collect();
+
+    let pending: Vec<MessageData> = messages
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|m| m.is_own_message && m.status == "pending")
+        .cloned()
+        .collect();
+
+    for msg in pending {
+        if let Some(recipient) = participants.get(&msg.conversation_id) {
+            let _ = websocket_client.send_message(
+                msg.message_id.clone(),
+                msg.conversation_id.clone(),
+                recipient.clone(),
+                msg.content.clone(),
+            );
+        }
+    }
 }
 
 fn format_timestamp(timestamp: Option<i64>) -> String {

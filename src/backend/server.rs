@@ -27,7 +27,7 @@ use crate::handlers::messages::MessageHandler;
 use crate::services::auth_service::TokenClaims;
 use crate::services::{MessageQueueService, PresenceService};
 
-use crate::handlers::{auth, conversation, user, websocket};
+use crate::handlers::{self, auth, conversation, user, websocket};
 use crate::middleware::auth as auth_middleware;
 
 /// Server configuration
@@ -475,6 +475,19 @@ async fn handle_change_password(
 async fn handle_rejection(err: Rejection) -> Result<impl Reply, Rejection> {
     warn!("Request rejected: {:?}", err);
     eprintln!("DEBUG: Rejection details: {:?}", err);
+
+    if let Some(api_err) = err.find::<handlers::ApiError>() {
+        let body = handlers::ErrorBody {
+            code: api_err.code.to_string(),
+            message: api_err.message.clone(),
+            details: api_err.details.clone(),
+        };
+
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&body),
+            api_err.status,
+        ));
+    }
 
     // Convert to JSON error response
     let (code, message) = if let Some(auth_err) = err.find::<WebSocketAuthError>() {
