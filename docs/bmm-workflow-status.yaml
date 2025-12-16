@@ -1,0 +1,133 @@
+# BMM Workflow Status - chat Project
+# Track: BMad Method (Brownfield)
+# Generated: 2025-12-16T08:02:36Z
+
+generated: "2025-12-16T08:02:36Z"
+project: "chat"
+project_type: "brownfield"
+selected_track: "bmad-method"
+field_type: "brownfield"
+workflow_path: ".bmad/bmm/workflows/workflow-status/paths/method-brownfield.yaml"
+
+# PREREQUISITES
+# =============
+prerequisites:
+  - id: "document-project"
+    name: "Document Project"
+    type: "workflow"
+    status: "pending"
+    required: true
+    agent: "analyst"
+    command: "document-project"
+    note: "Comprehensive analysis of existing codebase - critical for brownfield"
+
+# PHASE 0: DISCOVERY (OPTIONAL)
+# ==============================
+discovery:
+  - id: "research"
+    name: "Research"
+    type: "workflow"
+    status: "pending"
+    optional: false
+    selected: true
+    agent: "analyst"
+    command: "research"
+    note: "Domain, competitive, and technical research"
+
+# PHASE 1: PLANNING (REQUIRED)
+# =============================
+planning:
+  - id: "prd"
+    name: "Product Requirements Document"
+    type: "workflow"
+    status: "pending"
+    required: true
+    agent: "pm"
+    command: "prd"
+    note: "Feature requirements focused on changes to existing system"
+
+  - id: "create-ux-design"
+    name: "Create UX Design"
+    type: "workflow"
+    status: "pending"
+    conditional: "if_has_ui"
+    agent: "ux-designer"
+    command: "create-ux-design"
+    note: "UI/UX design for new features"
+
+# PHASE 2: SOLUTIONING (REQUIRED)
+# =================================
+solutioning:
+  - id: "create-architecture"
+    name: "Create Architecture"
+    type: "workflow"
+    status: "pending"
+    recommended: true
+    agent: "architect"
+    command: "create-architecture"
+    note: "Integration architecture - solution design for this project"
+
+  - id: "create-epics-and-stories"
+    name: "Create Epics & Stories"
+    type: "workflow"
+    status: "pending"
+    required: true
+    agent: "pm"
+    command: "create-epics-and-stories"
+    note: "Break down PRD into implementable epics and stories"
+
+  - id: "test-design"
+    name: "Test Design"
+    type: "workflow"
+    status: "pending"
+    recommended: true
+    agent: "tea"
+    command: "test-design"
+    note: "Testability assessment before gate check"
+
+  - id: "validate-architecture"
+    name: "Validate Architecture"
+    type: "workflow"
+    status: "pending"
+    optional: true
+    agent: "architect"
+    command: "validate-architecture"
+
+  - id: "implementation-readiness"
+    name: "Implementation Readiness"
+    type: "workflow"
+    status: "pending"
+    required: true
+    agent: "architect"
+    command: "implementation-readiness"
+    note: "Validates PRD + Architecture + Epics + UX (optional)"
+
+# PHASE 3: IMPLEMENTATION (REQUIRED)
+# ====================================
+implementation:
+  - id: "sprint-planning"
+    name: "Sprint Planning"
+    type: "workflow"
+    status: "pending"
+    required: true
+    agent: "sm"
+    command: "sprint-planning"
+    note: "Creates sprint plan with stories"
+
+# PROJECT CONTEXT
+# ================
+project_context:
+  name: "chat"
+  description: "Private Chat Application - Real-time messaging system"
+  technologies:
+    - "Rust 1.75+ (backend and frontend)"
+    - "Slint (UI framework)"
+    - "SQLite (MVP) / PostgreSQL (production)"
+    - "WebSocket (real-time messaging)"
+  status: "active-development"
+  existing_artifacts:
+    - "specs/001-private-chat/spec.md - Complete feature specification"
+    - "Rust backend with handlers, auth, services"
+    - "Slint frontend with UI components and screens"
+    - "Integration and contract tests"
+    - "Deployment documentation"
