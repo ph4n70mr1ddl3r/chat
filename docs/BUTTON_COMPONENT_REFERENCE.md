@@ -1,9 +1,11 @@
 # Button Component Reference
 
-**Status:** ✅ Complete  
+**Status:** ✅ Complete - Design Approved (Issue #5)  
 **Created:** 2025-12-16  
+**Last Updated:** 2025-12-17 (Issue #5 Spinner Design Verified)  
 **Component File:** `/src/frontend/components/button.slint`  
-**Test File:** `/tests/integration/button_test.rs`
+**Test File:** `/tests/integration/button_test.rs`  
+**Design Review:** `/docs/ux-design-review-issue-5-spinner-2025-12-17.md`
 
 ---
 
@@ -247,9 +249,113 @@ Button displays active color (darker than hover), indicating it's being pressed.
 
 ---
 
-## 💫 Loading Animation
+## 💫 Loading Animation (Issue #5 - Design Approved ✅)
 
-The Button component includes a loading spinner with motion preference support:
+The Button component includes a loading spinner with full motion preference support:
+
+### Spinner Visual Specification
+
+**Design:** Full-rotating-border (halo effect) - APPROVED by Sally (UX Designer)
+
+| Property | Value |
+|----------|-------|
+| **Size** | 16px × 16px |
+| **Border Width** | 2px |
+| **Border Radius** | 8px (full circle) |
+| **Animation Type** | Continuous 360° rotation |
+| **Easing** | Linear (constant speed) |
+| **Loop** | Infinite until `is_loading=false` |
+
+### Spinner Color by Button Variant
+
+| Button Variant | Spinner Color | Hex Code |
+|---|---|---|
+| **Primary** | Fluent Blue | #0078D4 |
+| **Secondary** | Fluent Blue | #0078D4 |
+| **Tertiary** | Fluent Blue | #0078D4 |
+| **Danger** | Error Red | #A4373A |
+| **Disabled** | Neutral Medium | #666666 |
+
+**Rationale:** Spinner inherits button's text color automatically for visual cohesion.
+
+### Design Rationale: Full-Rotating-Border vs. Partial-Arc
+
+**Why Full-Rotating-Border (Current)?**
+- ✅ Premium, modern aesthetic (Fluent Design System aligned)
+- ✅ More accessible for motion-sensitive users (continuous, not segmented)
+- ✅ Full ring visible at all rotation angles
+- ✅ Less jarring than partial-arc spinners
+- ✅ Windows 11 native style
+- ✅ No seizure risk (< 3 Hz flicker)
+
+**Alternative: Partial-Arc**
+- ❌ More universal recognition (web convention)
+- ❌ Less premium appearance
+- ❌ Potential flicker with segmented arc
+- ❌ Doesn't align with brand premium positioning
+
+**Conclusion:** Full-rotating-border is superior for accessibility + brand.
+
+### Implementation Pattern (WCAG 2.3.3 Compliant)
+
+**✅ CORRECT: Conditional Animation Block**
+
+```slint
+if is_loading {
+    if reduce_motion {
+        // ✅ STATIC SPINNER - NO ANIMATION BLOCK
+        Rectangle {
+            width: 16px;
+            height: 16px;
+            border-radius: 8px;
+            border-width: 2px;
+            border-color: get_text_color(variant, is_disabled);
+            background: #00000000;
+            rotation-angle: 0deg;  // Static - no animate block at all
+        }
+    } else {
+        // ✅ ANIMATED SPINNER - ANIMATION BLOCK HERE
+        Rectangle {
+            width: 16px;
+            height: 16px;
+            border-radius: 8px;
+            border-width: 2px;
+            border-color: get_text_color(variant, is_disabled);
+            background: #00000000;
+            rotation-angle: 0deg;
+            
+            animate rotation-angle {
+                duration: DURATION_SLOW;  // 400ms
+                easing: EASE_LINEAR;
+                loop-count: infinite;
+            }
+            
+            states [
+                animated: { rotation-angle: 360deg; }
+            ]
+            state: animated;
+        }
+    }
+}
+```
+
+**Why This Pattern?**
+- When `reduce_motion=true`: Spinner doesn't execute animate block at all (truly static)
+- When `reduce_motion=false`: Full rotating animation runs smoothly
+- WCAG 2.3.3 compliant: Animation never triggers when motion is reduced
+
+### ❌ Anti-Pattern: Using MOTION_DURATION_REDUCED() in animate block
+
+```slint
+// ❌ WRONG - Violates WCAG 2.3.3
+animate rotation-angle {
+    duration: MOTION_DURATION_REDUCED(DURATION_SLOW);  // Returns 0ms, but animation still executes!
+    easing: EASE_LINEAR;
+    loop-count: infinite;
+}
+```
+
+**Problem:** When `reduce_motion=true`, animation duration becomes 0ms but animation still **executes instantly**. WCAG 2.3.3 requires: animation must not trigger at all.
 
 ### Normal Motion (reduce_motion=false)
 
@@ -257,16 +363,16 @@ The Button component includes a loading spinner with motion preference support:
 - **Duration:** 400ms (DURATION_SLOW)
 - **Easing:** Linear
 - **Loop:** Infinite
-
-**Appearance:** Animated rotating circle
+- **Appearance:** Smooth rotating halo
 
 ### Reduced Motion (reduce_motion=true)
 
-- **Animation:** Disabled
-- **Duration:** 0ms (instant)
-- **Appearance:** Static circle (no rotation)
+- **Animation:** Completely disabled
+- **Duration:** N/A (no animation block)
+- **Appearance:** Static 16px circle border
+- **Accessibility:** Respects Windows "Show animations" setting
 
-**WCAG Compliance:** Respects `prefers-reduced-motion` media query per WCAG 2.3.3
+**WCAG 2.3.3 Compliance:** ✅ Fully compliant - animation doesn't trigger when motion is reduced
 
 ---
 

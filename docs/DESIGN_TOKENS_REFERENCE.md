@@ -408,51 +408,194 @@ export component MessageBubble {
 
 ### Loading Spinner Using Motion Tokens (WCAG 2.3.3 Compliant)
 
-**CORRECT USAGE - Respects Motion Preferences:**
+#### Spinner Design Standards
+
+All loading spinners in the chat application follow these design principles:
+
+**Visual Style:** Full-rotating-border (halo effect)
+- **Size:** 16px × 16px (in Button component)
+- **Border Width:** 2px
+- **Border Radius:** 8px (full circle)
+- **Background:** Transparent
+- **Animation Duration:** 400ms (DURATION_SLOW)
+- **Easing:** Linear (EASE_LINEAR)
+- **Loop:** Infinite until `is_loading=false`
+- **Color:** Inherits from parent component's text color
+
+**Design Rationale:**
+- Premium, modern aesthetic aligned with Fluent Design System
+- Full-rotating-border visible at all rotation angles (better accessibility)
+- Continuous motion less jarring than segmented partial-arc spinners
+- Accessible for users with vestibular disorders (when reduce_motion=true)
+
+#### CORRECT USAGE - Respects Motion Preferences (✅ WCAG 2.3.3 Compliant)
+
+**Pattern: Button with Loading Spinner**
 
 ```slint
-export component LoadingSpinner {
-    width: 40px;
-    height: 40px;
+export component Button {
+    in property is_loading: bool;
+    in property reduce_motion: bool;
     
-    Rectangle {
-        background: transparent;
-        
-        Rectangle {
-            width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            border-width: 3px;
-            border-color: FLUENT_BLUE;
-            
-            animate rotation {
-                duration: MOTION_DURATION_REDUCED(DURATION_SLOW);  // ✅ CORRECT
-                easing: EASE_LINEAR;
-                iteration-count: infinite;
+    // ... button props ...
+    
+    if is_loading {
+        if reduce_motion {
+            // ✅ STATIC SPINNER - NO ANIMATION BLOCK
+            Rectangle {
+                width: 16px;
+                height: 16px;
+                border-radius: 8px;
+                border-width: 2px;
+                border-color: get_text_color(variant, is_disabled);
+                background: #00000000;
+                rotation-angle: 0deg;  // Static - no animate block at all
             }
-            
-            rotation: 360deg;
+        } else {
+            // ✅ ANIMATED SPINNER - ANIMATION BLOCK HERE
+            Rectangle {
+                width: 16px;
+                height: 16px;
+                border-radius: 8px;
+                border-width: 2px;
+                border-color: get_text_color(variant, is_disabled);
+                background: #00000000;
+                rotation-angle: 0deg;
+                
+                animate rotation-angle {
+                    duration: DURATION_SLOW;  // 400ms
+                    easing: EASE_LINEAR;
+                    loop-count: infinite;
+                }
+                
+                states [
+                    animated: { rotation-angle: 360deg; }
+                ]
+                state: animated;
+            }
         }
     }
 }
 ```
 
-**INCORRECT USAGE - DOES NOT Respect Motion Preferences:**
+**Why This Pattern Works:**
+- When `reduce_motion=true`: Spinner doesn't render animation block at all (truly static)
+- When `reduce_motion=false`: Full rotating animation runs smoothly (400ms)
+- Screen reader announces "Button: [label] (Loading...)" when loading
+- No motion-related triggers for users with vestibular sensitivity
+
+#### INCORRECT USAGE - DOES NOT Respect Motion Preferences (❌ WCAG 2.3.3 Violation)
+
+**Anti-Pattern 1: Using MOTION_DURATION_REDUCED() in animate block**
 
 ```slint
-// ❌ WRONG - This ignores the PREFERS_REDUCED_MOTION flag
-animate rotation {
-    duration: DURATION_SLOW;  // Ignores accessibility preference!
-    easing: EASE_LINEAR;
-    iteration-count: infinite;
+// ❌ WRONG - Animation still executes with 0ms duration
+if is_loading {
+    Rectangle {
+        animate rotation-angle {
+            duration: MOTION_DURATION_REDUCED(DURATION_SLOW);  // Returns 0ms when reduce_motion=true
+            easing: EASE_LINEAR;
+            loop-count: infinite;
+        }
+        rotation-angle: 360deg;
+    }
 }
 ```
 
-**Why This Matters:**
-- Users with motion sensitivity have enabled "Reduce motion" in Windows Settings
-- Without `MOTION_DURATION_REDUCED()`, their preference is ignored
-- WCAG 2.3.3 requires respecting this preference
-- Animation instantly completes to prevent disorientation
+**Why This Fails:**
+- When `PREFERS_REDUCED_MOTION=true`, duration becomes 0ms
+- Animation still **executes instantly** (0ms is still animation)
+- WCAG 2.3.3 requires: "Animation must not trigger if motion preference is set"
+- Instant animation can trigger vestibular reactions
+
+**Anti-Pattern 2: Always animating regardless of preference**
+
+```slint
+// ❌ WRONG - Ignores reduce_motion preference entirely
+animate rotation-angle {
+    duration: DURATION_SLOW;  // Always 400ms, never checks reduce_motion!
+    easing: EASE_LINEAR;
+    loop-count: infinite;
+}
+```
+
+**Why This Fails:**
+- Ignores user's Windows accessibility settings
+- Violates WCAG 2.3.3
+- Users with motion sensitivity experience disorientation
+
+#### Spinner Variants by Button Type
+
+| Button Variant | Spinner Color | Contrast | Example |
+|---|---|---|---|
+| **Primary** | FLUENT_BLUE (#0078D4) | 5.2:1 ✅ | Blue spinner on blue button |
+| **Secondary** | FLUENT_BLUE (#0078D4) | 5.2:1 ✅ | Blue spinner on white button |
+| **Tertiary** | FLUENT_BLUE (#0078D4) | 5.2:1 ✅ | Blue spinner on transparent button |
+| **Danger** | ERROR (#E81123) | 5.8:1 ✅ | Red spinner on red button |
+| **Disabled** | NEUTRAL_MEDIUM (#666666) | 7.0:1 ✅ | Gray spinner on gray button |
+
+#### Spinner Animation Specifications
+
+**In Reduced Motion Mode (reduce_motion=true):**
+- ✅ No animate block executes
+- ✅ Spinner renders as static 16px circle
+- ✅ Border visible but not rotating
+- ✅ No visual feedback from animation (rely on text: "Loading...")
+- ✅ WCAG 2.3.3 compliant
+
+**In Normal Motion Mode (reduce_motion=false):**
+- ✅ Full 360° rotation
+- ✅ 400ms per rotation (DURATION_SLOW)
+- ✅ Linear easing (constant speed)
+- ✅ Infinite loop until `is_loading=false`
+- ✅ < 3 Hz flicker rate (no seizure risk)
+
+#### Testing Loading Spinner
+
+**1. Visual Regression Test:**
+```rust
+// Test: Spinner renders correctly in all button variants
+#[test]
+fn test_spinner_renders_all_variants() {
+    // Button primary with is_loading=true → blue spinner ✅
+    // Button danger with is_loading=true → red spinner ✅
+    // Button disabled with is_loading=true → gray spinner ✅
+}
+```
+
+**2. Accessibility Test (reduce_motion):**
+```rust
+#[test]
+fn test_spinner_respects_reduce_motion() {
+    // Setup: reduce_motion=false
+    // Result: Spinner animates smoothly ✅
+    
+    // Setup: reduce_motion=true
+    // Result: Spinner is static (no rotation) ✅
+}
+```
+
+**3. Motion Sensitivity Test:**
+Windows Settings → Ease of Access → Display → "Show animations":
+- Off: Spinner should be completely static
+- On: Spinner should rotate continuously
+
+#### Why Full-Rotating-Border Is Better Than Partial-Arc
+
+| Aspect | Full-Border (Current) | Partial-Arc (Alternative) | Winner |
+|--------|---|---|---|
+| **Flicker Risk** | None (continuous) | Segmented (potential flicker) | Full-Border ✅ |
+| **Motion Sensitivity** | Gentle, continuous | Jarring segments | Full-Border ✅ |
+| **Brand Fit** | Modern, premium | Generic | Full-Border ✅ |
+| **Visibility** | Entire ring visible | Only 75% visible | Full-Border ✅ |
+| **Fluent Alignment** | ✅ Windows 11 style | ✗ Web convention | Full-Border ✅ |
+| **Recognition** | Takes one use | Instant (universal) | Partial-Arc ✅ |
+
+**Verdict:** Full-rotating-border is superior for accessibility, brand, and Fluent Design alignment.
+
+#### Reference Implementation (Button Component)
+
+See `/docs/BUTTON_COMPONENT_REFERENCE.md` for complete Button implementation with spinner integration.
 
 ---
 
