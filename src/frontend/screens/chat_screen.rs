@@ -68,6 +68,7 @@ impl ChatScreen {
         let event_handle = spawn_event_listener(
             event_rx,
             ui_weak.clone(),
+            conversations.clone(),
             messages.clone(),
             selected_conversation_id.clone(),
             selected_participant_id.clone(),
@@ -323,6 +324,7 @@ impl ChatScreen {
 fn spawn_event_listener(
     mut event_rx: mpsc::UnboundedReceiver<crate::services::WebSocketEvent>,
     ui_weak: slint::Weak<ChatScreenComponent>,
+    conversations: Arc<Mutex<Vec<ConversationData>>>,
     messages: Arc<Mutex<Vec<MessageData>>>,
     selected_conversation_id: Arc<Mutex<Option<String>>>,
     selected_participant_id: Arc<Mutex<Option<String>>>,
@@ -332,6 +334,56 @@ fn spawn_event_listener(
     std::thread::spawn(move || {
         while let Some(event) = event_rx.blocking_recv() {
             match event {
+                crate::services::WebSocketEvent::Presence { user_id, username: _, is_online, last_seen_at: _ } => {
+                    // Update conversation list
+                    let mut needs_refresh = false;
+                    {
+                        let mut cache = conversations.lock().unwrap();
+                        for conv in cache.iter_mut() {
+                            if conv.participant_id == user_id {
+                                conv.participant_is_online = is_online;
+                                needs_refresh = true;
+                            }
+                        }
+                    }
+                    
+                    if needs_refresh {
+                        let conversations_clone = conversations.clone();
+                        let ui_weak_refresh = ui_weak.clone();
+                        slint::invoke_from_event_loop(move || {
+                            if let Some(ui) = ui_weak_refresh.upgrade() {
+                                let cache = conversations_clone.lock().unwrap();
+                                let slint_conversations: Vec<crate::ConversationItem> = cache
+                                    .iter()
+                                    .map(|c| crate::ConversationItem {
+                                        conversation_id: c.conversation_id.clone().into(),
+                                        participant_id: c.participant_id.clone().into(),
+                                        participant_username: c.participant_username.clone().into(),
+                                        participant_is_online: c.participant_is_online,
+                                        last_message: c.last_message.clone().into(),
+                                        last_message_time: c.last_message_time.clone().into(),
+                                        message_count: c.message_count,
+                                    })
+                                    .collect();
+                                let model = Rc::new(VecModel::from(slint_conversations));
+                                ui.set_conversations(ModelRc::from(model));
+                            }
+                        }).ok();
+                    }
+
+                    // Update selected conversation status
+                    let selected_participant = selected_participant_id.lock().unwrap().clone();
+                    if let Some(active_user_id) = selected_participant {
+                        if active_user_id == user_id {
+                            let ui_weak_update = ui_weak.clone();
+                            slint::invoke_from_event_loop(move || {
+                                if let Some(ui) = ui_weak_update.upgrade() {
+                                    ui.set_selected_participant_is_online(is_online);
+                                }
+                            }).ok();
+                        }
+                    }
+                }
                 crate::services::WebSocketEvent::Message { conversation_id, message_id, sender_username, content, status, timestamp } => {
                     if selected_conversation_id.lock().unwrap().as_deref() != Some(&conversation_id) {
                         continue;

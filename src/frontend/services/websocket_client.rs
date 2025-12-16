@@ -2,7 +2,7 @@
 //!
 //! Runs on a background Tokio runtime and communicates with the UI through channels.
 
-use chat_shared::protocol::{AckData, MessageEnvelope, TextMessageData, TypingData};
+use chat_shared::protocol::{AckData, MessageEnvelope, TextMessageData, TypingData, PresenceData};
 use futures::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -35,6 +35,13 @@ pub enum WebSocketEvent {
         sender_username: String,
         recipient_id: String,
         is_typing: bool,
+    },
+    /// User online status update.
+    Presence {
+        user_id: String,
+        username: String,
+        is_online: bool,
+        last_seen_at: u64,
     },
     /// Error surfaced to the UI.
     Error(String),
@@ -280,6 +287,17 @@ fn handle_incoming_text(text: &str, event_tx: &mpsc::UnboundedSender<WebSocketEv
                         .unwrap_or_else(|| "Unknown".to_string()),
                     recipient_id: typing.recipient_id,
                     is_typing: typing.is_typing,
+                });
+            }
+        }
+        "presence" => {
+            let presence: Result<PresenceData, _> = serde_json::from_value(envelope.data.clone());
+            if let Ok(presence) = presence {
+                let _ = event_tx.send(WebSocketEvent::Presence {
+                    user_id: presence.user_id,
+                    username: presence.username,
+                    is_online: presence.is_online,
+                    last_seen_at: presence.last_seen_at,
                 });
             }
         }

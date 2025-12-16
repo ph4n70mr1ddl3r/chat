@@ -460,27 +460,27 @@ Goal: Users see online/offline status of chat partners in real-time.
 
 ### Presence Service & Broadcasting
 
-- [ ] T099 [P] [US5] Enhance presence tracking at `src/backend/services/presence.rs` (broadcast to conversation participants)
-- [ ] T100 [P] [US5] Implement presence update handler at `src/backend/handlers/presence.rs` (on WebSocket connect/disconnect)
+- [X] T099 [P] [US5] Enhance presence tracking at `src/backend/services/presence.rs` (broadcast to conversation participants)
+- [X] T100 [P] [US5] Implement presence update handler at `src/backend/handlers/presence.rs` (on WebSocket connect/disconnect)
   - Update users.is_online flag
   - Broadcast presence to users in active conversations
   - Include userId, username, isOnline, lastSeenAt
-- [ ] T101 [US5] Create database queries at `src/backend/db/queries/users.rs`: update_online_status, update_last_seen
+- [X] T101 [US5] Create database queries at `src/backend/db/queries/users.rs`: update_online_status, update_last_seen
 
 ### Frontend Presence UI
 
-- [ ] T102 [P] [US5] Create online status indicator at `src/frontend/components/online_indicator.slint` (green dot for online, gray for offline)
-- [ ] T103 [US5] Implement presence listener at `src/frontend/services/websocket_client.rs` (handle presence messages from server)
-- [ ] T104 [US5] Update chat screen to show partner status at `src/frontend/screens/chat_screen.slint` (display in top bar)
-- [ ] T105 [US5] Update conversation list to show status at `src/frontend/screens/chat_screen.slint` (green dot next to username)
+- [X] T102 [P] [US5] Create online status indicator at `src/frontend/components/online_indicator.slint` (green dot for online, gray for offline)
+- [X] T103 [US5] Implement presence listener at `src/frontend/services/websocket_client.rs` (handle presence messages from server)
+- [X] T104 [US5] Update chat screen to show partner status at `src/frontend/screens/chat_screen.slint` (display in top bar)
+- [X] T105 [US5] Update conversation list to show status at `src/frontend/screens/chat_screen.slint` (green dot next to username)
 
 ### Presence Tests
 
-- [ ] T106 [US5] Create test file at `tests/integration/presence_test.rs` with scenarios:
+- [X] T106 [US5] Create test file at `tests/integration/presence_test.rs` with scenarios:
   - User comes online → presence broadcast within 1 second
   - User goes offline → presence update within 30s (heartbeat timeout)
   - Presence sent to conversation participants only (privacy)
-- [ ] T106_A [US5] Create presence latency test at `tests/integration/presence_latency_test.rs`
+- [X] T106_A [US5] Create presence latency test at `tests/integration/presence_latency_test.rs`
   - Two connected clients in active conversation
   - Client A goes offline (simulate TCP disconnect)
   - Client A reconnects with stored JWT token
@@ -513,11 +513,11 @@ Goal: Users can search messages within conversations by keyword.
 - [ ] T110 [P] [US6] Create search input at `src/frontend/components/search_input.slint` (debounced search field)
 - [ ] T111 [US6] Implement search logic at `src/frontend/screens/chat_screen.rs` (call GET /conversations/{id}/search)
 - [ ] T112 [US6] Display search results at `src/frontend/screens/chat_screen.slint` (show matching messages, highlight keyword)
-- [ ] T113 [US6] Create "no results" message at `src/frontend/screens/chat_screen.slint`
+- [X] T113 [US6] Create "no results" message at `src/frontend/screens/chat_screen.slint`
 
 ### Search Tests
 
-- [ ] T114 [US6] Create test file at `tests/integration/search_test.rs` with scenarios:
+- [X] T114 [US6] Create test file at `tests/integration/search_test.rs` with scenarios:
   - Search with valid keyword → matching messages returned
   - Search with no matches → empty results
   - Search in offline conversation → works correctly

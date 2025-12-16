@@ -1,6 +1,7 @@
 import { VerticalBox, HorizontalBox, Text, ListView, ScrollView } from "std-widgets.slint";
 import { MessageInput } from "../components/message_input.slint";
 import { MessageBubble } from "../components/message_bubble.slint";
+import { OnlineIndicator } from "../components/online_indicator.slint";
 
 export struct ConversationItem {
     conversation_id: string,
@@ -33,6 +34,8 @@ export component ChatScreenComponent {
     in property <bool> is_loading;
     in property <string> error_message;
     in property <string> typing_indicator;
+    in property <bool> is_search_active;
+    in property <string> search_query;
     callback scroll_to_bottom();
     
     callback conversation_selected(string /* conversation_id */);
@@ -82,11 +85,8 @@ export component ChatScreenComponent {
                             spacing: 10px;
                             
                             // Online status indicator
-                            Rectangle {
-                                width: 12px;
-                                height: 12px;
-                                border-radius: 6px;
-                                background: conversation.participant_is_online ? green : gray;
+                            OnlineIndicator {
+                                is_online: conversation.participant_is_online;
                                 vertical-alignment: center;
                             }
                             
@@ -139,11 +139,8 @@ export component ChatScreenComponent {
                     spacing: 10px;
                     
                     // Online indicator
-                    Rectangle {
-                        width: 12px;
-                        height: 12px;
-                        border-radius: 6px;
-                        background: root.selected_participant_is_online ? lightgreen : lightgray;
+                    OnlineIndicator {
+                        is_online: root.selected_participant_is_online;
                         vertical-alignment: center;
                     }
                     
@@ -178,6 +175,27 @@ export component ChatScreenComponent {
                             timestamp: message.timestamp;
                             status: message.status;
                             is_own: message.is_own_message;
+                        }
+
+                        // Search no-results state
+                        if root.is_search_active && root.messages.length == 0: Rectangle {
+                            background: #f9f9f9;
+                            border-radius: 6px;
+                            padding: 12px;
+                            HorizontalBox {
+                                spacing: 6px;
+                                Text {
+                                    text: "No messages found for";
+                                    color: #777;
+                                    font-size: 12px;
+                                }
+                                Text {
+                                    text: "\"" + root.search_query + "\"";
+                                    color: #333;
+                                    font-size: 12px;
+                                    font-weight: bold;
+                                }
+                            }
                         }
                     }
                 }
