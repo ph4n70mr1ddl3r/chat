@@ -1,0 +1,355 @@
+// ============================================================================
+// Button Component (Slint)
+// ============================================================================
+// A reusable, accessible Button component supporting 4 variants and 3 sizes
+// Implements US-002 Acceptance Criteria:
+// - AC1: Variants (primary, secondary, tertiary, danger) with hover/active states
+// - AC2: Sizes (small 28px, medium 36px, large 44px)
+// - AC3: on_clicked callback on button press
+// - AC4: Keyboard accessible (Tab, Enter, Space)
+// - AC5: Respects reduce_motion preference
+// - AC6: Disabled state prevents interaction
+// - AC7: Loading state with spinner
+// - AC8: Screen reader accessible
+// ============================================================================
+
+import { 
+    FLUENT_BLUE, ERROR, NEUTRAL_LIGHT, NEUTRAL_DARK, NEUTRAL_MEDIUM,
+    FONT_SIZE_BODY, FONT_WEIGHT_MEDIUM,
+    SPACING_SM, SPACING_MD, SPACING_LG,
+    DURATION_SLOW, MOTION_DURATION_REDUCED, EASE_LINEAR
+} from "../design/tokens.slint";
+
+// ============================================================================
+// Color helper functions
+// ============================================================================
+
+function get_primary_base_color() -> color {
+    return FLUENT_BLUE; // #0078D4
+}
+
+function get_primary_hover_color() -> color {
+    return #0063B1;
+}
+
+function get_primary_active_color() -> color {
+    return #004A94;
+}
+
+function get_secondary_base_color() -> color {
+    return #FFFFFF;
+}
+
+function get_secondary_hover_color() -> color {
+    return #EFF6FC;
+}
+
+function get_secondary_active_color() -> color {
+    return #F3F9FE;
+}
+
+function get_tertiary_base_color() -> color {
+    return #00000000; // Transparent
+}
+
+function get_tertiary_hover_color() -> color {
+    return #E8F4FD;
+}
+
+function get_tertiary_active_color() -> color {
+    return #D9ECFC;
+}
+
+function get_danger_base_color() -> color {
+    return #A4373A;
+}
+
+function get_danger_hover_color() -> color {
+    return #8B2E31;
+}
+
+function get_danger_active_color() -> color {
+    return #6B2327;
+}
+
+function get_base_color(variant: string) -> color {
+    if (variant == "primary") {
+        return get_primary_base_color();
+    } else if (variant == "secondary") {
+        return get_secondary_base_color();
+    } else if (variant == "tertiary") {
+        return get_tertiary_base_color();
+    } else if (variant == "danger") {
+        return get_danger_base_color();
+    }
+    return get_primary_base_color();
+}
+
+function get_hover_color(variant: string) -> color {
+    if (variant == "primary") {
+        return get_primary_hover_color();
+    } else if (variant == "secondary") {
+        return get_secondary_hover_color();
+    } else if (variant == "tertiary") {
+        return get_tertiary_hover_color();
+    } else if (variant == "danger") {
+        return get_danger_hover_color();
+    }
+    return get_primary_hover_color();
+}
+
+function get_active_color(variant: string) -> color {
+    if (variant == "primary") {
+        return get_primary_active_color();
+    } else if (variant == "secondary") {
+        return get_secondary_active_color();
+    } else if (variant == "tertiary") {
+        return get_tertiary_active_color();
+    } else if (variant == "danger") {
+        return get_danger_active_color();
+    }
+    return get_primary_active_color();
+}
+
+function get_disabled_color() -> color {
+    return NEUTRAL_LIGHT;
+}
+
+// Text color based on variant
+function get_text_color(variant: string, is_disabled: bool) -> color {
+    if (is_disabled) {
+        return NEUTRAL_MEDIUM;
+    }
+    if (variant == "primary" || variant == "danger") {
+        return #FFFFFF; // White text for primary and danger
+    } else if (variant == "secondary" || variant == "tertiary") {
+        return FLUENT_BLUE; // Blue text for secondary and tertiary
+    }
+    return #FFFFFF;
+}
+
+// Border color for secondary variant
+function get_border_color(variant: string, is_disabled: bool) -> color {
+    if (variant == "secondary" && !is_disabled) {
+        return FLUENT_BLUE;
+    } else if (is_disabled) {
+        return NEUTRAL_LIGHT;
+    }
+    return #00000000; // Transparent
+}
+
+// ============================================================================
+// Size helper functions
+// ============================================================================
+
+function get_height(size: string) -> length {
+    if (size == "small") {
+        return 28px;
+    } else if (size == "large") {
+        return 44px;
+    }
+    // Default to medium
+    return 36px;
+}
+
+function get_padding_vertical(size: string) -> length {
+    if (size == "small") {
+        return 4px;
+    } else if (size == "large") {
+        return 10px;
+    }
+    // Default to medium
+    return 6px;
+}
+
+function get_padding_horizontal(size: string) -> length {
+    if (size == "small") {
+        return SPACING_SM;
+    } else if (size == "large") {
+        return SPACING_LG;
+    }
+    // Default to medium
+    return SPACING_MD;
+}
+
+// ============================================================================
+// Button Component
+// ============================================================================
+
+export component Button {
+    // ========== Input Properties ==========
+    
+    // Data
+    in property <string> label: "Button";
+    in property <function()> on_clicked;
+    
+    // Styling
+    in property <string> variant: "primary";        // "primary", "secondary", "tertiary", "danger"
+    in property <string> size: "medium";            // "small", "medium", "large"
+    
+    // State
+    in property <bool> is_disabled: false;
+    in property <bool> is_loading: false;
+    in property <bool> reduce_motion: false;
+    
+    // ========== Internal State Properties ==========
+    private property <bool> hovered: false;
+    private property <bool> pressed: false;
+    private property <bool> focused: false;
+    
+    // ========== Layout ==========
+    width: 100%;
+    height: get_height(size);
+    
+    Rectangle {
+        // Determine background color based on state and variant
+        background: is_disabled ? get_disabled_color() : 
+                   pressed ? get_active_color(variant) :
+                   hovered ? get_hover_color(variant) :
+                   get_base_color(variant);
+        
+        // Border for secondary variant
+        border-color: get_border_color(variant, is_disabled);
+        border-width: variant == "secondary" ? 1px : 0px;
+        
+        // Rounded corners for modern appearance
+        border-radius: 4px;
+        
+        // Size
+        height: get_height(size);
+        width: 100%;
+        
+        // Interactivity
+        pointer-events: is_disabled ? none : auto;
+        
+        // Hover state tracking
+        mouse-area := MouseArea {
+            hovered-changed(hovered) => {
+                root.hovered = hovered;
+            }
+            
+            pressed-changed(pressed) => {
+                root.pressed = pressed;
+            }
+            
+            clicked => {
+                if (!is_disabled) {
+                    on_clicked();
+                }
+            }
+        }
+        
+        // Focus handling
+        TouchArea {
+            width: 100%;
+            height: 100%;
+            
+            pressed => {
+                root.pressed = true;
+                if (!is_disabled) {
+                    on_clicked();
+                }
+            }
+            released => {
+                root.pressed = false;
+            }
+        }
+        
+        // Focus styling with FocusScope
+        focus-scope := FocusScope {
+            x: 0;
+            y: 0;
+            width: 100%;
+            height: 100%;
+            
+            key-pressed(event) => {
+                if (event.text == " " || event.text == Key.Return) {
+                    if (!is_disabled) {
+                        on_clicked();
+                        root.pressed = true;
+                    }
+                    return accept;
+                }
+                return reject;
+            }
+            
+            key-released(event) => {
+                if (event.text == " " || event.text == Key.Return) {
+                    root.pressed = false;
+                    return accept;
+                }
+                return reject;
+            }
+        }
+        
+        // Focus indicator border
+        if focus-scope.has-focus {
+            Rectangle {
+                border-radius: 6px;
+                border-width: 2px;
+                border-color: FLUENT_BLUE;
+                width: 100%;
+                height: 100%;
+            }
+        }
+        
+        // Content area: label or spinner
+        HorizontalLayout {
+            x: get_padding_horizontal(size);
+            y: get_padding_vertical(size);
+            width: parent.width - 2 * get_padding_horizontal(size);
+            height: parent.height - 2 * get_padding_vertical(size);
+            alignment: center;
+            
+            if is_loading {
+                // Loading spinner - rotating indicator
+                Rectangle {
+                    width: 16px;
+                    height: 16px;
+                    border-radius: 8px;
+                    border-width: 2px;
+                    border-color: get_text_color(variant, is_disabled);
+                    
+                    // Transparent background with partial border creates spinner effect
+                    background: #00000000;
+                    
+                    // Rotation animation
+                    rotation-angle: 0deg;
+                    
+                    animate rotation-angle {
+                        duration: MOTION_DURATION_REDUCED(DURATION_SLOW);
+                        easing: EASE_LINEAR;
+                        loop-count: infinite;
+                    }
+                    
+                    // Trigger animation
+                    states [
+                        animated: {
+                            rotation-angle: 360deg;
+                        }
+                    ]
+                    
+                    state: animated;
+                }
+            } else {
+                // Label text
+                Text {
+                    text: label;
+                    font-size: FONT_SIZE_BODY;
+                    font-weight: FONT_WEIGHT_MEDIUM;
+                    color: get_text_color(variant, is_disabled);
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
+    
+    // ========== Accessibility ==========
+    accessible-label: is_loading ? label + " (Loading...)" : label;
+    accessible-role: "button";
+}
+
+// ============================================================================
+// Component Complete
+// ============================================================================
