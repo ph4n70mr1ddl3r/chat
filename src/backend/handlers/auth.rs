@@ -210,6 +210,8 @@ pub async fn login_handler(
     pool: SqlitePool,
     jwt_secret: String,
 ) -> Result<impl Reply, Rejection> {
+    let auth_service = AuthService::new(jwt_secret.clone());
+
     // Find user by username
     let user = match queries::find_user_by_username(&pool, &req.username).await {
         Ok(Some(user)) => user,
@@ -247,8 +249,8 @@ pub async fn login_handler(
         ));
     }
 
-    // Verify password
-    match AuthService::verify_password(&req.password, &user.password_hash) {
+    // Verify password with structured logging
+    match auth_service.verify_login(&req.username, &req.password, &user.password_hash) {
         Ok(true) => {
             // Password is correct
         }
@@ -275,7 +277,6 @@ pub async fn login_handler(
     }
 
     // Generate token
-    let auth_service = AuthService::new(jwt_secret);
     let (token, expires_at) = match auth_service.generate_token(user.id.clone()) {
         Ok((token, expires_at)) => (token, expires_at),
         Err(e) => {

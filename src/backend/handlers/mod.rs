@@ -10,6 +10,7 @@ pub mod messages;
 pub mod parser;
 pub mod refresh;
 pub mod router;
+pub mod server;
 pub mod user;
 pub mod websocket;
 

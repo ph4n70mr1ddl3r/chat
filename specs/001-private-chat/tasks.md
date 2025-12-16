@@ -604,10 +604,10 @@ Goal: Implement observability, security hardening, performance optimization, and
 
 ### Logging & Observability
 
-- [ ] T130 [P] Implement structured JSON logging at `src/backend/lib.rs` using tracing crate
-- [ ] T131 [P] Add authentication event logging (login, signup, failed attempts) at `src/backend/services/auth_service.rs`
-- [ ] T132 [P] Add message delivery state logging at `src/backend/services/message_service.rs` (sent, delivered, failed states)
-- [ ] T133 Create server health endpoint at `src/backend/handlers/server.rs` (GET /health, /status)
+- [X] T130 [P] Implement structured JSON logging at `src/backend/lib.rs` using tracing crate
+- [X] T131 [P] Add authentication event logging (login, signup, failed attempts) at `src/backend/services/auth_service.rs`
+- [X] T132 [P] Add message delivery state logging at `src/backend/services/message_service.rs` (sent, delivered, failed states)
+- [X] T133 Create server health endpoint at `src/backend/handlers/server.rs` (GET /health, /status)
 
 ### Security & Input Validation
 

@@ -12,13 +12,11 @@ use anyhow::Error;
 use futures::{SinkExt, StreamExt};
 use sqlx::SqlitePool;
 use std::sync::Arc;
+use std::time::Instant;
 use tracing::{info, warn};
 use tokio::sync::mpsc;
-use warp::filters::body::BodyDeserializeError;
-use warp::filters::ws::ws;
 use warp::filters::ws::{WebSocket, Ws};
 use warp::http::StatusCode;
-use warp::reject;
 use warp::{Filter, Rejection, Reply};
 
 use crate::handlers::dispatcher::{DispatchResult, MessageDispatcher};
@@ -27,7 +25,7 @@ use crate::handlers::messages::MessageHandler;
 use crate::services::auth_service::TokenClaims;
 use crate::services::{MessageQueueService, PresenceService};
 
-use crate::handlers::{self, auth, conversation, user, websocket};
+use crate::handlers::{self, auth, conversation, server as server_handlers, user, websocket};
 use crate::middleware::auth as auth_middleware;
 
 /// Server configuration
@@ -54,6 +52,7 @@ pub struct ServerState {
     pub connection_manager: Arc<websocket::ConnectionManager>,
     pub presence_service: PresenceService,
     pub message_queue: MessageQueueService,
+    pub start_time: Instant,
 }
 
 impl ServerState {
@@ -69,6 +68,7 @@ impl ServerState {
             ),
             message_queue: MessageQueueService::new(pool_for_services, connection_manager.clone()),
             connection_manager,
+            start_time: Instant::now(),
         }
     }
 }
@@ -86,13 +86,16 @@ pub fn create_routes(
     let with_auth = auth_middleware::with_auth(auth_service.clone());
 
     // Health endpoint
-    let health_route = warp::path!("health").and(warp::get()).map(|| {
-        info!("Health check requested");
-        warp::reply::json(&serde_json::json!({
-            "status": "healthy",
-            "timestamp": chrono::Utc::now().timestamp_millis(),
-        }))
-    });
+    let health_route = warp::path!("health")
+        .and(warp::get())
+        .and(state_filter.clone())
+        .and_then(server_handlers::health);
+
+    // Status endpoint
+    let status_route = warp::path!("status")
+        .and(warp::get())
+        .and(state_filter.clone())
+        .and_then(server_handlers::status);
 
     // WebSocket endpoint with JWT authentication
     let websocket_route = warp::path!("socket")
@@ -242,6 +245,7 @@ pub fn create_routes(
     // Combine all routes
     health_route
         .or(websocket_route)
+        .or(status_route)
         .or(auth_routes)
         .or(user_routes)
         .or(users_routes)
@@ -631,9 +635,32 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     }
 
+    #[tokio::test]
+    async fn test_status_endpoint() {
+        let pool = init_test_pool().await;
+        let state = ServerState::new(pool, ServerConfig::default());
+        let routes = create_routes(state);
+
+        let resp = request().method("GET").path("/status").reply(&routes).await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = String::from_utf8_lossy(resp.body());
+        assert!(body.contains("\"status\":\"running\""));
+    }
+
     async fn init_test_pool() -> SqlitePool {
-        sqlx::SqlitePool::connect(":memory:")
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
             .await
-            .expect("Failed to create test pool")
+            .expect("Failed to create test pool");
+
+        let schema_sql = include_str!("db/migrations/001_initial_schema.sql");
+        for statement in schema_sql.split(';').filter(|s| !s.trim().is_empty()) {
+            sqlx::query(statement)
+                .execute(&pool)
+                .await
+                .expect("Failed to run schema statement");
+        }
+
+        pool
     }
 }

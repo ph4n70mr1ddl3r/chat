@@ -7,6 +7,7 @@ use bcrypt::{hash, verify, DEFAULT_COST};
 use chrono::Utc;
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
+use tracing::{info, warn};
 
 /// JWT token claims
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -109,7 +110,15 @@ impl AuthService {
         let (password_hash, password_salt) = Self::hash_password(&password)?;
 
         // Create user (note: actual DB save happens in the handler)
-        Ok(User::new(username, password_hash, password_salt))
+        let user = User::new(username, password_hash, password_salt);
+        info!(
+            target: "auth",
+            event = "auth.signup",
+            username = %user.username,
+            user_id = %user.id,
+            "Validated credentials and constructed new user"
+        );
+        Ok(user)
     }
 
     /// Generate JWT token for a user
@@ -130,6 +139,47 @@ impl AuthService {
         encode(&Header::default(), &claims, &key)
             .map(|token| (token, expiration))
             .map_err(|e| format!("Failed to generate token: {}", e))
+    }
+
+    /// Verify user login credentials with structured logging around outcomes.
+    pub fn verify_login(
+        &self,
+        username: &str,
+        password: &str,
+        hash: &str,
+    ) -> Result<bool, String> {
+        match Self::verify_password(password, hash) {
+            Ok(true) => {
+                info!(
+                    target: "auth",
+                    event = "auth.login",
+                    username = %username,
+                    outcome = "success",
+                    "Password verified"
+                );
+                Ok(true)
+            }
+            Ok(false) => {
+                warn!(
+                    target: "auth",
+                    event = "auth.login",
+                    username = %username,
+                    outcome = "failed",
+                    reason = "invalid_password"
+                );
+                Ok(false)
+            }
+            Err(e) => {
+                warn!(
+                    target: "auth",
+                    event = "auth.login",
+                    username = %username,
+                    outcome = "error",
+                    error = %e
+                );
+                Err(e)
+            }
+        }
     }
 
     /// Verify and decode a JWT token

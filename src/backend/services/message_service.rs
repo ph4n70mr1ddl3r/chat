@@ -5,7 +5,7 @@
 use crate::db::queries;
 use crate::models::Message;
 use sqlx::SqlitePool;
-use uuid::Uuid;
+use tracing::{info, warn};
 
 /// Message status enum
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -53,11 +53,30 @@ impl MessageService {
     ) -> Result<Message, String> {
         // Validate content length (1-5000 characters)
         if content.is_empty() || content.len() > 5000 {
+            warn!(
+                target: "message",
+                event = "message.send",
+                conversation_id = %conversation_id,
+                sender_id = %sender_id,
+                recipient_id = %recipient_id,
+                outcome = "failed",
+                reason = "invalid_length",
+                content_length = content.len()
+            );
             return Err("Message content must be between 1 and 5000 characters".to_string());
         }
 
         // Validate UTF-8 (Rust strings are already UTF-8, but check for validity)
         if !content.is_ascii() && content.chars().any(|c| !c.is_valid()) {
+            warn!(
+                target: "message",
+                event = "message.send",
+                conversation_id = %conversation_id,
+                sender_id = %sender_id,
+                recipient_id = %recipient_id,
+                outcome = "failed",
+                reason = "invalid_utf8"
+            );
             return Err("Message content contains invalid UTF-8 characters".to_string());
         }
 
@@ -81,14 +100,24 @@ impl MessageService {
 
         // Create message with generated UUID
         let message = Message::new(
-            conversation_id,
-            sender_id,
-            recipient_id,
+            conversation_id.clone(),
+            sender_id.clone(),
+            recipient_id.clone(),
             content,
         );
 
         // Insert into database
         let created_message = queries::insert_message(&self.pool, &message).await?;
+        info!(
+            target: "message",
+            event = "message.send",
+            conversation_id = %conversation_id,
+            sender_id = %sender_id,
+            recipient_id = %recipient_id,
+            message_id = %created_message.id,
+            status = %created_message.status,
+            "Message persisted"
+        );
 
         Ok(created_message)
     }
@@ -106,6 +135,16 @@ impl MessageService {
     ) -> Result<(Message, bool), String> {
         // Check if message already exists (idempotency)
         if let Some(existing) = queries::find_message_by_id(&self.pool, &message_id).await? {
+            info!(
+                target: "message",
+                event = "message.idempotent",
+                conversation_id = %conversation_id,
+                sender_id = %sender_id,
+                recipient_id = %recipient_id,
+                message_id = %existing.id,
+                status = %existing.status,
+                "Duplicate message detected; returning existing record"
+            );
             return Ok((existing, false)); // Not created, already exists
         }
 
@@ -116,6 +155,16 @@ impl MessageService {
 
         // Update ID to client-provided one
         message.id = message_id;
+        info!(
+            target: "message",
+            event = "message.send",
+            conversation_id = %message.conversation_id,
+            sender_id = %message.sender_id,
+            recipient_id = %message.recipient_id,
+            message_id = %message.id,
+            status = %message.status,
+            "Message persisted with client-supplied id"
+        );
 
         Ok((message, true)) // Created new message
     }
@@ -180,14 +229,52 @@ impl MessageService {
         message_id: &str,
         status: MessageStatus,
     ) -> Result<(), String> {
-        queries::update_message_status(&self.pool, message_id, status.as_str()).await
+        let result = queries::update_message_status(&self.pool, message_id, status.as_str()).await;
+
+        match &result {
+            Ok(_) => info!(
+                target: "message",
+                event = "message.status",
+                message_id = %message_id,
+                status = %status.as_str(),
+                "Message status updated"
+            ),
+            Err(err) => warn!(
+                target: "message",
+                event = "message.status",
+                message_id = %message_id,
+                status = %status.as_str(),
+                outcome = "failed",
+                error = %err
+            ),
+        }
+
+        result
     }
 
     /// Mark message as delivered
     ///
     /// Sets delivered_at timestamp and status to 'delivered'
     pub async fn mark_delivered(&self, message_id: &str) -> Result<(), String> {
-        queries::mark_message_delivered(&self.pool, message_id).await
+        let result = queries::mark_message_delivered(&self.pool, message_id).await;
+
+        match &result {
+            Ok(_) => info!(
+                target: "message",
+                event = "message.delivered",
+                message_id = %message_id,
+                "Marked message delivered"
+            ),
+            Err(err) => warn!(
+                target: "message",
+                event = "message.delivered",
+                message_id = %message_id,
+                outcome = "failed",
+                error = %err
+            ),
+        }
+
+        result
     }
 
     /// Validate message content
