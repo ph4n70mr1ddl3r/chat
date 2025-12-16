@@ -1,0 +1,80 @@
+# Sprint Status Tracking File
+# generated: 2025-12-16
+# project: chat
+# project_key: chat-mvp
+# tracking_system: file-system
+# story_location: /home/riddler/chat/docs/sprint-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - drafted: Story file created in stories folder
+#   - ready-for-dev: Draft approved, ready for development
+#   - in-progress: Developer actively working on implementation
+#   - review: Implementation complete, ready for review
+#   - done: Story completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Mark epic as 'in-progress' when starting work on its first story
+# - SM typically drafts next story ONLY after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then Dev runs code-review (fresh context, ideally different LLM)
+
+generated: 2025-12-16
+project: chat
+project_key: chat-mvp
+tracking_system: file-system
+story_location: /home/riddler/chat/docs/sprint-artifacts
+
+development_status:
+  # WEEK 1: Design Tokens & Base Components
+  week-1-design-tokens-base-components: in-progress
+  us-001-design-token-constants: done
+  us-002-button-component: backlog
+  us-003-textfield-component: backlog
+  us-004-icon-component: backlog
+  us-005-chip-component: backlog
+  us-006-loadingspinner-component: backlog
+  week-1-retrospective: optional
+
+  # WEEK 2: Conversation & Message Components
+  week-2-conversation-message: backlog
+  us-007-messagebubble-component: backlog
+  us-008-conversationitem-component: backlog
+  us-009-presence-indicator-component: backlog
+  us-010-messageinput-container: backlog
+  us-011-conversationheader-container: backlog
+  week-2-retrospective: optional
+
+  # WEEK 3: Real-Time & Message List
+  week-3-realtime-message-list: backlog
+  us-012-presence-sync-realtime: backlog
+  us-013-delivery-status-sync-realtime: backlog
+  week-3-retrospective: optional
+
+  # WEEK 4: Message List & Integration
+  week-4-message-list-integration: backlog
+  us-014-messagelist-container: backlog
+  us-015-realtime-message-arrival: backlog
+  week-4-retrospective: optional
+
+  # WEEK 5: Search & Animations
+  week-5-search-animations: backlog
+  us-016-conversation-list-container: backlog
+  us-017-search-conversations: backlog
+  us-018-message-search: backlog
+  week-5-retrospective: optional
+
+  # WEEK 6: Animations & Accessibility
+  week-6-animations-accessibility: backlog
+  us-019-message-animations: backlog
+  us-020-conversation-switching-animation: backlog
+  us-021-wcag-accessibility-testing: backlog
+  us-022-motion-preferences: backlog
+  week-6-retrospective: optional
