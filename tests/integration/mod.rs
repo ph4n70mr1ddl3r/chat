@@ -13,3 +13,4 @@ mod user_search_test;
 mod websocket_handshake_test;
 mod logout_test;
 mod button_test;
+mod button_integration_tests;

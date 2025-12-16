@@ -303,33 +303,48 @@ export component Button {
             
             if is_loading {
                 // Loading spinner - rotating indicator
-                Rectangle {
-                    width: 16px;
-                    height: 16px;
-                    border-radius: 8px;
-                    border-width: 2px;
-                    border-color: get_text_color(variant, is_disabled);
-                    
-                    // Transparent background with partial border creates spinner effect
-                    background: #00000000;
-                    
-                    // Rotation animation
-                    rotation-angle: 0deg;
-                    
-                    animate rotation-angle {
-                        duration: MOTION_DURATION_REDUCED(DURATION_SLOW);
-                        easing: EASE_LINEAR;
-                        loop-count: infinite;
+                // AC5: Respects reduce_motion preference
+                // - When reduce_motion=true: static spinner (no animation)
+                // - When reduce_motion=false: rotating spinner (400ms)
+                
+                if (reduce_motion) {
+                    // Static spinner when motion is reduced (WCAG 2.3.3 compliant)
+                    Rectangle {
+                        width: 16px;
+                        height: 16px;
+                        border-radius: 8px;
+                        border-width: 2px;
+                        border-color: get_text_color(variant, is_disabled);
+                        background: #00000000;
+                        rotation-angle: 0deg;  // Static - no animation at all
                     }
-                    
-                    // Trigger animation
-                    states [
-                        animated: {
-                            rotation-angle: 360deg;
+                } else {
+                    // Animated spinner when motion is normal
+                    Rectangle {
+                        width: 16px;
+                        height: 16px;
+                        border-radius: 8px;
+                        border-width: 2px;
+                        border-color: get_text_color(variant, is_disabled);
+                        background: #00000000;
+                        rotation-angle: 0deg;
+                        
+                        // Only animate when reduce_motion=false
+                        animate rotation-angle {
+                            duration: DURATION_SLOW;  // 400ms
+                            easing: EASE_LINEAR;
+                            loop-count: infinite;
                         }
-                    ]
-                    
-                    state: animated;
+                        
+                        // Trigger animation
+                        states [
+                            animated: {
+                                rotation-angle: 360deg;
+                            }
+                        ]
+                        
+                        state: animated;
+                    }
                 }
             } else {
                 // Label text
@@ -346,6 +361,18 @@ export component Button {
     }
     
     // ========== Accessibility ==========
+    // AC8: Screen Reader Accessible
+    // The accessible-label property updates dynamically when is_loading changes.
+    // When is_loading=true, the label includes "(Loading...)" suffix for screen readers.
+    // This binding is reactive and updates in real-time.
+    //
+    // Note: Screen reader clients may cache labels. To ensure proper announcement of
+    // loading state changes, screen readers typically use:
+    // 1. Property binding updates (handled by Slint)
+    // 2. ARIA live region announcements (if supported by Slint)
+    // 3. Focus-change notifications (triggers re-announcement)
+    //
+    // Test: Use NVDA/JAWS to verify label updates when is_loading toggles
     accessible-label: is_loading ? label + " (Loading...)" : label;
     accessible-role: "button";
 }
