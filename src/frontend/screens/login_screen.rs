@@ -14,7 +14,11 @@ pub struct LoginScreen {
 }
 
 impl LoginScreen {
-    pub fn new(base_url: String, on_login_success: Box<dyn Fn(String) + Send + Sync>) -> Self {
+    pub fn new(
+        base_url: String,
+        on_login_success: Box<dyn Fn(String) + Send + Sync>,
+        on_navigate_to_signup: Box<dyn Fn() + Send + Sync>,
+    ) -> Self {
         let ui = LoginScreenComponent::new().unwrap();
         let http_client = Arc::new(HttpClient::new(base_url));
         let session_manager = Arc::new(SessionManager::new());
@@ -23,6 +27,7 @@ impl LoginScreen {
         let client = http_client.clone();
         let session_mgr = session_manager.clone();
         let callback = Arc::new(on_login_success);
+        let signup_callback = Arc::new(on_navigate_to_signup);
 
         ui.on_login(move || {
             let ui_handle = ui_weak.unwrap();
@@ -90,9 +95,12 @@ impl LoginScreen {
             });
         });
 
+        let ui_weak_signup = ui.as_weak();
         ui.on_navigate_to_signup(move || {
-            // TODO: Navigate to signup screen
-            println!("Navigate to signup");
+            if let Some(ui) = ui_weak_signup.upgrade() {
+                ui.hide().unwrap();
+            }
+            signup_callback();
         });
 
         Self {

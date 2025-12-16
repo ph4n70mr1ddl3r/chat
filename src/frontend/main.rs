@@ -9,6 +9,7 @@ pub mod ui; // Public so screens can use it
 use screens::chat_screen::ChatScreen;
 use screens::login_screen::LoginScreen;
 use screens::settings_screen::SettingsScreen;
+use screens::signup_screen::SignupScreen;
 use services::SessionManager;
 use std::cell::RefCell;
 
@@ -16,6 +17,7 @@ struct AppState {
     login_screen: Option<LoginScreen>,
     chat_screen: Option<ChatScreen>,
     settings_screen: Option<SettingsScreen>,
+    signup_screen: Option<SignupScreen>,
 }
 
 thread_local! {
@@ -24,6 +26,7 @@ thread_local! {
             login_screen: None,
             chat_screen: None,
             settings_screen: None,
+            signup_screen: None,
         })
     };
 }
@@ -69,11 +72,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn show_login(base_url: String) {
     let url_for_chat = base_url.clone();
+    let url_for_signup = base_url.clone();
 
     let login = LoginScreen::new(
         base_url,
         Box::new(move |user_id| {
             show_chat(user_id, url_for_chat.clone());
+        }),
+        Box::new(move || {
+            show_signup(url_for_signup.clone());
         }),
     );
 
@@ -83,6 +90,7 @@ fn show_login(base_url: String) {
         let mut state_ref = state.borrow_mut();
         state_ref.chat_screen = None;
         state_ref.settings_screen = None;
+        state_ref.signup_screen = None;
         state_ref.login_screen = Some(login);
     });
 }
@@ -109,6 +117,7 @@ fn show_chat(user_id: String, base_url: String) {
                 let mut state_ref = state.borrow_mut();
                 state_ref.login_screen = None;
                 state_ref.settings_screen = None;
+                state_ref.signup_screen = None;
                 state_ref.chat_screen = Some(chat);
             });
         }
@@ -148,6 +157,32 @@ fn show_settings(user_id: String, base_url: String) {
         let mut state_ref = state.borrow_mut();
         state_ref.chat_screen = None;
         state_ref.login_screen = None;
+        state_ref.signup_screen = None;
         state_ref.settings_screen = Some(settings);
+    });
+}
+
+fn show_signup(base_url: String) {
+    let url_for_login = base_url.clone();
+    let url_for_chat = base_url.clone();
+
+    let signup = SignupScreen::new(
+        base_url,
+        Box::new(move |user_id| {
+            show_chat(user_id, url_for_chat.clone());
+        }),
+        Box::new(move || {
+            show_login(url_for_login.clone());
+        }),
+    );
+
+    signup.show();
+
+    APP_STATE.with(|state| {
+        let mut state_ref = state.borrow_mut();
+        state_ref.chat_screen = None;
+        state_ref.settings_screen = None;
+        state_ref.login_screen = None;
+        state_ref.signup_screen = Some(signup);
     });
 }

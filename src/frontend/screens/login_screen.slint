@@ -74,12 +74,24 @@ export component LoginScreenComponent inherits Window {
             wrap: word-wrap;
         }
         
-        HorizontalBox {
+        Rectangle {
+            height: 1px;
+            background: #ddd;
+        }
+        
+        VerticalBox {
+            alignment: center;
+            spacing: 8px;
+            
             Text {
-                text: "Don't have an account? ";
+                text: "Don't have an account?";
+                font-size: 14px;
+                color: #666;
+                horizontal-alignment: center;
             }
+            
             Button {
-                text: "Sign Up";
+                text: "Create Account";
                 clicked => {
                     root.navigate_to_signup();
                 }

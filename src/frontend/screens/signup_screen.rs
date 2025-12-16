@@ -16,7 +16,11 @@ pub struct SignupScreen {
 
 #[allow(dead_code)]
 impl SignupScreen {
-    pub fn new(base_url: String) -> Self {
+    pub fn new(
+        base_url: String,
+        on_signup_success: Box<dyn Fn(String) + Send + Sync>,
+        on_navigate_to_login: Box<dyn Fn() + Send + Sync>,
+    ) -> Self {
         let ui = SignupScreenComponent::new().unwrap();
         let http_client = Arc::new(HttpClient::new(base_url));
         let session_manager = Arc::new(SessionManager::new());
@@ -24,6 +28,7 @@ impl SignupScreen {
         let ui_weak = ui.as_weak();
         let client = http_client.clone();
         let session_mgr = session_manager.clone();
+        let success_callback = Arc::new(on_signup_success);
         ui.on_signup(move || {
             let ui_handle = ui_weak.unwrap();
             let username = ui_handle.get_username().to_string();
@@ -53,6 +58,7 @@ impl SignupScreen {
             let ui_weak_inner = ui_weak.clone();
             let http_client = client.clone();
             let session_manager = session_mgr.clone();
+            let success_cb = success_callback.clone();
             std::thread::spawn(move || {
                 let runtime = tokio::runtime::Runtime::new().unwrap();
                 match runtime.block_on(http_client.signup(username.clone(), password.clone())) {
@@ -67,14 +73,14 @@ impl SignupScreen {
                             eprintln!("Failed to save session: {}", e);
                         }
 
+                        let user_id = response.user_id.clone();
+
                         // Success! Update UI from event loop
                         slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_weak_inner.upgrade() {
-                                ui.set_error_message(
-                                    format!("Account created! Welcome, {}", response.username)
-                                        .into(),
-                                );
-                                // TODO: Navigate to chat screen after successful signup
+                                ui.set_error_message("".into());
+                                ui.hide().unwrap(); // Hide signup screen
+                                success_cb(user_id); // Navigate to chat screen
                             }
                         })
                         .ok();
@@ -91,9 +97,13 @@ impl SignupScreen {
             });
         });
 
+        let ui_weak_login = ui.as_weak();
+        let login_callback = Arc::new(on_navigate_to_login);
         ui.on_navigate_to_login(move || {
-            // TODO: Navigate to login screen
-            println!("Navigate to login");
+            if let Some(ui) = ui_weak_login.upgrade() {
+                ui.hide().unwrap();
+            }
+            login_callback();
         });
 
         Self {
