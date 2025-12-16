@@ -102,7 +102,7 @@ impl HandshakeValidator {
 
         // Check token expiration explicitly
         let now = chrono::Utc::now().timestamp();
-        if claims.exp <= now as i64 {
+        if claims.exp <= now {
             return Err((StatusCode::UNAUTHORIZED, "Token has expired".to_string()));
         }
 

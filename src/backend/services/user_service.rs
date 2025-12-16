@@ -141,10 +141,7 @@ mod tests {
         queries::insert_user(&pool, &initial_result).await.unwrap();
 
         // First search -> cache miss, returns bob
-        let first = service
-            .search_users(&requester.id, "b", 10)
-            .await
-            .unwrap();
+        let first = service.search_users(&requester.id, "b", 10).await.unwrap();
         assert_eq!(first.len(), 1);
 
         // Add another user matching query
@@ -152,18 +149,12 @@ mod tests {
         queries::insert_user(&pool, &new_user).await.unwrap();
 
         // Second search before TTL expiry should still return cached single result
-        let cached = service
-            .search_users(&requester.id, "b", 10)
-            .await
-            .unwrap();
+        let cached = service.search_users(&requester.id, "b", 10).await.unwrap();
         assert_eq!(cached.len(), 1);
 
         // Wait for TTL to expire and confirm cache refresh includes new user
         tokio::time::sleep(Duration::from_millis(60)).await;
-        let refreshed = service
-            .search_users(&requester.id, "b", 10)
-            .await
-            .unwrap();
+        let refreshed = service.search_users(&requester.id, "b", 10).await.unwrap();
         assert_eq!(refreshed.len(), 2);
     }
 }

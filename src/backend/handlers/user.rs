@@ -5,9 +5,9 @@
 use crate::db::queries;
 use crate::handlers::auth::ErrorResponse;
 use crate::services::{AuthService, UserService};
-use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
+use std::sync::Arc;
 use tracing::warn;
 use warp::{reply, Rejection, Reply};
 

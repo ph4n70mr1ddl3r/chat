@@ -8,7 +8,7 @@ use crate::db::queries;
 use crate::handlers::websocket::{ClientConnection, ConnectionManager, ErrorResponse};
 use crate::services::{
     message_queue::MessageQueueService,
-    message_service::{MessageService, MessageStatus},
+    message_service::MessageService,
 };
 use chat_shared::protocol::{MessageEnvelope, TextMessageData};
 use serde_json::json;

@@ -186,7 +186,7 @@ pub fn rate_limit_filter(
             limiter
                 .check_and_record(&ip)
                 .await
-                .map_err(|e| reject::custom(e))
+                .map_err(reject::custom)
         })
         .untuple_one()
 }

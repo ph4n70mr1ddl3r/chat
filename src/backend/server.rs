@@ -638,12 +638,12 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Rejection> {
         )
     } else if err.is_not_found() {
         (warp::http::StatusCode::NOT_FOUND, "Not Found".to_string())
-    } else if let Some(_) = err.find::<warp::filters::body::BodyDeserializeError>() {
+    } else if err.find::<warp::filters::body::BodyDeserializeError>().is_some() {
         (
             warp::http::StatusCode::BAD_REQUEST,
             "Invalid request body".to_string(),
         )
-    } else if let Some(_) = err.find::<warp::reject::MethodNotAllowed>() {
+    } else if err.find::<warp::reject::MethodNotAllowed>().is_some() {
         (
             warp::http::StatusCode::METHOD_NOT_ALLOWED,
             "Method Not Allowed".to_string(),

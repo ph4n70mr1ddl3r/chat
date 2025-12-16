@@ -8,7 +8,6 @@ use chat_shared::protocol::{MessageEnvelope, PresenceData};
 use serde_json::json;
 use sqlx::SqlitePool;
 use std::sync::Arc;
-use tracing::warn;
 use warp::ws::Message as WsMessage;
 
 #[derive(Clone)]

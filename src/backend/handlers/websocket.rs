@@ -49,6 +49,12 @@ pub struct ManagedConnection {
     pub sender: UnboundedSender<WsMessage>,
 }
 
+impl Default for ConnectionManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ConnectionManager {
     pub fn new() -> Self {
         Self {

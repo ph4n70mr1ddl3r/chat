@@ -88,7 +88,7 @@ impl MessageQueueService {
                         if msg.next_retry_at <= now {
                             ready_by_recipient
                                 .entry(msg.recipient_id.clone())
-                                .or_insert_with(Vec::new)
+                                .or_default()
                                 .push(msg.clone());
                             false // Remove from queue
                         } else {
@@ -102,7 +102,14 @@ impl MessageQueueService {
                 // Attempt batched delivery per recipient
                 for (recipient_id, queued_messages) in ready_by_recipient {
                     if connection_manager.is_user_online(&recipient_id).await {
-                        Self::deliver_batch(&pool, &message_service, connection_manager.as_ref(), queue.clone(), queued_messages).await;
+                        Self::deliver_batch(
+                            &pool,
+                            &message_service,
+                            connection_manager.as_ref(),
+                            queue.clone(),
+                            queued_messages,
+                        )
+                        .await;
                     } else {
                         // Recipient still offline - requeue all with backoff
                         for msg in queued_messages {

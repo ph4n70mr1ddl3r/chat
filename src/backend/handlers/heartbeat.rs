@@ -39,6 +39,12 @@ pub struct HeartbeatState {
     pub is_alive: bool,
 }
 
+impl Default for HeartbeatState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HeartbeatState {
     pub fn new() -> Self {
         Self {
