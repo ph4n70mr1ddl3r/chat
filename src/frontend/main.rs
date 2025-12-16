@@ -9,13 +9,14 @@ pub mod ui; // Public so screens can use it
 use screens::chat_screen::ChatScreen;
 use screens::login_screen::LoginScreen;
 use screens::settings_screen::SettingsScreen;
-use services::SessionManager;
+use screens::signup_screen::SignupScreen;
 use std::cell::RefCell;
 
 struct AppState {
     login_screen: Option<LoginScreen>,
     chat_screen: Option<ChatScreen>,
     settings_screen: Option<SettingsScreen>,
+    signup_screen: Option<SignupScreen>,
 }
 
 thread_local! {
@@ -24,6 +25,7 @@ thread_local! {
             login_screen: None,
             chat_screen: None,
             settings_screen: None,
+            signup_screen: None,
         })
     };
 }
@@ -37,7 +39,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let base_url =
         std::env::var("SERVER_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
-    let session_manager = SessionManager::new();
+    
+    // Use the global session manager singleton
+    let session_manager = services::session::get_session_manager();
 
     // Check for existing session
     match session_manager.get_session() {
@@ -68,26 +72,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn show_login(base_url: String) {
+    tracing::info!("Showing login screen");
     let url_for_chat = base_url.clone();
+    let url_for_signup = base_url.clone();
 
     let login = LoginScreen::new(
         base_url,
         Box::new(move |user_id| {
             show_chat(user_id, url_for_chat.clone());
         }),
+        Box::new(move || {
+            show_signup(url_for_signup.clone());
+        }),
     );
 
+    // Show new window BEFORE hiding old ones
     login.show();
 
+    // Now cleanup old screens
     APP_STATE.with(|state| {
         let mut state_ref = state.borrow_mut();
         state_ref.chat_screen = None;
         state_ref.settings_screen = None;
+        state_ref.signup_screen = None;
         state_ref.login_screen = Some(login);
     });
 }
 
 fn show_chat(user_id: String, base_url: String) {
+    tracing::info!("show_chat called for user_id: {}", user_id);
     let base_url_logout = base_url.clone();
     let base_url_settings = base_url.clone();
     let user_id_settings = user_id.clone();
@@ -104,17 +117,26 @@ fn show_chat(user_id: String, base_url: String) {
         }),
     ) {
         Ok(chat) => {
+            tracing::info!("Chat screen created successfully, showing window");
+            // Show the new window BEFORE hiding the old ones
             chat.show();
+            
+            tracing::info!("Cleaning up old screens");
+            // Now we can safely clean up old screens
             APP_STATE.with(|state| {
                 let mut state_ref = state.borrow_mut();
                 state_ref.login_screen = None;
                 state_ref.settings_screen = None;
+                state_ref.signup_screen = None;
                 state_ref.chat_screen = Some(chat);
             });
         }
         Err(e) => {
             tracing::error!("Failed to initialize chat screen: {}", e);
-            show_login(base_url);
+            eprintln!("ERROR: Chat screen initialization failed: {}", e);
+            // Don't create a new login window - the old one is still there
+            // The error will be visible in the console for now
+            // TODO: Show error dialog on existing window
         }
     }
 }
@@ -148,6 +170,35 @@ fn show_settings(user_id: String, base_url: String) {
         let mut state_ref = state.borrow_mut();
         state_ref.chat_screen = None;
         state_ref.login_screen = None;
+        state_ref.signup_screen = None;
         state_ref.settings_screen = Some(settings);
+    });
+}
+
+fn show_signup(base_url: String) {
+    tracing::info!("Showing signup screen");
+    let url_for_login = base_url.clone();
+    let url_for_chat = base_url.clone();
+
+    let signup = SignupScreen::new(
+        base_url,
+        Box::new(move |user_id| {
+            show_chat(user_id, url_for_chat.clone());
+        }),
+        Box::new(move || {
+            show_login(url_for_login.clone());
+        }),
+    );
+
+    // Show new window BEFORE hiding old ones
+    signup.show();
+
+    // Now cleanup old screens
+    APP_STATE.with(|state| {
+        let mut state_ref = state.borrow_mut();
+        state_ref.chat_screen = None;
+        state_ref.settings_screen = None;
+        state_ref.login_screen = None;
+        state_ref.signup_screen = Some(signup);
     });
 }

@@ -14,7 +14,11 @@ pub struct LoginScreen {
 }
 
 impl LoginScreen {
-    pub fn new(base_url: String, on_login_success: Box<dyn Fn(String) + Send + Sync>) -> Self {
+    pub fn new(
+        base_url: String,
+        on_login_success: Box<dyn Fn(String) + Send + Sync>,
+        on_navigate_to_signup: Box<dyn Fn() + Send + Sync>,
+    ) -> Self {
         let ui = LoginScreenComponent::new().unwrap();
         let http_client = Arc::new(HttpClient::new(base_url));
         let session_manager = Arc::new(SessionManager::new());
@@ -23,9 +27,13 @@ impl LoginScreen {
         let client = http_client.clone();
         let session_mgr = session_manager.clone();
         let callback = Arc::new(on_login_success);
+        let signup_callback = Arc::new(on_navigate_to_signup);
 
         ui.on_login(move || {
-            let ui_handle = ui_weak.unwrap();
+            let ui_handle = match ui_weak.upgrade() {
+                Some(ui) => ui,
+                None => return,
+            };
             let username = ui_handle.get_username().to_string();
             let password = ui_handle.get_password().to_string();
 
@@ -66,14 +74,10 @@ impl LoginScreen {
 
                         let user_id = response.user_id.clone();
 
-                        // Success! Update UI from event loop
+                        // Success! Navigate to chat screen
                         slint::invoke_from_event_loop(move || {
-                            if let Some(ui) = ui_weak_inner.upgrade() {
-                                ui.set_is_loading(false);
-                                ui.set_error_message("".into());
-                                ui.hide().unwrap(); // Hide login screen
-                                success_cb(user_id); // Trigger callback
-                            }
+                            success_cb(user_id);
+                            // Note: Don't hide the window here - show_chat will clean up
                         })
                         .ok();
                     }
@@ -91,8 +95,9 @@ impl LoginScreen {
         });
 
         ui.on_navigate_to_signup(move || {
-            // TODO: Navigate to signup screen
-            println!("Navigate to signup");
+            eprintln!("DEBUG: Navigate to signup clicked");
+            signup_callback();
+            // Note: Don't hide login window here - show_signup will clean up
         });
 
         Self {

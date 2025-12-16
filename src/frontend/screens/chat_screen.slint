@@ -251,8 +251,8 @@ export component ChatScreenComponent inherits Window {
                             if root.is_search_active && root.messages.length == 0: Rectangle {
                                 background: #f9f9f9;
                                 border-radius: 6px;
-                                padding: 12px;
                                 HorizontalBox {
+                                    padding: 12px;
                                     spacing: 6px;
                                     Text {
                                         text: "No messages found for";
@@ -272,19 +272,22 @@ export component ChatScreenComponent inherits Window {
 
                     if root.typing_indicator != "": Rectangle {
                         background: #ffffff;
-                        padding: 8px;
-                        Text {
-                            text: root.typing_indicator;
-                            font-size: 12px;
-                            color: #555;
+                        VerticalBox {
+                            padding: 8px;
+                            Text {
+                                text: root.typing_indicator;
+                                font-size: 12px;
+                                color: #555;
+                            }
                         }
                     }
                     
                     // Message input area
                     Rectangle {
                         background: #F5F5F5;
-                        padding: 10px;
-                        MessageInput {
+                        VerticalBox {
+                            padding: 10px;
+                            MessageInput {
                             placeholder: "Type a message...";
                             text <=> root.message_input;
                             is_sending: root.is_loading;
@@ -295,6 +298,7 @@ export component ChatScreenComponent inherits Window {
                             }
                             typing(val) => {
                                 root.typing(val);
+                            }
                             }
                         }
                     }
