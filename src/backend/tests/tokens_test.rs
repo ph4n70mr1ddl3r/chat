@@ -1,4 +1,9 @@
 // ============================================================================
+// Design Token Tests Integration Test
+// ============================================================================
+// This file runs the token validation tests through the integration test runner
+
+// ============================================================================
 // Token Unit Tests
 // ============================================================================
 // Validates all design tokens for correctness:
