@@ -170,6 +170,27 @@ pub async fn update_last_seen(pool: &SqlitePool, user_id: &str) -> Result<(), St
     Ok(())
 }
 
+/// Update user password
+pub async fn update_password(
+    pool: &SqlitePool,
+    user_id: &str,
+    password_hash: &str,
+    password_salt: &str,
+) -> Result<(), String> {
+    let now = chrono::Utc::now().timestamp_millis();
+
+    sqlx::query("UPDATE users SET password_hash = ?, password_salt = ?, updated_at = ? WHERE id = ?")
+        .bind(password_hash)
+        .bind(password_salt)
+        .bind(now)
+        .bind(user_id)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Failed to update password: {}", e))?;
+
+    Ok(())
+}
+
 /// Soft delete a user (mark deleted_at)
 pub async fn delete_user(pool: &SqlitePool, user_id: &str) -> Result<(), String> {
     let now = chrono::Utc::now().timestamp_millis();

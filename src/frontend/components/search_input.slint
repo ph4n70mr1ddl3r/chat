@@ -1,0 +1,45 @@
+import { HorizontalBox, LineEdit, Button } from "std-widgets.slint";
+
+export component SearchInput {
+    in property <string> placeholder: "Search in conversation...";
+    in-out property <string> text;
+    
+    callback search(string);
+    callback clear();
+    callback text-changed(string);
+
+    HorizontalBox {
+        spacing: 8px;
+
+        LineEdit {
+            placeholder-text: root.placeholder;
+            text <=> root.text;
+            horizontal-stretch: 1;
+
+            accepted => {
+                root.search(root.text);
+            }
+            
+            edited => {
+                root.text-changed(root.text);
+            }
+        }
+
+        if root.text != "" : Button {
+            text: "X";
+            width: 30px;
+            clicked => {
+                root.text = "";
+                root.clear();
+            }
+        }
+        
+        Button {
+            text: "Search";
+            enabled: root.text != "";
+            clicked => {
+                root.search(root.text);
+            }
+        }
+    }
+}

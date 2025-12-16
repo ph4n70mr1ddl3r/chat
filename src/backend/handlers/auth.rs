@@ -10,6 +10,8 @@ use warp::{reply, Rejection, Reply};
 use crate::db::queries;
 use crate::services::AuthService;
 use crate::validators;
+use crate::handlers::websocket::ConnectionManager;
+use std::sync::Arc;
 
 /// Signup request payload
 #[derive(Debug, Deserialize)]
@@ -55,6 +57,35 @@ impl Reply for HttpResponse {
         )
         .into_response()
     }
+}
+
+/// Handle POST /auth/logout
+pub async fn logout_handler(
+    user_id: String,
+    connection_manager: Arc<ConnectionManager>,
+    pool: SqlitePool,
+) -> Result<impl Reply, Rejection> {
+    info!("Logout request for user: {}", user_id);
+
+    // Log the event
+    if let Err(e) = queries::insert_auth_log(
+        &pool,
+        "unknown", // IP address not available in this context easily without extraction
+        None, // username not strictly needed if we have user_id but log takes username
+        queries::AuthEventType::Logout,
+        None,
+        Some(&format!("User {} logged out", user_id)),
+    ).await {
+        warn!("Failed to log logout event: {}", e);
+    }
+
+    // Disconnect active WebSocket connections
+    connection_manager.disconnect_user(&user_id).await;
+    
+    Ok(reply::with_status(
+        reply::json(&serde_json::json!({ "message": "Logged out successfully" })),
+        warp::http::StatusCode::OK,
+    ))
 }
 
 /// Handle POST /auth/signup

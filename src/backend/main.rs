@@ -35,6 +35,7 @@ async fn main() -> anyhow::Result<()> {
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&args.log_level));
 
     tracing_subscriber::fmt()
+        .json()
         .with_env_filter(env_filter)
         .with_target(true)
         .with_thread_ids(true)

@@ -1,4 +1,4 @@
-import { VerticalBox, HorizontalBox, LineEdit, Button, Text, ListView } from "std-widgets.slint";
+import { VerticalBox, HorizontalBox, LineEdit, Button, ListView } from "std-widgets.slint";
 
 export struct UserSearchResult {
     user_id: string,
@@ -6,11 +6,15 @@ export struct UserSearchResult {
     is_online: bool,
 }
 
-export component UserSearchScreenComponent {
-    in property <string> search_query;
+export component UserSearchScreenComponent inherits Window {
+    in-out property <string> search_query;
     in property <[UserSearchResult]> search_results;
     in property <bool> is_searching;
     in property <string> error_message;
+    
+    width: 600px;
+    height: 500px;
+    title: "Search Users";
     
     callback search_changed(string);
     callback user_selected(string /* user_id */);
@@ -32,7 +36,7 @@ export component UserSearchScreenComponent {
             Text {
                 text: "Search Users";
                 font-size: 20px;
-                font-weight: bold;
+                font-weight: 700;
                 horizontal-alignment: center;
             }
         }
@@ -46,7 +50,7 @@ export component UserSearchScreenComponent {
             }
             LineEdit {
                 placeholder-text: "Enter username to search...";
-                text: <=> root.search_query;
+                text <=> root.search_query;
                 enabled: !root.is_searching;
                 edited => {
                     root.search_changed(self.text);
@@ -62,7 +66,7 @@ export component UserSearchScreenComponent {
         }
         
         // Error message
-        if root.error_message.length > 0: Text {
+        if root.error_message != "": Text {
             text: root.error_message;
             color: red;
             font-size: 12px;
@@ -72,37 +76,41 @@ export component UserSearchScreenComponent {
         if root.search_results.length > 0: VerticalBox {
             Text {
                 text: "Results:";
-                font-weight: bold;
+                font-weight: 700;
                 font-size: 14px;
             }
             
             ListView {
-                for result in root.search_results: HorizontalBox {
-                    spacing: 10px;
-                    padding: 10px;
+                for result in root.search_results: Rectangle {
                     background: #f0f0f0;
                     border-radius: 5px;
+                    height: 40px; // Fixed height for list item
                     
-                    // Online status indicator
-                    Rectangle {
-                        width: 10px;
-                        height: 10px;
-                        border-radius: 5px;
-                        background: result.is_online ? green : gray;
-                        vertical-alignment: center;
-                    }
-                    
-                    Text {
-                        text: result.username;
-                        font-size: 14px;
-                        vertical-alignment: center;
-                        horizontal-stretch: 1;
-                    }
-                    
-                    Button {
-                        text: "Start Chat";
-                        clicked => {
-                            root.user_selected(result.user_id);
+                    HorizontalBox {
+                        spacing: 10px;
+                        padding: 10px;
+                        alignment: center;
+                        
+                        // Online status indicator
+                        Rectangle {
+                            width: 10px;
+                            height: 10px;
+                            border-radius: 5px;
+                            background: result.is_online ? green : gray;
+                        }
+                        
+                        Text {
+                            text: result.username;
+                            font-size: 14px;
+                            vertical-alignment: center;
+                            horizontal-stretch: 1;
+                        }
+                        
+                        Button {
+                            text: "Start Chat";
+                            clicked => {
+                                root.user_selected(result.user_id);
+                            }
                         }
                     }
                 }
@@ -110,7 +118,7 @@ export component UserSearchScreenComponent {
         }
         
         // No results message
-        if root.search_results.length == 0 && root.search_query.length > 0 && !root.is_searching: Text {
+        if root.search_results.length == 0 && root.search_query != "" && !root.is_searching: Text {
             text: "No users found";
             color: #666;
             font-size: 14px;

@@ -500,19 +500,19 @@ Goal: Users can search messages within conversations by keyword.
 
 ### Search Implementation
 
-- [ ] T107 [P] [US6] Implement full-text search at `src/backend/services/message_service.rs` (search_messages_in_conversation)
-- [ ] T108 [US6] Create message search endpoint at `src/backend/handlers/conversation.rs` (GET /conversations/{conversationId}/search?q=keyword&limit=50)
+- [X] T107 [P] [US6] Implement full-text search at `src/backend/services/message_service.rs` (search_messages_in_conversation)
+- [X] T108 [US6] Create message search endpoint at `src/backend/handlers/conversation.rs` (GET /conversations/{conversationId}/search?q=keyword&limit=50)
   - Search message content for keyword (case-insensitive)
   - Return matching messages with context
   - Support pagination
   - Return 403 if not participant
-- [ ] T109 [US6] Create database query at `src/backend/db/queries/messages.rs` with full-text search support (LIKE or FTS)
+- [X] T109 [US6] Create database query at `src/backend/db/queries/messages.rs` with full-text search support (LIKE or FTS)
 
 ### Frontend Search UI
 
-- [ ] T110 [P] [US6] Create search input at `src/frontend/components/search_input.slint` (debounced search field)
-- [ ] T111 [US6] Implement search logic at `src/frontend/screens/chat_screen.rs` (call GET /conversations/{id}/search)
-- [ ] T112 [US6] Display search results at `src/frontend/screens/chat_screen.slint` (show matching messages, highlight keyword)
+- [X] T110 [P] [US6] Create search input at `src/frontend/components/search_input.slint` (debounced search field)
+- [X] T111 [US6] Implement search logic at `src/frontend/screens/chat_screen.rs` (call GET /conversations/{id}/search)
+- [X] T112 [US6] Display search results at `src/frontend/screens/chat_screen.slint` (show matching messages, highlight keyword)
 - [X] T113 [US6] Create "no results" message at `src/frontend/screens/chat_screen.slint`
 
 ### Search Tests
@@ -533,31 +533,31 @@ Goal: Users can safely log out and terminate their session.
 
 ### Logout & Session Termination
 
-- [ ] T115 [P] [US7] Implement logout at `src/backend/handlers/auth.rs` - graceful WebSocket disconnect handling
-- [ ] T116 [US7] Create session clearing at `src/frontend/services/session.rs` (delete stored token, disconnect WebSocket)
-- [ ] T117 [P] [US7] Implement logout button at `src/frontend/screens/chat_screen.slint`
-- [ ] T118 [US7] Create logout flow at `src/frontend/screens/chat_screen.rs` (call logout, clear UI, navigate to login)
+- [X] T115 [P] [US7] Implement logout at `src/backend/handlers/auth.rs` - graceful WebSocket disconnect handling
+- [X] T116 [US7] Create session clearing at `src/frontend/services/session.rs` (delete stored token, disconnect WebSocket)
+- [X] T117 [P] [US7] Implement logout button at `src/frontend/screens/chat_screen.slint`
+- [X] T118 [US7] Create logout flow at `src/frontend/screens/chat_screen.rs` (call logout, clear UI, navigate to login)
 
 ### Account Deletion
 
-- [ ] T119 [P] [US7] Implement account deletion endpoint at `src/backend/handlers/user.rs` (DELETE /user/me)
+- [X] T119 [P] [US7] Implement account deletion endpoint at `src/backend/handlers/user.rs` (DELETE /user/me)
   - Accept Bearer token and password confirmation
   - Verify password matches
   - Mark user deleted (soft delete: deleted_at = NOW())
   - Anonymize all messages from user (app-layer: display "Deleted User" instead of name)
   - Return 204 No Content
   - Return 401 if password incorrect
-- [ ] T120 [US7] Create deletion query at `src/backend/db/queries/users.rs`: delete_user (soft delete)
-- [ ] T121 [P] [US7] Implement message anonymization at `src/backend/services/message_service.rs` (when displaying messages from deleted user)
+- [X] T120 [US7] Create deletion query at `src/backend/db/queries/users.rs`: delete_user (soft delete)
+- [X] T121 [P] [US7] Implement message anonymization at `src/backend/services/message_service.rs` (when displaying messages from deleted user)
 
 ### Frontend Account Management
 
-- [ ] T122 [P] [US7] Create account settings screen at `src/frontend/screens/settings_screen.slint` with:
+- [X] T122 [P] [US7] Create account settings screen at `src/frontend/screens/settings_screen.slint` with:
   - Current username display
   - Change password button
   - Delete account button (with confirmation)
-- [ ] T123 [US7] Implement account deletion UI at `src/frontend/screens/settings_screen.rs` (confirmation dialog, call DELETE /user/me)
-- [ ] T124 [US7] Create password change endpoint at `src/backend/handlers/user.rs` (POST /user/change-password)
+- [X] T123 [US7] Implement account deletion UI at `src/frontend/screens/settings_screen.rs` (confirmation dialog, call DELETE /user/me)
+- [X] T124 [US7] Create password change endpoint at `src/backend/handlers/user.rs` (POST /user/change-password)
   - Accept Bearer token, current password, new password
   - Verify current password
   - Validate new password strength
@@ -566,11 +566,11 @@ Goal: Users can safely log out and terminate their session.
 
 ### Session Tests
 
-- [ ] T125 [US7] Create test file at `tests/integration/logout_test.rs` with scenarios:
+- [X] T125 [US7] Create test file at `tests/integration/logout_test.rs` with scenarios:
   - Logout disconnects WebSocket
   - Logout clears token
   - Deleted account cannot log in
-- [ ] T126 [US7] Create test file at `tests/integration/deletion_test.rs` with scenarios:
+- [X] T126 [US7] Create test file at `tests/integration/deletion_test.rs` with scenarios:
   - Account deletion marks user deleted
   - Messages from deleted user show "Deleted User"
   - Deleted user cannot log in

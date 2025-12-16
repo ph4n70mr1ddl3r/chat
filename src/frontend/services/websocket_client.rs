@@ -144,6 +144,7 @@ impl WebSocketClient {
                                             break;
                                         }
                                         None => break,
+                                        _ => {}
                                     }
                                 }
                             }
@@ -189,6 +190,13 @@ impl WebSocketClient {
                 is_typing,
             })
             .map_err(|e| format!("Failed to queue typing: {}", e))
+    }
+
+    /// Disconnect WebSocket
+    pub fn disconnect(&self) -> Result<(), String> {
+         self.command_tx
+            .send(WebSocketCommand::Disconnect)
+            .map_err(|e| format!("Failed to queue disconnect: {}", e))
     }
 }
 

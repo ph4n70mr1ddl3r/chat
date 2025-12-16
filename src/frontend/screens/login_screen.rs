@@ -2,8 +2,8 @@
 
 use crate::services::{HttpClient, SessionManager};
 use std::sync::Arc;
-
-slint::include_modules!();
+use crate::ui::LoginScreenComponent;
+use slint::ComponentHandle;
 
 /// Login screen controller
 pub struct LoginScreen {
@@ -13,7 +13,7 @@ pub struct LoginScreen {
 }
 
 impl LoginScreen {
-    pub fn new(base_url: String) -> Self {
+    pub fn new(base_url: String, on_login_success: Box<dyn Fn(String) + Send + Sync>) -> Self {
         let ui = LoginScreenComponent::new().unwrap();
         let http_client = Arc::new(HttpClient::new(base_url));
         let session_manager = Arc::new(SessionManager::new());
@@ -21,6 +21,8 @@ impl LoginScreen {
         let ui_weak = ui.as_weak();
         let client = http_client.clone();
         let session_mgr = session_manager.clone();
+        let callback = Arc::new(on_login_success);
+
         ui.on_login(move || {
             let ui_handle = ui_weak.unwrap();
             let username = ui_handle.get_username().to_string();
@@ -45,6 +47,8 @@ impl LoginScreen {
             let ui_weak_inner = ui_weak.clone();
             let http_client = client.clone();
             let session_manager = session_mgr.clone();
+            let success_cb = callback.clone();
+            
             std::thread::spawn(move || {
                 let runtime = tokio::runtime::Runtime::new().unwrap();
                 match runtime.block_on(http_client.login(username.clone(), password.clone())) {
@@ -59,18 +63,15 @@ impl LoginScreen {
                             eprintln!("Failed to save session: {}", e);
                         }
                         
+                        let user_id = response.user_id.clone();
+                        
                         // Success! Update UI from event loop
                         slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_weak_inner.upgrade() {
                                 ui.set_is_loading(false);
-                                ui.set_error_message(
-                                    format!(
-                                        "Login successful! Welcome, {}",
-                                        response.username
-                                    )
-                                    .into(),
-                                );
-                                // TODO: Navigate to chat screen after successful login
+                                ui.set_error_message("".into());
+                                ui.hide().unwrap(); // Hide login screen
+                                success_cb(user_id); // Trigger callback
                             }
                         })
                         .ok();
@@ -98,6 +99,6 @@ impl LoginScreen {
     }
     
     pub fn show(&self) {
-        self.ui.run().unwrap();
+        self.ui.show().unwrap();
     }
 }

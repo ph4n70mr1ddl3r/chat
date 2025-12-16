@@ -87,6 +87,12 @@ impl ConnectionManager {
         }
     }
 
+    /// Disconnect all sessions for a user
+    pub async fn disconnect_user(&self, user_id: &str) {
+        let mut conns = self.connections.write().await;
+        conns.remove(user_id);
+    }
+
     /// Get all connections for a user
     pub async fn get_user_connections(&self, user_id: &str) -> Vec<ClientConnection> {
         let conns = self.connections.read().await;

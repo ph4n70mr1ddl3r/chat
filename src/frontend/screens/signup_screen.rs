@@ -1,9 +1,10 @@
 //! Signup screen UI and logic
 
-use crate::services::{HttpClient, SessionManager};
+use crate::services::HttpClient;
+use crate::services::SessionManager;
 use std::sync::Arc;
-
-slint::include_modules!();
+use crate::ui::SignupScreenComponent;
+use slint::ComponentHandle;
 
 /// Signup screen controller
 pub struct SignupScreen {

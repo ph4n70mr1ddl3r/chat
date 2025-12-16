@@ -27,7 +27,7 @@ use crate::handlers::messages::MessageHandler;
 use crate::services::auth_service::TokenClaims;
 use crate::services::{MessageQueueService, PresenceService};
 
-use crate::handlers::{auth, conversation, websocket};
+use crate::handlers::{auth, conversation, user, websocket};
 use crate::middleware::auth as auth_middleware;
 
 /// Server configuration
@@ -116,7 +116,60 @@ pub fn create_routes(
                     .and(warp::body::json())
                     .and(state_filter.clone())
                     .and_then(handle_login),
+            )
+            .or(
+                // POST /auth/logout
+                warp::post()
+                    .and(warp::path("logout"))
+                    .and(warp::path::end())
+                    .and(with_auth.clone())
+                    .and(state_filter.clone())
+                    .and_then(handle_logout),
             ),
+    );
+
+    // User routes
+    let user_routes = warp::path("user").and(
+        // GET /user/me
+        warp::get()
+            .and(warp::path("me"))
+            .and(warp::path::end())
+            .and(with_auth.clone())
+            .and(state_filter.clone())
+            .and_then(handle_get_current_user)
+            .or(
+                // DELETE /user/me
+                warp::delete()
+                    .and(warp::path("me"))
+                    .and(warp::path::end())
+                    .and(with_auth.clone())
+                    .and(warp::body::json())
+                    .and(state_filter.clone())
+                    .and_then(handle_delete_account)
+            )
+            .or(
+                // POST /user/change-password
+                warp::post()
+                    .and(warp::path("change-password"))
+                    .and(warp::path::end())
+                    .and(with_auth.clone())
+                    .and(warp::body::json())
+                    .and(state_filter.clone())
+                    .and_then(handle_change_password)
+            ),
+    );
+    
+    // User Search route (GET /users/search)
+    // Note: This was separate in handlers/user.rs, likely mapped to /users/search
+    let users_routes = warp::path("users").and(
+        warp::path("search")
+        .and(warp::get())
+        .and(with_auth.clone())
+        .and(warp::query::<user::SearchQuery>())
+        .and(state_filter.clone())
+        .and_then(|user_id, query, state: ServerState| async move {
+            user::search_users(user_id, query, state.pool).await
+        })
     );
 
     // Conversations routes (stubs for Phase 3+)
@@ -190,6 +243,8 @@ pub fn create_routes(
     health_route
         .or(websocket_route)
         .or(auth_routes)
+        .or(user_routes)
+        .or(users_routes)
         .or(conversation_routes)
         .with(
             warp::cors()
@@ -379,6 +434,41 @@ async fn handle_login(
 
     // Delegate to auth handler
     auth::login_handler(req, state.pool, state.config.jwt_secret).await
+}
+
+/// Handle logout request
+async fn handle_logout(
+    user_id: String,
+    state: ServerState,
+) -> Result<impl Reply, Rejection> {
+    info!("Logout request for user: {}", user_id);
+    auth::logout_handler(user_id, state.connection_manager, state.pool).await
+}
+
+/// Handle GET /user/me
+async fn handle_get_current_user(
+    user_id: String,
+    state: ServerState,
+) -> Result<impl Reply, Rejection> {
+    user::get_current_user(user_id, state.pool).await
+}
+
+/// Handle DELETE /user/me
+async fn handle_delete_account(
+    user_id: String,
+    req: user::DeleteAccountRequest,
+    state: ServerState,
+) -> Result<impl Reply, Rejection> {
+    user::delete_account(user_id, req, state.pool).await
+}
+
+/// Handle POST /user/change-password
+async fn handle_change_password(
+    user_id: String,
+    req: user::ChangePasswordRequest,
+    state: ServerState,
+) -> Result<impl Reply, Rejection> {
+    user::change_password(user_id, req, state.pool).await
 }
 
 /// Handle rejections (errors) and convert to JSON responses

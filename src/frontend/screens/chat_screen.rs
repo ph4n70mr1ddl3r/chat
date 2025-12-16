@@ -5,8 +5,7 @@ use std::time::Duration;
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 use uuid::Uuid;
-
-slint::include_modules!();
+use crate::ui::{ChatScreenComponent, MessageItem, ConversationItem};
 
 #[derive(Clone, Debug)]
 pub struct ConversationData {
@@ -45,7 +44,11 @@ pub struct ChatScreen {
 }
 
 impl ChatScreen {
-    pub fn new(user_id: String) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(
+        user_id: String,
+        on_logout: Box<dyn Fn() + Send + Sync>,
+        on_settings: Box<dyn Fn() + Send + Sync>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let ui = ChatScreenComponent::new()?;
         let current_user_id = user_id.clone();
         let runtime = Arc::new(Runtime::new()?);
@@ -76,6 +79,56 @@ impl ChatScreen {
             current_user_id.clone(),
         );
 
+        // Logout callback
+        let ui_weak_logout = ui.as_weak();
+        let runtime_for_logout = runtime.clone();
+        let ws_for_logout = websocket_client.clone();
+        let logout_cb = Arc::new(on_logout);
+
+        ui.on_logout(move || {
+            let ui_weak = ui_weak_logout.clone();
+            let runtime = runtime_for_logout.clone();
+            let logout_cb_inner = logout_cb.clone();
+            let ws_client = ws_for_logout.clone();
+
+            runtime.spawn(async move {
+                // 1. Call API logout
+                let _ = api_logout().await;
+                
+                // 2. Clear session locally
+                let _ = crate::services::session::get_session_manager().clear_session().await;
+
+                // 3. Disconnect WebSocket
+                if let Some(ws) = ws_client.as_ref() {
+                    ws.disconnect(); 
+                }
+
+                slint::invoke_from_event_loop(move || {
+                    if let Some(ui) = ui_weak.upgrade() {
+                        ui.hide().unwrap(); // Hide chat screen
+                        logout_cb_inner(); // Trigger callback
+                    }
+                }).ok();
+            });
+        });
+
+        // Settings callback
+        let ui_weak_settings = ui.as_weak();
+        let settings_cb = Arc::new(on_settings);
+        ui.on_open_settings(move || {
+            let ui_weak = ui_weak_settings.clone();
+            let settings_cb_inner = settings_cb.clone();
+            
+            // Just hide and call callback, no async needed here strictly speaking, 
+            // but for consistency we use invoke_from_event_loop if we were in async.
+            // Here we are in UI callback (main thread).
+            // But we want to ensure clean state.
+            if let Some(ui) = ui_weak.upgrade() {
+                ui.hide().unwrap();
+                settings_cb_inner();
+            }
+        });
+
         // Clone UI handles for callbacks
         let user_id_clone = user_id.clone();
         let runtime_for_select = runtime.clone();
@@ -83,29 +136,39 @@ impl ChatScreen {
         let messages_for_select = messages.clone();
         let selected_conv_for_select = selected_conversation_id.clone();
         let selected_participant_for_select = selected_participant_id.clone();
+        let ui_weak_select = ui.as_weak();
         
         // Set up conversation selection callback
         ui.on_conversation_selected(move |conversation_id| {
+            let ui_weak = ui_weak_select.clone();
+            let runtime = runtime_for_select.clone();
+            let conversations = conversations_for_select.clone();
+            let messages = messages_for_select.clone();
+            let selected_conv = selected_conv_for_select.clone();
+            let selected_participant = selected_participant_for_select.clone();
+            let user_id = user_id_clone.clone();
+            
             let ui = match ui_weak.upgrade() {
                 Some(ui) => ui,
                 None => return,
             };
             
             let conv_id = conversation_id.to_string();
-            let user_id = user_id_clone.clone();
+            
             // Update selected conversation metadata
-            if let Some(conv) = conversations_for_select
+            if let Some(conv) = conversations
                 .lock()
                 .unwrap()
                 .iter()
                 .find(|c| c.conversation_id == conv_id)
                 .cloned()
             {
-                *selected_conv_for_select.lock().unwrap() = Some(conv_id.clone());
-                *selected_participant_for_select.lock().unwrap() = Some(conv.participant_id.clone());
+                *selected_conv.lock().unwrap() = Some(conv_id.clone());
+                *selected_participant.lock().unwrap() = Some(conv.participant_id.clone());
 
                 slint::invoke_from_event_loop({
                     let conv_id = conv_id.clone();
+                    let ui_weak = ui_weak.clone();
                         move || {
                             if let Some(ui) = ui_weak.upgrade() {
                                 ui.set_selected_conversation_id(conv_id.clone().into());
@@ -119,24 +182,25 @@ impl ChatScreen {
                 .ok();
             }
             
-            runtime_for_select.spawn(async move {
+            runtime.spawn(async move {
                 // Load messages for selected conversation
                 match load_messages(&conv_id).await {
-                    Ok(messages) => {
+                    Ok(msgs) => {
                         {
-                            let mut cache = messages_for_select.lock().unwrap();
-                            *cache = messages.clone();
+                            let mut cache = messages.lock().unwrap();
+                            *cache = msgs.clone();
                         }
                         render_messages_for_conversation(
                             ui_weak.clone(),
-                            messages_for_select.clone(),
+                            messages.clone(),
                             conv_id.clone(),
                         );
                     }
                     Err(e) => {
+                        let err_msg = format!("Failed to load messages: {}", e);
                         slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_weak.upgrade() {
-                                ui.set_error_message(format!("Failed to load messages: {}", e).into());
+                                ui.set_error_message(err_msg.into());
                             }
                         }).ok();
                     }
@@ -150,8 +214,15 @@ impl ChatScreen {
         let selected_participant_for_send = selected_participant_id.clone();
         let ws_for_send = websocket_client.clone();
         let typing_state_for_send = typing_state.clone();
+        
         ui.on_send_message(move |content| {
-            let ui = match ui_weak_send.upgrade() {
+            let ui_weak = ui_weak_send.clone();
+            let messages = messages_send.clone();
+            let selected_participant = selected_participant_for_send.clone();
+            let ws_client = ws_for_send.clone();
+            let typing_state = typing_state_for_send.clone();
+            
+            let ui = match ui_weak.upgrade() {
                 Some(ui) => ui,
                 None => return,
             };
@@ -161,7 +232,7 @@ impl ChatScreen {
                 return;
             }
             
-            let participant_id = selected_participant_for_send
+            let participant_id = selected_participant
                 .lock()
                 .unwrap()
                 .clone()
@@ -176,7 +247,7 @@ impl ChatScreen {
 
             // Add pending message locally for immediate feedback
             {
-                let mut cache = messages_send.lock().unwrap();
+                let mut cache = messages.lock().unwrap();
                 cache.push(MessageData {
                     message_id: message_id.clone(),
                     conversation_id: conversation_id.clone(),
@@ -188,21 +259,22 @@ impl ChatScreen {
                 });
             }
             render_messages_for_conversation(
-                ui_weak_send.clone(),
-                messages_send.clone(),
+                ui_weak.clone(),
+                messages.clone(),
                 conversation_id.clone(),
             );
             
-            if let Some(ws) = ws_for_send.as_ref() {
+            if let Some(ws) = ws_client.as_ref() {
                 if let Err(e) = ws.send_message(
                     message_id.clone(),
                     conversation_id.clone(),
                     participant_id.clone(),
                     message_content.clone(),
                 ) {
+                    let err_msg = format!("Failed to send message: {}", e);
                     slint::invoke_from_event_loop(move || {
-                        if let Some(ui) = ui_weak_send.upgrade() {
-                            ui.set_error_message(format!("Failed to send message: {}", e).into());
+                        if let Some(ui) = ui_weak.upgrade() {
+                            ui.set_error_message(err_msg.into());
                         }
                     })
                     .ok();
@@ -211,10 +283,10 @@ impl ChatScreen {
 
             // Reset typing indicator after sending a message
             {
-                let mut state = typing_state_for_send.lock().unwrap();
+                let mut state = typing_state.lock().unwrap();
                 if *state {
                     *state = false;
-                    if let Some(ws) = ws_for_send.as_ref() {
+                    if let Some(ws) = ws_client.as_ref() {
                         let _ = ws.send_typing(participant_id, false);
                     }
                 }
@@ -227,7 +299,12 @@ impl ChatScreen {
         let typing_state_for_cb = typing_state.clone();
         let selected_participant_for_typing = selected_participant_id.clone();
         ui.on_typing(move |is_typing| {
-            let participant_id = selected_participant_for_typing
+            let ui_weak = ui_weak_typing.clone();
+            let ws_client = ws_for_typing.clone();
+            let typing_state = typing_state_for_cb.clone();
+            let selected_participant = selected_participant_for_typing.clone();
+            
+            let participant_id = selected_participant
                 .lock()
                 .unwrap()
                 .clone()
@@ -237,17 +314,18 @@ impl ChatScreen {
                 return;
             }
 
-            let mut state = typing_state_for_cb.lock().unwrap();
+            let mut state = typing_state.lock().unwrap();
             if *state == is_typing {
                 return;
             }
             *state = is_typing;
 
-            if let Some(ws) = ws_for_typing.as_ref() {
+            if let Some(ws) = ws_client.as_ref() {
                 if let Err(e) = ws.send_typing(participant_id.clone(), is_typing) {
+                    let err_msg = format!("Failed to send typing indicator: {}", e);
                     slint::invoke_from_event_loop(move || {
-                        if let Some(ui) = ui_weak_typing.upgrade() {
-                            ui.set_error_message(format!("Failed to send typing indicator: {}", e).into());
+                        if let Some(ui) = ui_weak.upgrade() {
+                            ui.set_error_message(err_msg.into());
                         }
                     })
                     .ok();
@@ -255,6 +333,88 @@ impl ChatScreen {
             }
         });
         
+        // Search callbacks
+        let ui_weak_search = ui.as_weak();
+        let runtime_for_search = runtime.clone();
+        ui.on_search_in_conversation(move |query| {
+            let ui_weak = ui_weak_search.clone();
+            let runtime = runtime_for_search.clone();
+            
+            let ui = match ui_weak.upgrade() {
+                Some(ui) => ui,
+                None => return,
+            };
+            
+            let conversation_id = ui.get_selected_conversation_id().to_string();
+            if conversation_id.is_empty() {
+                return;
+            }
+            
+            ui.set_is_search_active(true);
+            ui.set_search_query(query.clone().into());
+            
+            runtime.spawn(async move {
+                match search_messages(&conversation_id, &query).await {
+                    Ok(messages) => {
+                         let ui_messages: Vec<MessageItem> = messages
+                            .iter()
+                            .map(|m| MessageItem {
+                                message_id: m.message_id.clone().into(),
+                                conversation_id: m.conversation_id.clone().into(),
+                                sender_username: m.sender_username.clone().into(),
+                                content: m.content.clone().into(),
+                                timestamp: m.timestamp.clone().into(),
+                                is_own_message: m.is_own_message,
+                                status: m.status.clone().into(),
+                            })
+                            .collect();
+
+                        slint::invoke_from_event_loop(move || {
+                            if let Some(ui) = ui_weak.upgrade() {
+                                let model = Rc::new(VecModel::from(ui_messages));
+                                ui.set_messages(ModelRc::from(model));
+                            }
+                        }).ok();
+                    }
+                    Err(e) => {
+                        let err_msg = format!("Search failed: {}", e);
+                        slint::invoke_from_event_loop(move || {
+                            if let Some(ui) = ui_weak.upgrade() {
+                                ui.set_error_message(err_msg.into());
+                            }
+                        }).ok();
+                    }
+                }
+            });
+        });
+
+        let ui_weak_clear = ui.as_weak();
+        let messages_for_clear = messages.clone();
+        ui.on_clear_search(move || {
+            let ui_weak = ui_weak_clear.clone();
+            let messages = messages_for_clear.clone();
+            
+            let ui = match ui_weak.upgrade() {
+                Some(ui) => ui,
+                None => return,
+            };
+            
+            let conversation_id = ui.get_selected_conversation_id().to_string();
+            if conversation_id.is_empty() {
+                return;
+            }
+            
+            ui.set_is_search_active(false);
+            ui.set_search_query("".into());
+            
+            // Restore original messages
+            render_messages_for_conversation(
+                ui_weak.clone(),
+                messages.clone(),
+                conversation_id,
+            );
+        });
+
         // Load initial conversations
         let ui_weak_init = ui.as_weak();
         let conversations_init = conversations.clone();
@@ -262,9 +422,9 @@ impl ChatScreen {
         runtime_for_init.spawn(async move {
             match load_conversations().await {
                 Ok(conversations) => {
-                    let slint_conversations: Vec<crate::ConversationItem> = conversations
+                    let slint_conversations: Vec<ConversationItem> = conversations
                         .iter()
-                        .map(|c| crate::ConversationItem {
+                        .map(|c| ConversationItem {
                             conversation_id: c.conversation_id.clone().into(),
                             participant_id: c.participant_id.clone().into(),
                             participant_username: c.participant_username.clone().into(),
@@ -280,17 +440,20 @@ impl ChatScreen {
                         *cache = conversations;
                     }
                     
+                    let ui_weak = ui_weak_init.clone();
                     slint::invoke_from_event_loop(move || {
-                        if let Some(ui) = ui_weak_init.upgrade() {
+                        if let Some(ui) = ui_weak.upgrade() {
                             let model = Rc::new(VecModel::from(slint_conversations));
                             ui.set_conversations(ModelRc::from(model));
                         }
                     }).ok();
                 }
                 Err(e) => {
+                    let err_msg = format!("Failed to load conversations: {}", e);
+                    let ui_weak = ui_weak_init.clone();
                     slint::invoke_from_event_loop(move || {
-                        if let Some(ui) = ui_weak_init.upgrade() {
-                            ui.set_error_message(format!("Failed to load conversations: {}", e).into());
+                        if let Some(ui) = ui_weak.upgrade() {
+                            ui.set_error_message(err_msg.into());
                         }
                     }).ok();
                 }
@@ -353,9 +516,9 @@ fn spawn_event_listener(
                         slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_weak_refresh.upgrade() {
                                 let cache = conversations_clone.lock().unwrap();
-                                let slint_conversations: Vec<crate::ConversationItem> = cache
+                                let slint_conversations: Vec<ConversationItem> = cache
                                     .iter()
-                                    .map(|c| crate::ConversationItem {
+                                    .map(|c| ConversationItem {
                                         conversation_id: c.conversation_id.clone().into(),
                                         participant_id: c.participant_id.clone().into(),
                                         participant_username: c.participant_username.clone().into(),
@@ -402,11 +565,14 @@ fn spawn_event_listener(
                         });
                     }
 
-                    render_messages_for_conversation(
-                        ui_weak.clone(),
-                        messages.clone(),
-                        conversation_id.clone(),
-                    );
+                    let is_searching = ui_weak.upgrade().map(|ui| ui.get_is_search_active()).unwrap_or(false);
+                    if !is_searching {
+                         render_messages_for_conversation(
+                            ui_weak.clone(),
+                            messages.clone(),
+                            conversation_id.clone(),
+                        );
+                    }
                 }
                 crate::services::WebSocketEvent::Ack { message_id, status, conversation_id } => {
                     {
@@ -424,11 +590,14 @@ fn spawn_event_listener(
 
                     let selected = selected_conversation_id.lock().unwrap().clone();
                     if let Some(selected_id) = selected {
-                        render_messages_for_conversation(
-                            ui_weak.clone(),
-                            messages.clone(),
-                            selected_id,
-                        );
+                        let is_searching = ui_weak.upgrade().map(|ui| ui.get_is_search_active()).unwrap_or(false);
+                        if !is_searching {
+                            render_messages_for_conversation(
+                                ui_weak.clone(),
+                                messages.clone(),
+                                selected_id,
+                            );
+                        }
                     }
                 }
                 crate::services::WebSocketEvent::Typing { sender_id, sender_username, recipient_id, is_typing } => {
@@ -460,10 +629,11 @@ fn spawn_event_listener(
                         *guard = token.clone();
                     }
 
+                    let ui_weak_typing = ui_weak.clone();
                     slint::invoke_from_event_loop({
                         let indicator_text = indicator_text.clone();
                         move || {
-                            if let Some(ui) = ui_weak.upgrade() {
+                            if let Some(ui) = ui_weak_typing.upgrade() {
                                 ui.set_typing_indicator(indicator_text.clone().into());
                             }
                         }
@@ -491,8 +661,9 @@ fn spawn_event_listener(
                     }
                 }
                 crate::services::WebSocketEvent::Error(err) => {
+                    let ui_weak_err = ui_weak.clone();
                     slint::invoke_from_event_loop(move || {
-                        if let Some(ui) = ui_weak.upgrade() {
+                        if let Some(ui) = ui_weak_err.upgrade() {
                             ui.set_error_message(err.clone().into());
                         }
                     })
@@ -508,12 +679,12 @@ fn render_messages_for_conversation(
     messages: Arc<Mutex<Vec<MessageData>>>,
     conversation_id: String,
 ) {
-    let ui_messages: Vec<crate::MessageItem> = messages
+    let ui_messages: Vec<MessageItem> = messages
         .lock()
         .unwrap()
         .iter()
         .filter(|m| m.conversation_id == conversation_id)
-        .map(|m| crate::MessageItem {
+        .map(|m| MessageItem {
             message_id: m.message_id.clone().into(),
             conversation_id: m.conversation_id.clone().into(),
             sender_username: m.sender_username.clone().into(),
@@ -528,10 +699,41 @@ fn render_messages_for_conversation(
         if let Some(ui) = ui_weak.upgrade() {
             let model = Rc::new(VecModel::from(ui_messages));
             ui.set_messages(ModelRc::from(model));
-            ui.scroll_to_bottom();
+            ui.invoke_scroll_to_bottom();
         }
     })
     .ok();
+}
+
+fn format_timestamp(timestamp: Option<i64>) -> String {
+    match timestamp {
+        Some(ts) => {
+            use chrono::{DateTime, Utc, Local};
+            let dt = DateTime::<Utc>::from_timestamp(ts, 0).unwrap_or_default();
+            let local: DateTime<Local> = dt.into();
+            local.format("%I:%M %p").to_string()
+        }
+        None => "".to_string(),
+    }
+}
+
+// API call to logout
+async fn api_logout() -> Result<(), Box<dyn std::error::Error>> {
+    let base_url = std::env::var("SERVER_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
+    
+    let token = match crate::services::session::get_token() {
+        Some(t) => t,
+        None => return Ok(()), // Already logged out or no token
+    };
+    
+    let client = reqwest::Client::new();
+    let _ = client
+        .post(format!("{}/auth/logout", base_url))
+        .header("Authorization", format!("Bearer {}", token))
+        .send()
+        .await?;
+    
+    Ok(())
 }
 
 // API call to load conversations
@@ -628,44 +830,51 @@ async fn load_messages(conversation_id: &str) -> Result<Vec<MessageData>, Box<dy
         .collect())
 }
 
-// API call to send a message
-async fn send_message(conversation_id: &str, content: &str) -> Result<(), Box<dyn std::error::Error>> {
+// API call to search messages in a conversation
+async fn search_messages(conversation_id: &str, query: &str) -> Result<Vec<MessageData>, Box<dyn std::error::Error>> {
     let base_url = std::env::var("SERVER_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
     
     let token = crate::services::session::get_token()
         .ok_or("No authentication token found")?;
     
-    #[derive(serde::Serialize)]
-    struct SendMessageRequest {
+    let session = crate::services::session::get_session_manager()
+        .get_current_session()
+        .ok_or("No session found")?;
+    
+    #[derive(serde::Deserialize)]
+    struct ApiMessage {
+        id: String,
+        sender_id: String,
+        sender_username: Option<String>,
         content: String,
+        created_at: i64,
+        status: String,
     }
     
     let client = reqwest::Client::new();
     let response = client
-        .post(format!("{}/conversations/{}/messages", base_url, conversation_id))
+        .get(format!("{}/conversations/{}/search", base_url, conversation_id))
+        .query(&[("q", query), ("limit", "50")])
         .header("Authorization", format!("Bearer {}", token))
-        .json(&SendMessageRequest {
-            content: content.to_string(),
-        })
         .send()
         .await?;
     
     if !response.status().is_success() {
-        return Err(format!("Failed to send message: {}", response.status()).into());
+        return Err(format!("Failed to search messages: {}", response.status()).into());
     }
     
-    Ok(())
-}
-
-// Helper to format timestamp
-fn format_timestamp(timestamp: Option<i64>) -> String {
-    match timestamp {
-        Some(ts) => {
-            use chrono::{DateTime, Utc, Local};
-            let dt = DateTime::<Utc>::from_timestamp(ts, 0).unwrap_or_default();
-            let local: DateTime<Local> = dt.into();
-            local.format("%I:%M %p").to_string()
-        }
-        None => "".to_string(),
-    }
+    let api_messages: Vec<ApiMessage> = response.json().await?;
+    
+    Ok(api_messages
+        .into_iter()
+        .map(|m| MessageData {
+            message_id: m.id.clone(),
+            conversation_id: conversation_id.to_string(),
+            sender_username: m.sender_username.unwrap_or_else(|| "Unknown".to_string()),
+            content: m.content,
+            timestamp: format_timestamp(Some(m.created_at)),
+            is_own_message: m.sender_id == session.user_id,
+            status: m.status,
+        })
+        .collect())
 }

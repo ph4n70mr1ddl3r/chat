@@ -143,6 +143,28 @@ impl MessageService {
         queries::get_messages_by_conversation(&self.pool, conversation_id, limit, offset).await
     }
 
+    /// Search messages within a conversation
+    ///
+    /// Returns matching messages with context
+    pub async fn search_messages_in_conversation(
+        &self,
+        conversation_id: &str,
+        user_id: &str,
+        query: &str,
+        limit: u32,
+    ) -> Result<Vec<Message>, String> {
+        // Verify user is participant
+        let conversation = queries::get_conversation_by_id(&self.pool, conversation_id)
+            .await?
+            .ok_or("Conversation not found".to_string())?;
+
+        if conversation.user1_id != user_id && conversation.user2_id != user_id {
+            return Err("User is not a participant in this conversation".to_string());
+        }
+
+        queries::search_messages_in_conversation(&self.pool, conversation_id, query, limit).await
+    }
+
     /// Get pending messages (for offline delivery retry)
     ///
     /// Returns messages with 'pending' or 'failed' status

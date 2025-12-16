@@ -19,6 +19,8 @@ slint = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 reqwest = { workspace = true }
+futures = "0.3"
+futures-util = "0.3"
 
 # Internal dependencies
 chat-shared = { path = "../shared" }

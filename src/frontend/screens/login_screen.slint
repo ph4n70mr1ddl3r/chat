@@ -1,10 +1,14 @@
 import { VerticalBox, HorizontalBox, LineEdit, Button } from "std-widgets.slint";
 
-export component LoginScreenComponent {
+export component LoginScreenComponent inherits Window {
     in-out property <string> username;
     in-out property <string> password;
     in property <string> error_message;
     in property <bool> is_loading;
+    
+    width: 400px;
+    height: 300px;
+    title: "Chat App - Login";
     
     callback login();
     callback navigate_to_signup();
