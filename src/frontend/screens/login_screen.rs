@@ -30,7 +30,10 @@ impl LoginScreen {
         let signup_callback = Arc::new(on_navigate_to_signup);
 
         ui.on_login(move || {
-            let ui_handle = ui_weak.unwrap();
+            let ui_handle = match ui_weak.upgrade() {
+                Some(ui) => ui,
+                None => return,
+            };
             let username = ui_handle.get_username().to_string();
             let password = ui_handle.get_password().to_string();
 
@@ -71,14 +74,10 @@ impl LoginScreen {
 
                         let user_id = response.user_id.clone();
 
-                        // Success! Update UI from event loop
+                        // Success! Navigate to chat screen
                         slint::invoke_from_event_loop(move || {
-                            if let Some(ui) = ui_weak_inner.upgrade() {
-                                ui.set_is_loading(false);
-                                ui.set_error_message("".into());
-                                ui.hide().unwrap(); // Hide login screen
-                                success_cb(user_id); // Trigger callback
-                            }
+                            success_cb(user_id);
+                            // Note: Don't hide the window here - show_chat will clean up
                         })
                         .ok();
                     }
@@ -95,12 +94,10 @@ impl LoginScreen {
             });
         });
 
-        let ui_weak_signup = ui.as_weak();
         ui.on_navigate_to_signup(move || {
-            if let Some(ui) = ui_weak_signup.upgrade() {
-                ui.hide().unwrap();
-            }
+            eprintln!("DEBUG: Navigate to signup clicked");
             signup_callback();
+            // Note: Don't hide login window here - show_signup will clean up
         });
 
         Self {
