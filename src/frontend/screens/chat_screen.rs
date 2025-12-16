@@ -1,6 +1,6 @@
 use crate::services::ConnectionStatus;
 use crate::ui::{ChatScreenComponent, ConversationItem, MessageItem};
-use slint::{ComponentHandle, Model, ModelRc, VecModel};
+use slint::{ComponentHandle, ModelRc, VecModel};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -31,6 +31,7 @@ pub struct MessageData {
     pub status: String,
 }
 
+#[allow(dead_code)]
 pub struct ChatScreen {
     ui: ChatScreenComponent,
     current_user_id: String,
@@ -115,7 +116,7 @@ impl ChatScreen {
 
                 // 3. Disconnect WebSocket
                 if let Some(ws) = ws_client.as_ref() {
-                    ws.disconnect();
+                    let _ = ws.disconnect();
                 }
 
                 slint::invoke_from_event_loop(move || {
@@ -162,9 +163,9 @@ impl ChatScreen {
             let messages = messages_for_select.clone();
             let selected_conv = selected_conv_for_select.clone();
             let selected_participant = selected_participant_for_select.clone();
-            let user_id = user_id_clone.clone();
+            let _user_id = user_id_clone.clone();
 
-            let ui = match ui_weak.upgrade() {
+            let _ui = match ui_weak.upgrade() {
                 Some(ui) => ui,
                 None => return,
             };
@@ -370,7 +371,7 @@ impl ChatScreen {
             }
 
             ui.set_is_search_active(true);
-            ui.set_search_query(query.clone().into());
+            ui.set_search_query(query.clone());
 
             runtime.spawn(async move {
                 match search_messages(&conversation_id, &query).await {
@@ -498,11 +499,13 @@ impl ChatScreen {
         self.ui.show().unwrap();
     }
 
+    #[allow(dead_code)]
     pub fn as_weak(&self) -> slint::Weak<ChatScreenComponent> {
         self.ui.as_weak()
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn spawn_event_listener(
     mut event_rx: mpsc::UnboundedReceiver<crate::services::WebSocketEvent>,
     ui_weak: slint::Weak<ChatScreenComponent>,
@@ -576,10 +579,8 @@ fn spawn_event_listener(
                                     );
                                 }
 
-                                let active_conv = {
-                                    selected_conv_refresh.lock().unwrap().clone()
-                                };
-                                
+                                let active_conv = { selected_conv_refresh.lock().unwrap().clone() };
+
                                 if let Some(active_conv) = active_conv {
                                     if let Ok(fresh_messages) = load_messages(&active_conv).await {
                                         {

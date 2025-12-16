@@ -66,11 +66,9 @@ pub async fn refresh_token_handler(
 
 /// Extract Bearer token from Authorization header
 pub fn extract_bearer_token(auth_header: &str) -> Option<String> {
-    if auth_header.starts_with("Bearer ") {
-        Some(auth_header[7..].to_string())
-    } else {
-        None
-    }
+    auth_header
+        .strip_prefix("Bearer ")
+        .map(|token| token.to_string())
 }
 
 #[cfg(test)]

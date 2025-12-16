@@ -23,6 +23,7 @@ pub struct AuthResponse {
 /// Error response from server
 #[derive(Debug, Deserialize)]
 pub struct ErrorResponse {
+    #[allow(dead_code)]
     pub error: String,
     pub message: String,
 }
@@ -43,6 +44,7 @@ impl HttpClient {
     }
 
     /// Sign up a new user
+    #[allow(dead_code)]
     pub async fn signup(&self, username: String, password: String) -> Result<AuthResponse, String> {
         let url = format!("{}/auth/signup", self.base_url);
         let request = SignupRequest { username, password };

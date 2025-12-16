@@ -368,7 +368,7 @@ mod tests {
         let pool = setup_test_db().await;
         let service = MessageService::new(pool.clone());
 
-        let mut user1 = User::new(
+        let user1 = User::new(
             "alice".to_string(),
             "hash1".to_string(),
             "salt1".to_string(),

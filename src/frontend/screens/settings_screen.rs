@@ -5,6 +5,7 @@ use slint::ComponentHandle;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
+#[allow(dead_code)]
 pub struct SettingsScreen {
     ui: SettingsScreenComponent,
     runtime: Arc<Runtime>,
@@ -21,7 +22,6 @@ impl SettingsScreen {
 
         ui.set_username(username.into());
 
-        let ui_weak = ui.as_weak();
         let back_cb = Arc::new(on_back);
         ui.on_back(move || {
             back_cb();

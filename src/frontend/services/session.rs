@@ -67,6 +67,7 @@ impl SessionManager {
     }
 
     /// Save session to disk
+    #[allow(dead_code)]
     pub async fn save_session(&self, session: SessionData) -> Result<(), String> {
         // Ensure parent directory exists
         if let Some(parent) = self.session_file.parent() {
@@ -126,6 +127,7 @@ impl SessionManager {
     }
 
     /// Load session from disk
+    #[allow(dead_code)]
     pub async fn load_session(&self) -> Result<Option<SessionData>, String> {
         // Check if file exists
         if !self.session_file.exists() {
@@ -192,6 +194,7 @@ impl SessionManager {
     }
 
     /// Check if token is expired or will expire soon (within 5 minutes)
+    #[allow(dead_code)]
     pub fn should_refresh_token(&self) -> bool {
         if let Some(session) = self.get_current_session() {
             let now = chrono::Utc::now().timestamp();
@@ -205,6 +208,7 @@ impl SessionManager {
     }
 
     /// Check if user is logged in with valid token
+    #[allow(dead_code)]
     pub fn is_logged_in(&self) -> bool {
         if let Some(session) = self.get_current_session() {
             let now = chrono::Utc::now().timestamp();
@@ -221,7 +225,7 @@ static SESSION_MANAGER: OnceLock<SessionManager> = OnceLock::new();
 
 /// Get the global session manager instance
 pub fn get_session_manager() -> &'static SessionManager {
-    SESSION_MANAGER.get_or_init(|| SessionManager::new())
+    SESSION_MANAGER.get_or_init(SessionManager::new)
 }
 
 /// Helper function to get the current token
@@ -230,6 +234,7 @@ pub fn get_token() -> Option<String> {
 }
 
 /// Helper function to check if logged in
+#[allow(dead_code)]
 pub fn is_logged_in() -> bool {
     get_session_manager().is_logged_in()
 }

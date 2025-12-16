@@ -6,10 +6,7 @@
 
 use crate::db::queries;
 use crate::handlers::websocket::{ClientConnection, ConnectionManager, ErrorResponse};
-use crate::services::{
-    message_queue::MessageQueueService,
-    message_service::MessageService,
-};
+use crate::services::{message_queue::MessageQueueService, message_service::MessageService};
 use chat_shared::protocol::{MessageEnvelope, TextMessageData};
 use serde_json::json;
 use sqlx::SqlitePool;
@@ -171,6 +168,7 @@ impl MessageHandler {
     }
 
     /// Build message envelope for delivery
+    #[allow(clippy::too_many_arguments)]
     fn build_message_envelope(
         &self,
         message_id: &str,
@@ -280,7 +278,7 @@ mod tests {
         assert_eq!(responses.len(), 1);
 
         // Verify message was stored
-        let messages = queries::get_messages_by_conversation(&pool, "", 10, 0).await;
+        let _messages = queries::get_messages_by_conversation(&pool, "", 10, 0).await;
         // Note: This test would need the actual conversation ID to verify
     }
 

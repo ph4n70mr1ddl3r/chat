@@ -43,8 +43,10 @@ pub enum WebSocketEvent {
     /// User online status update.
     Presence {
         user_id: String,
+        #[allow(dead_code)]
         username: String,
         is_online: bool,
+        #[allow(dead_code)]
         last_seen_at: u64,
     },
     /// Error surfaced to the UI.

@@ -19,11 +19,13 @@ struct AppState {
 }
 
 thread_local! {
-    static APP_STATE: RefCell<AppState> = RefCell::new(AppState {
-        login_screen: None,
-        chat_screen: None,
-        settings_screen: None,
-    });
+    static APP_STATE: RefCell<AppState> = const {
+        RefCell::new(AppState {
+            login_screen: None,
+            chat_screen: None,
+            settings_screen: None,
+        })
+    };
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

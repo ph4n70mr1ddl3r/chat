@@ -6,6 +6,7 @@ use slint::ComponentHandle;
 use std::sync::Arc;
 
 /// Login screen controller
+#[allow(dead_code)]
 pub struct LoginScreen {
     ui: LoginScreenComponent,
     http_client: Arc<HttpClient>,
@@ -89,7 +90,6 @@ impl LoginScreen {
             });
         });
 
-        let ui_weak = ui.as_weak();
         ui.on_navigate_to_signup(move || {
             // TODO: Navigate to signup screen
             println!("Navigate to signup");

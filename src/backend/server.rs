@@ -638,7 +638,10 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Rejection> {
         )
     } else if err.is_not_found() {
         (warp::http::StatusCode::NOT_FOUND, "Not Found".to_string())
-    } else if err.find::<warp::filters::body::BodyDeserializeError>().is_some() {
+    } else if err
+        .find::<warp::filters::body::BodyDeserializeError>()
+        .is_some()
+    {
         (
             warp::http::StatusCode::BAD_REQUEST,
             "Invalid request body".to_string(),

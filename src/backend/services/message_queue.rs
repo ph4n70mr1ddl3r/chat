@@ -32,6 +32,7 @@ struct QueuedMessage {
 #[derive(Clone)]
 pub struct MessageQueueService {
     pool: SqlitePool,
+    #[allow(dead_code)]
     message_service: MessageService,
     connection_manager: Arc<ConnectionManager>,
     /// Queue of pending messages: recipient_id -> Vec<QueuedMessage>
@@ -83,7 +84,7 @@ impl MessageQueueService {
 
                 // Collect messages ready for retry and group by recipient for batching
                 let mut ready_by_recipient: HashMap<String, Vec<QueuedMessage>> = HashMap::new();
-                for (recipient_id, messages) in queue_lock.iter_mut() {
+                for (_recipient_id, messages) in queue_lock.iter_mut() {
                     messages.retain(|msg| {
                         if msg.next_retry_at <= now {
                             ready_by_recipient
@@ -305,7 +306,6 @@ impl MessageQueueService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::handlers::websocket::ClientConnection;
     use crate::models::{Conversation, User};
 
     async fn setup_test_db() -> SqlitePool {
@@ -384,6 +384,6 @@ mod tests {
         queue_service.load_pending_messages().await.unwrap();
 
         let stats = queue_service.get_queue_stats().await;
-        assert!(stats.get(&user2.id).is_some());
+        assert!(stats.contains_key(&user2.id));
     }
 }

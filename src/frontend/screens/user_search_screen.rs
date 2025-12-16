@@ -1,18 +1,20 @@
 //! User search screen logic
 
 use crate::ui::{UserSearchResult, UserSearchScreenComponent};
-use slint::{ComponentHandle, Model, ModelRc, VecModel};
+use slint::{ComponentHandle, ModelRc, VecModel};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::runtime::Runtime;
 
+#[allow(dead_code)]
 pub struct UserSearchScreen {
     ui: UserSearchScreenComponent,
     runtime: Arc<Runtime>,
     _debounce_timer: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
 }
 
+#[allow(dead_code)]
 impl UserSearchScreen {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let ui = UserSearchScreenComponent::new()?;

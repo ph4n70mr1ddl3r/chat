@@ -434,8 +434,6 @@ pub async fn update_message_status(
     message_id: &str,
     status: &str,
 ) -> Result<(), String> {
-    let now = chrono::Utc::now().timestamp_millis();
-
     sqlx::query("UPDATE messages SET status = ? WHERE id = ?")
         .bind(status)
         .bind(message_id)

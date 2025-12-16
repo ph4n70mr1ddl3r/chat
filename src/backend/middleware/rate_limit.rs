@@ -183,10 +183,7 @@ pub fn rate_limit_filter(
         })
         .and(warp::any().map(move || limiter.clone()))
         .and_then(|ip: String, limiter: Arc<RateLimiter>| async move {
-            limiter
-                .check_and_record(&ip)
-                .await
-                .map_err(reject::custom)
+            limiter.check_and_record(&ip).await.map_err(reject::custom)
         })
         .untuple_one()
 }
