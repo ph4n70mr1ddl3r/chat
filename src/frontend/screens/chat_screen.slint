@@ -1,0 +1,344 @@
+import { VerticalBox, HorizontalBox, ListView, ScrollView, Button, LineEdit } from "std-widgets.slint";
+import { MessageInput } from "../components/message_input.slint";
+import { MessageBubble } from "../components/message_bubble.slint";
+import { OnlineIndicator } from "../components/online_indicator.slint";
+import { SearchInput } from "../components/search_input.slint";
+import { ErrorDialog } from "error_dialog.slint";
+
+export struct ConversationItem {
+    conversation_id: string,
+    participant_id: string,
+    participant_username: string,
+    participant_is_online: bool,
+    last_message: string,
+    last_message_time: string,
+    message_count: int,
+}
+
+export struct MessageItem {
+    message_id: string,
+    conversation_id: string,
+    sender_username: string,
+    content: string,
+    timestamp: string,
+    is_own_message: bool,
+    status: string,
+}
+
+export component ChatScreenComponent inherits Window {
+    in property <[ConversationItem]> conversations;
+    in property <[MessageItem]> messages;
+    in property <string> selected_conversation_id;
+    in property <string> selected_participant_id;
+    in property <string> selected_participant_username;
+    in property <bool> selected_participant_is_online;
+    in-out property <string> message_input;
+    in property <bool> is_loading;
+    in property <string> error_message;
+    in-out property <bool> show_error_dialog;
+    in property <string> error_dialog_title;
+    in property <string> error_dialog_message;
+    in property <string> connection_status;
+    in property <bool> connection_online;
+    in property <string> typing_indicator;
+    in property <bool> is_search_active;
+    in property <string> search_query;
+    
+    width: 800px;
+    height: 600px;
+    title: "Chat App";
+    
+    callback scroll_to_bottom();
+    
+    callback conversation_selected(string /* conversation_id */);
+    callback send_message(string /* content */);
+    callback typing(bool);
+    callback search_users();
+    callback logout();
+    callback search_in_conversation(string /* query */);
+    callback clear_search();
+    callback open_settings();
+    
+    VerticalBox {
+        spacing: 0px;
+
+        Rectangle {
+            height: 28px;
+            background: root.connection_online ? #2E7D32 : #F57C00;
+            HorizontalBox {
+                padding: 8px;
+                spacing: 8px;
+                Rectangle {
+                    width: 10px;
+                    height: 10px;
+                    border-radius: 5px;
+                    background: root.connection_online ? #9BE7B0 : #FFE0B2;
+                }
+                Text {
+                    text: root.connection_status;
+                    font-size: 12px;
+                    color: root.connection_online ? #ffffff : #3E2723;
+                    vertical-alignment: center;
+                }
+            }
+        }
+
+        HorizontalBox {
+            // Sidebar: Conversation list
+            Rectangle {
+                width: 300px;
+                background: #f5f5f5;
+                
+                VerticalBox {
+                    padding: 10px;
+                    
+                    // Header
+                    HorizontalBox {
+                        Text {
+                            text: "Conversations";
+                            font-size: 18px;
+                            font-weight: 700;
+                        }
+                        Button {
+                            text: "🔍 Search";
+                            clicked => {
+                                root.search_users();
+                            }
+                        }
+                    }
+                    
+                    // Conversations list
+                    ScrollView {
+                        ListView {
+                            for conversation in root.conversations: Rectangle {
+                                height: 70px;
+                                background: conversation.conversation_id == root.selected_conversation_id ? #e0e0e0 : #ffffff;
+                                border-radius: 5px;
+                                
+                                TouchArea {
+                                    clicked => {
+                                        root.conversation_selected(conversation.conversation_id);
+                                    }
+                                }
+                                
+                                HorizontalBox {
+                                    padding: 10px;
+                                    spacing: 10px;
+                                    alignment: center;
+                                    
+                                    // Online status indicator
+                                    OnlineIndicator {
+                                        is_online: conversation.participant_is_online;
+                                    }
+                                    
+                                    VerticalBox {
+                                        horizontal-stretch: 1;
+                                        
+                                        Text {
+                                            text: conversation.participant_username;
+                                            font-size: 14px;
+                                            font-weight: 700;
+                                        }
+                                        
+                                        Text {
+                                            text: conversation.last_message;
+                                            font-size: 12px;
+                                            color: #666;
+                                            overflow: elide;
+                                        }
+                                        
+                                        Text {
+                                            text: conversation.last_message_time;
+                                            font-size: 10px;
+                                            color: #999;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Bottom buttons
+                    VerticalBox {
+                        spacing: 5px;
+                        
+                        Button {
+                            text: "Settings";
+                            clicked => {
+                                root.open_settings();
+                            }
+                        }
+                        
+                        Button {
+                            text: "Logout";
+                            clicked => {
+                                root.logout();
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Main area: Chat window
+            Rectangle {
+                background: #ffffff;
+                horizontal-stretch: 1;
+                
+                // Selected conversation view
+                VerticalBox {
+                    visible: root.selected_conversation_id != "";
+                    
+                    // Top bar: Participant info
+                    Rectangle {
+                        height: 60px;
+                        background: #4CAF50;
+                        
+                        HorizontalBox {
+                            padding: 10px;
+                            spacing: 10px;
+                            alignment: center;
+                            
+                            // Online indicator
+                            OnlineIndicator {
+                                is_online: root.selected_participant_is_online;
+                            }
+                            
+                            Text {
+                                text: root.selected_participant_username;
+                                font-size: 16px;
+                                font-weight: 700;
+                                color: white;
+                                vertical-alignment: center;
+                            }
+                            
+                            Text {
+                                text: root.selected_participant_is_online ? "Online" : "Offline";
+                                font-size: 12px;
+                                color: lightgray;
+                                vertical-alignment: center;
+                                horizontal-stretch: 1;
+                            }
+
+                            SearchInput {
+                                width: 250px;
+                                search(query) => {
+                                    root.search_in_conversation(query);
+                                }
+                                clear => {
+                                    root.clear_search();
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Messages area
+                    messages_scroll := ScrollView {
+                        vertical-stretch: 1;
+                        
+                        VerticalBox {
+                            padding: 10px;
+                            spacing: 10px;
+                            
+                            for message in root.messages: MessageBubble {
+                                sender_username: message.sender_username;
+                                content: message.content;
+                                timestamp: message.timestamp;
+                                status: message.status;
+                                is_own: message.is_own_message;
+                            }
+
+                            // Search no-results state
+                            if root.is_search_active && root.messages.length == 0: Rectangle {
+                                background: #f9f9f9;
+                                border-radius: 6px;
+                                padding: 12px;
+                                HorizontalBox {
+                                    spacing: 6px;
+                                    Text {
+                                        text: "No messages found for";
+                                        color: #777;
+                                        font-size: 12px;
+                                    }
+                                    Text {
+                                        text: "\"" + root.search_query + "\"";
+                                        color: #333;
+                                        font-size: 12px;
+                                        font-weight: 700;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if root.typing_indicator != "": Rectangle {
+                        background: #ffffff;
+                        padding: 8px;
+                        Text {
+                            text: root.typing_indicator;
+                            font-size: 12px;
+                            color: #555;
+                        }
+                    }
+                    
+                    // Message input area
+                    Rectangle {
+                        background: #F5F5F5;
+                        padding: 10px;
+                        MessageInput {
+                            placeholder: "Type a message...";
+                            text <=> root.message_input;
+                            is_sending: root.is_loading;
+                            max_chars: 5000;
+                            error_text: root.error_message;
+                            send(text) => {
+                                root.send_message(text);
+                            }
+                            typing(val) => {
+                                root.typing(val);
+                            }
+                        }
+                    }
+                }
+                
+                // No conversation selected view
+                VerticalBox {
+                    visible: root.selected_conversation_id == "";
+                    alignment: center;
+                    
+                    Text {
+                        text: "Select a conversation or search for users to start chatting";
+                        font-size: 16px;
+                        color: #999;
+                        horizontal-alignment: center;
+                    }
+                    
+                    Button {
+                        text: "Search Users";
+                        clicked => {
+                            root.search_users();
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    ErrorDialog {
+        open <=> root.show_error_dialog;
+        title: root.error_dialog_title;
+        message: root.error_dialog_message;
+        action_text: "Dismiss";
+        close => {
+            root.show_error_dialog = false;
+        }
+    }
+    
+    scroll_to_bottom => {
+        let target_y = messages_scroll.viewport_height - messages_scroll.height;
+        if target_y > 0px {
+            messages_scroll.viewport_y = target_y;
+        } else {
+            messages_scroll.viewport_y = 0px;
+        }
+    }
+}

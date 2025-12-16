@@ -31,11 +31,7 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- Library-First: Feature must start as standalone library
-- CLI Interface: Library must expose CLI functionality
-- Test-First: TDD mandatory - tests first, then implementation
-- Integration Testing: Contract and inter-service tests required
-- Observability, Versioning & Breaking Changes, Simplicity: Follow principles for logging, versioning, and KISS
+[Gates determined based on constitution file]
 
 ## Project Structure
 

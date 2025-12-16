@@ -1,0 +1,117 @@
+import { VerticalBox, HorizontalBox, LineEdit, Button, StandardTableView } from "std-widgets.slint";
+
+export component SettingsScreenComponent inherits Window {
+    in property <string> username;
+    in property <bool> is_loading;
+    in property <string> error_message;
+    in property <string> success_message;
+
+    // Change Password inputs
+    in-out property <string> current_password;
+    in-out property <string> new_password;
+    
+    // Delete Account inputs
+    in-out property <string> delete_password;
+    
+    width: 600px;
+    height: 500px;
+    title: "Account Settings";
+    
+    callback back();
+    callback change_password();
+    callback delete_account();
+
+    VerticalBox {
+        padding: 20px;
+        spacing: 20px;
+        alignment: start;
+
+        HorizontalBox {
+            Text {
+                text: "Account Settings";
+                font-size: 24px;
+                font-weight: 700;
+            }
+            Button {
+                text: "Back";
+                clicked => { root.back(); }
+            }
+        }
+
+        if root.error_message != "": Text {
+            text: root.error_message;
+            color: red;
+        }
+
+        if root.success_message != "": Text {
+            text: root.success_message;
+            color: green;
+        }
+
+        // Change Password Section
+        Rectangle {
+            background: #f0f0f0;
+            border-radius: 4px;
+            VerticalBox {
+                padding: 10px;
+                spacing: 10px;
+                Text {
+                    text: "Change Password";
+                    font-size: 18px;
+                    font-weight: 700;
+                }
+                
+                Text { text: "Current Password:"; }
+                LineEdit {
+                    text <=> root.current_password;
+                    input-type: InputType.password;
+                }
+                
+                Text { text: "New Password:"; }
+                LineEdit {
+                    text <=> root.new_password;
+                    input-type: InputType.password;
+                }
+                
+                Button {
+                    text: "Update Password";
+                    enabled: !root.is_loading && root.current_password != "" && root.new_password != "";
+                    clicked => { root.change_password(); }
+                }
+            }
+        }
+
+        // Delete Account Section
+        Rectangle {
+            background: #ffebee; // Light red
+            border-radius: 4px;
+            VerticalBox {
+                padding: 10px;
+                spacing: 10px;
+                Text {
+                    text: "Delete Account";
+                    font-size: 18px;
+                    font-weight: 700;
+                    color: red;
+                }
+                
+                Text { 
+                    text: "Warning: This action cannot be undone."; 
+                    color: red;
+                }
+                
+                Text { text: "Confirm Password to Delete:"; }
+                LineEdit {
+                    text <=> root.delete_password;
+                    input-type: InputType.password;
+                }
+                
+                Button {
+                    text: "Delete Account";
+                    enabled: !root.is_loading && root.delete_password != "";
+                    clicked => { root.delete_account(); }
+                }
+            }
+        }
+    }
+}

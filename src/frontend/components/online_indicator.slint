@@ -1,0 +1,9 @@
+// Online status indicator (green/gray dot)
+export component OnlineIndicator inherits Rectangle {
+    in property <bool> is_online;
+    
+    width: 10px;
+    height: 10px;
+    border-radius: 5px;
+    background: is_online ? #4CAF50 : #BDBDBD; // Green 500 or Grey 400
+}

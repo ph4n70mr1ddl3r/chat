@@ -1,0 +1,90 @@
+import { VerticalBox, HorizontalBox, LineEdit, Button } from "std-widgets.slint";
+
+export component LoginScreenComponent inherits Window {
+    in-out property <string> username;
+    in-out property <string> password;
+    in property <string> error_message;
+    in property <bool> is_loading;
+    
+    width: 400px;
+    height: 300px;
+    title: "Chat App - Login";
+    
+    callback login();
+    callback navigate_to_signup();
+    
+    VerticalBox {
+        alignment: start;
+        spacing: 10px;
+        padding: 20px;
+        
+        Text {
+            text: "Login";
+            font-size: 24px;
+            font-weight: 700;
+            color: #333;
+        }
+        
+        HorizontalBox {
+            Text {
+                text: "Username:";
+                width: 120px;
+                vertical-alignment: center;
+            }
+            LineEdit {
+                placeholder-text: "Enter username";
+                text <=> root.username;
+                enabled: !root.is_loading;
+            }
+        }
+        
+        HorizontalBox {
+            Text {
+                text: "Password:";
+                width: 120px;
+                vertical-alignment: center;
+            }
+            LineEdit {
+                placeholder-text: "Enter password";
+                text <=> root.password;
+                input-type: InputType.password;
+                enabled: !root.is_loading;
+            }
+        }
+        
+        Button {
+            text: root.is_loading ? "Logging in..." : "Log In";
+            clicked => {
+                root.login();
+            }
+            enabled: root.username != "" && root.password != "" && !root.is_loading;
+        }
+        
+        Text {
+            text: root.error_message;
+            color: red;
+            font-size: 12px;
+            visible: root.error_message != "";
+        }
+
+        Text {
+            text: "This is a self-hosted chat application. Your data is stored locally and never shared externally.";
+            color: #555;
+            font-size: 12px;
+            wrap: word-wrap;
+        }
+        
+        HorizontalBox {
+            Text {
+                text: "Don't have an account? ";
+            }
+            Button {
+                text: "Sign Up";
+                clicked => {
+                    root.navigate_to_signup();
+                }
+                enabled: !root.is_loading;
+            }
+        }
+    }
+}

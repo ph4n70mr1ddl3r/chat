@@ -1,0 +1,93 @@
+import { VerticalBox, HorizontalBox, LineEdit, Button } from "std-widgets.slint";
+
+export component SignupScreenComponent inherits Window {
+    in-out property <string> username;
+    in-out property <string> password;
+    in-out property <string> confirm_password;
+    in property <string> error_message;
+    
+    width: 400px;
+    height: 500px;
+    title: "Chat App - Sign Up";
+    
+    callback signup();
+    callback navigate-to-login();
+    
+    VerticalBox {
+        alignment: start;
+        spacing: 10px;
+        padding: 20px;
+        
+        Text {
+            text: "Create Account";
+            font-size: 24px;
+            font-weight: 700;
+            color: #333;
+        }
+        
+        HorizontalBox {
+            Text {
+                text: "Username:";
+                width: 120px;
+                vertical-alignment: center;
+            }
+            LineEdit {
+                placeholder-text: "Enter username (1-50 chars)";
+                text <=> root.username;
+            }
+        }
+        
+        HorizontalBox {
+            Text {
+                text: "Password:";
+                width: 120px;
+                vertical-alignment: center;
+            }
+            LineEdit {
+                placeholder-text: "Enter password";
+                text <=> root.password;
+                input-type: InputType.password;
+            }
+        }
+        
+        HorizontalBox {
+            Text {
+                text: "Confirm Password:";
+                width: 120px;
+                vertical-alignment: center;
+            }
+            LineEdit {
+                placeholder-text: "Re-enter password";
+                text <=> root.confirm_password;
+                input-type: InputType.password;
+            }
+        }
+        
+        Button {
+            text: "Sign Up";
+            clicked => {
+                root.signup();
+            }
+            enabled: root.username != "" && root.password != "" && root.confirm_password != "";
+        }
+        
+        Text {
+            text: root.error_message;
+            color: red;
+            font-size: 12px;
+            visible: root.error_message != "";
+        }
+        
+        HorizontalBox {
+            Text {
+                text: "Already have an account? ";
+            }
+            Button {
+                text: "Log In";
+                clicked => {
+                    root.navigate-to-login();
+                }
+            }
+        }
+    }
+}

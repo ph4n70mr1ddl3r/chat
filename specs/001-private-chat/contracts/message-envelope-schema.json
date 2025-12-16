@@ -1,0 +1,190 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Chat WebSocket Protocol",
+  "version": "1.0",
+  "description": "Message envelope and type-specific schemas for chat WebSocket protocol",
+  "definitions": {
+    "messageEnvelope": {
+      "type": "object",
+      "required": ["id", "type", "timestamp", "data"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique message ID (UUID v4)"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["message", "typing", "presence", "ack", "error", "heartbeat"],
+          "description": "Message type"
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Timestamp in milliseconds (RFC3339)"
+        },
+        "data": {
+          "type": "object",
+          "description": "Type-specific payload"
+        }
+      }
+    },
+    "textMessage": {
+      "type": "object",
+      "required": ["recipient_id", "content"],
+      "properties": {
+        "recipient_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID of message recipient"
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 5000,
+          "description": "Message content (plaintext)"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "sent", "delivered", "failed"],
+          "description": "Message delivery status"
+        }
+      }
+    },
+    "ack": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["pending", "sent", "delivered", "failed"],
+          "description": "ACK status"
+        },
+        "message_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Reference to original message ID"
+        },
+        "conversation_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Conversation ID"
+        },
+        "server_timestamp": {
+          "type": "integer",
+          "description": "Server timestamp in milliseconds"
+        }
+      }
+    },
+    "typing": {
+      "type": "object",
+      "required": ["recipient_id", "is_typing"],
+      "properties": {
+        "recipient_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID of chat partner"
+        },
+        "is_typing": {
+          "type": "boolean",
+          "description": "Whether user is currently typing"
+        }
+      }
+    },
+    "presence": {
+      "type": "object",
+      "required": ["user_id", "username", "is_online", "last_seen_at"],
+      "properties": {
+        "user_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID of user"
+        },
+        "username": {
+          "type": "string",
+          "description": "Username of user"
+        },
+        "is_online": {
+          "type": "boolean",
+          "description": "Online status"
+        },
+        "last_seen_at": {
+          "type": "integer",
+          "description": "Last seen timestamp in milliseconds"
+        }
+      }
+    },
+    "error": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Error code"
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable error message"
+        },
+        "details": {
+          "type": "object",
+          "description": "Additional error details"
+        }
+      }
+    },
+    "jwtClaims": {
+      "type": "object",
+      "required": ["sub", "aud", "iat", "exp"],
+      "properties": {
+        "sub": {
+          "type": "string",
+          "description": "Subject (user ID)"
+        },
+        "aud": {
+          "type": "string",
+          "const": "chat-app",
+          "description": "Audience"
+        },
+        "iat": {
+          "type": "integer",
+          "description": "Issued at timestamp"
+        },
+        "exp": {
+          "type": "integer",
+          "description": "Expiration timestamp"
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": ["send", "receive"],
+          "description": "Token scopes"
+        }
+      }
+    },
+    "conversation": {
+      "type": "object",
+      "required": ["id", "user1_id", "user2_id", "created_at"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Conversation ID"
+        },
+        "user1_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "First user ID (sorted < user2_id)"
+        },
+        "user2_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Second user ID (sorted > user1_id)"
+        },
+        "created_at": {
+          "type": "integer",
+          "description": "Creation timestamp"
+        }
+      }
+    }
+  }
+}

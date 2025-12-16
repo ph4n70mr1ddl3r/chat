@@ -1,0 +1,128 @@
+import { VerticalBox, HorizontalBox, LineEdit, Button, ListView } from "std-widgets.slint";
+
+export struct UserSearchResult {
+    user_id: string,
+    username: string,
+    is_online: bool,
+}
+
+export component UserSearchScreenComponent inherits Window {
+    in-out property <string> search_query;
+    in property <[UserSearchResult]> search_results;
+    in property <bool> is_searching;
+    in property <string> error_message;
+    
+    width: 600px;
+    height: 500px;
+    title: "Search Users";
+    
+    callback search_changed(string);
+    callback user_selected(string /* user_id */);
+    callback navigate_back();
+    
+    VerticalBox {
+        alignment: start;
+        spacing: 10px;
+        padding: 20px;
+        
+        // Header
+        HorizontalBox {
+            Button {
+                text: "← Back";
+                clicked => {
+                    root.navigate_back();
+                }
+            }
+            Text {
+                text: "Search Users";
+                font-size: 20px;
+                font-weight: 700;
+                horizontal-alignment: center;
+            }
+        }
+        
+        // Search input
+        HorizontalBox {
+            Text {
+                text: "Search:";
+                width: 80px;
+                vertical-alignment: center;
+            }
+            LineEdit {
+                placeholder-text: "Enter username to search...";
+                text <=> root.search_query;
+                enabled: !root.is_searching;
+                edited => {
+                    root.search_changed(self.text);
+                }
+            }
+        }
+        
+        // Loading indicator
+        if root.is_searching: Text {
+            text: "Searching...";
+            color: #666;
+            font-size: 12px;
+        }
+        
+        // Error message
+        if root.error_message != "": Text {
+            text: root.error_message;
+            color: red;
+            font-size: 12px;
+        }
+        
+        // Results list
+        if root.search_results.length > 0: VerticalBox {
+            Text {
+                text: "Results:";
+                font-weight: 700;
+                font-size: 14px;
+            }
+            
+            ListView {
+                for result in root.search_results: Rectangle {
+                    background: #f0f0f0;
+                    border-radius: 5px;
+                    height: 40px; // Fixed height for list item
+                    
+                    HorizontalBox {
+                        spacing: 10px;
+                        padding: 10px;
+                        alignment: center;
+                        
+                        // Online status indicator
+                        Rectangle {
+                            width: 10px;
+                            height: 10px;
+                            border-radius: 5px;
+                            background: result.is_online ? green : gray;
+                        }
+                        
+                        Text {
+                            text: result.username;
+                            font-size: 14px;
+                            vertical-alignment: center;
+                            horizontal-stretch: 1;
+                        }
+                        
+                        Button {
+                            text: "Start Chat";
+                            clicked => {
+                                root.user_selected(result.user_id);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // No results message
+        if root.search_results.length == 0 && root.search_query != "" && !root.is_searching: Text {
+            text: "No users found";
+            color: #666;
+            font-size: 14px;
+            horizontal-alignment: center;
+        }
+    }
+}

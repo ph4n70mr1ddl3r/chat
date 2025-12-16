@@ -1,0 +1,64 @@
+import { VerticalBox, HorizontalBox, LineEdit, Button } from "std-widgets.slint";
+
+// Message input field
+export component MessageInput {
+    in property <string> placeholder;
+    in property <string> error_message; 
+    in property <string> error_text; 
+    in property <bool> is_sending;
+    in property <int> max_chars;
+    in-out property <string> text;
+
+    /// Triggered when user requests to send the message content
+    callback send(string);
+    /// Emitted when the user starts/stops typing
+    callback typing(bool);
+
+    VerticalBox {
+        spacing: 6px;
+
+        HorizontalBox {
+            spacing: 8px;
+
+            LineEdit {
+                placeholder-text: root.placeholder;
+                text <=> root.text;
+                horizontal-stretch: 1;
+                enabled: !root.is_sending;
+
+                edited => {
+                    root.typing(root.text != "");
+                }
+
+                accepted => {
+                    if (root.text != "") {
+                        root.send(root.text);
+                        root.text = "";
+                        root.typing(false);
+                    }
+                }
+            }
+
+            Button {
+                text: root.is_sending ? "Sending..." : "Send";
+                enabled: root.text != "" && !root.is_sending;
+                clicked => {
+                    root.send(root.text);
+                    root.text = "";
+                    root.typing(false);
+                }
+            }
+        }
+
+        HorizontalBox {
+            spacing: 8px;
+
+            if root.error_text != "": Text {
+                text: root.error_text;
+                font-size: 11px;
+                color: red;
+                horizontal-stretch: 1;
+            }
+        }
+    }
+}

@@ -1,0 +1,57 @@
+import { VerticalBox, HorizontalBox } from "std-widgets.slint";
+
+export component MessageBubble {
+    in property <string> sender_username;
+    in property <string> content;
+    in property <string> timestamp;
+    in property <string> status; // pending, sent, delivered, failed
+    in property <bool> is_own;
+
+    HorizontalBox {
+        alignment: root.is_own ? end : start;
+        
+        Rectangle {
+            background: root.is_own ? #DCF8C6 : #FFFFFF;
+            border-radius: 8px;
+            border-width: 1px;
+            border-color: #E0E0E0;
+            
+            VerticalBox {
+                padding: 8px;
+                spacing: 4px;
+                
+                HorizontalBox {
+                    spacing: 8px;
+                    
+                    Text {
+                        text: root.sender_username;
+                        font-size: 12px;
+                        font-weight: 700;
+                        color: root.is_own ? #075E54 : #333;
+                    }
+                    
+                    Text {
+                        text: root.timestamp;
+                        font-size: 10px;
+                        color: #999;
+                    }
+                }
+                
+                Text {
+                    text: root.content;
+                    font-size: 14px;
+                    color: #000;
+                    wrap: word-wrap;
+                    max-width: 300px;
+                }
+                
+                if root.is_own: Text {
+                    text: root.status; // pending, sent, delivered
+                    font-size: 10px;
+                    color: #999;
+                    horizontal-alignment: right;
+                }
+            }
+        }
+    }
+}

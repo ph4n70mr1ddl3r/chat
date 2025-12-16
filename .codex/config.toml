@@ -1,0 +1,4 @@
+model = "gpt-5.1-codex-max"
+model_reasoning_effort = "medium"
+[projects."/home/riddler/chat"]
+trust_level = "trusted"
