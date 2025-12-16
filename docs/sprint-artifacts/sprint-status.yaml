@@ -36,7 +36,7 @@ development_status:
   # WEEK 1: Design Tokens & Base Components
   week-1-design-tokens-base-components: in-progress
   us-001-design-token-constants: done
-  us-002-button-component: backlog
+  us-002-button-component: ready-for-dev
   us-003-textfield-component: backlog
   us-004-icon-component: backlog
   us-005-chip-component: backlog
