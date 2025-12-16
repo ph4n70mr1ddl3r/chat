@@ -81,12 +81,15 @@ impl MessageQueueService {
                 let now = chrono::Utc::now().timestamp() as u64;
                 let mut queue_lock = queue.write().await;
 
-                // Collect messages ready for retry
-                let mut messages_to_retry = Vec::new();
+                // Collect messages ready for retry and group by recipient for batching
+                let mut ready_by_recipient: HashMap<String, Vec<QueuedMessage>> = HashMap::new();
                 for (recipient_id, messages) in queue_lock.iter_mut() {
                     messages.retain(|msg| {
                         if msg.next_retry_at <= now {
-                            messages_to_retry.push(msg.clone());
+                            ready_by_recipient
+                                .entry(msg.recipient_id.clone())
+                                .or_insert_with(Vec::new)
+                                .push(msg.clone());
                             false // Remove from queue
                         } else {
                             true // Keep in queue
@@ -96,39 +99,15 @@ impl MessageQueueService {
 
                 drop(queue_lock);
 
-                // Attempt delivery for each message
-                for queued_msg in messages_to_retry {
-                    // Check if recipient is now online
-                    if connection_manager
-                        .is_user_online(&queued_msg.recipient_id)
-                        .await
-                    {
-                        // Attempt delivery
-                        match Self::deliver_message(
-                            &pool,
-                            &message_service,
-                            connection_manager.as_ref(),
-                            &queued_msg.message_id,
-                        )
-                        .await
-                        {
-                            Ok(_) => {
-                                // Success - mark as sent
-                                let _ = message_service
-                                    .update_message_status(
-                                        &queued_msg.message_id,
-                                        MessageStatus::Sent,
-                                    )
-                                    .await;
-                            }
-                            Err(_) => {
-                                // Failed - requeue with exponential backoff
-                                Self::requeue_message(queue.clone(), queued_msg).await;
-                            }
-                        }
+                // Attempt batched delivery per recipient
+                for (recipient_id, queued_messages) in ready_by_recipient {
+                    if connection_manager.is_user_online(&recipient_id).await {
+                        Self::deliver_batch(&pool, &message_service, connection_manager.as_ref(), queue.clone(), queued_messages).await;
                     } else {
-                        // Recipient still offline - requeue with exponential backoff
-                        Self::requeue_message(queue.clone(), queued_msg).await;
+                        // Recipient still offline - requeue all with backoff
+                        for msg in queued_messages {
+                            Self::requeue_message(queue.clone(), msg).await;
+                        }
                     }
                 }
             }
@@ -234,6 +213,34 @@ impl MessageQueueService {
         let _ = connection_manager.send_to_user(&sender.id, ack_msg).await;
 
         Ok(())
+    }
+
+    /// Deliver a batch of messages to a single recipient (sequentially) to reduce queue churn
+    async fn deliver_batch(
+        pool: &SqlitePool,
+        message_service: &MessageService,
+        connection_manager: &ConnectionManager,
+        queue: Arc<RwLock<HashMap<String, Vec<QueuedMessage>>>>,
+        messages: Vec<QueuedMessage>,
+    ) {
+        for queued_msg in messages {
+            match Self::deliver_message(
+                pool,
+                message_service,
+                connection_manager,
+                &queued_msg.message_id,
+            )
+            .await
+            {
+                Ok(_) => {}
+                Err(reason) => {
+                    // Recipient offline handled by caller; if we hit a transient failure, requeue
+                    if reason != "Recipient deleted" && reason != "Recipient not found" {
+                        Self::requeue_message(queue.clone(), queued_msg).await;
+                    }
+                }
+            }
+        }
     }
 
     /// Requeue a message with exponential backoff

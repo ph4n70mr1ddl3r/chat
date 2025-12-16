@@ -4,7 +4,8 @@
 
 use crate::db::queries;
 use crate::handlers::auth::ErrorResponse;
-use crate::services::AuthService;
+use crate::services::{AuthService, UserService};
+use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tracing::warn;
@@ -111,7 +112,7 @@ pub async fn get_current_user(user_id: String, pool: SqlitePool) -> Result<impl 
 pub async fn search_users(
     user_id: String,
     query: SearchQuery,
-    pool: SqlitePool,
+    user_service: Arc<UserService>,
 ) -> Result<impl Reply, Rejection> {
     // Validate query length (minimum 1 character)
     if query.q.is_empty() {
@@ -127,8 +128,8 @@ pub async fn search_users(
     // Cap limit at 50
     let limit = query.limit.min(50);
 
-    // Search users (excluding self)
-    let users = match queries::search_users_excluding_self(&pool, &query.q, &user_id, limit).await {
+    // Search users (excluding self) with cached results
+    let users = match user_service.search_users(&user_id, &query.q, limit).await {
         Ok(users) => users,
         Err(e) => {
             warn!("Failed to search users: {}", e);

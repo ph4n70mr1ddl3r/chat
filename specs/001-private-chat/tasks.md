@@ -643,9 +643,9 @@ Goal: Implement observability, security hardening, performance optimization, and
 ### Performance Optimization
 
 - [X] T139 [P] Add database indexes (per data-model.md) at `src/backend/db/migrations/001_initial_schema.sql`
-- [ ] T140 [P] Implement query result caching for user searches at `src/backend/services/user_service.rs` (60s TTL)
+- [X] T140 [P] Implement query result caching for user searches at `src/backend/services/user_service.rs` (60s TTL)
 - [X] T141 Create connection pooling at `src/backend/db/mod.rs` (sqlx pool with 10-20 connections)
-- [ ] T142 [P] Implement message batching for offline delivery at `src/backend/services/message_queue.rs`
+- [X] T142 [P] Implement message batching for offline delivery at `src/backend/services/message_queue.rs`
 
 ### Testing & Quality Assurance
 

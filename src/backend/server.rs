@@ -69,6 +69,7 @@ pub struct ServerState {
     pub connection_manager: Arc<websocket::ConnectionManager>,
     pub presence_service: PresenceService,
     pub message_queue: MessageQueueService,
+    pub user_service: Arc<crate::services::UserService>,
     pub global_rate_limiter: Arc<rate_limit::RateLimiter>,
     pub auth_rate_limiter: Arc<rate_limit::RateLimiter>,
     pub start_time: Instant,
@@ -80,6 +81,7 @@ impl ServerState {
         let pool_for_services = pool.clone();
         let global_rate_limiter = Arc::new(rate_limit::RateLimiter::global());
         let auth_rate_limiter = Arc::new(rate_limit::RateLimiter::auth());
+        let user_service = Arc::new(crate::services::UserService::new(pool.clone()));
         Self {
             pool,
             config,
@@ -89,6 +91,7 @@ impl ServerState {
             ),
             message_queue: MessageQueueService::new(pool_for_services, connection_manager.clone()),
             connection_manager,
+            user_service,
             global_rate_limiter,
             auth_rate_limiter,
             start_time: Instant::now(),
@@ -208,7 +211,7 @@ pub fn create_routes(
             .and(warp::query::<user::SearchQuery>())
             .and(state_filter.clone())
             .and_then(|user_id, query, state: ServerState| async move {
-                user::search_users(user_id, query, state.pool).await
+                user::search_users(user_id, query, state.user_service.clone()).await
             }),
     );
 
