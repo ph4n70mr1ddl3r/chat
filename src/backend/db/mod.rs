@@ -23,7 +23,9 @@ pub async fn init_db(db_path: impl AsRef<Path>) -> Result<SqlitePool> {
 
     info!("Initializing database: {}", db_url);
 
-    // Create connection options with WAL mode for better concurrency
+    // Create connection options with WAL mode for better concurrency.
+    // NOTE: MVP stores SQLite files in plaintext; production deployments should place
+    // the database on an encrypted volume (LUKS/BitLocker) or enable SQLCipher.
     let connect_options = SqliteConnectOptions::from_str(&db_url)?
         .create_if_missing(true)
         .pragma("journal_mode", "WAL")
@@ -32,6 +34,7 @@ pub async fn init_db(db_path: impl AsRef<Path>) -> Result<SqlitePool> {
 
     // Create connection pool
     let pool = SqlitePoolOptions::new()
+        .min_connections(5)
         .max_connections(20)
         .connect_with(connect_options)
         .await?;

@@ -40,8 +40,7 @@ impl ConversationService {
         };
 
         // Check if conversation already exists
-        if let Some(conversation) =
-            queries::get_conversation_by_users(&self.pool, &u1, &u2).await?
+        if let Some(conversation) = queries::get_conversation_by_users(&self.pool, &u1, &u2).await?
         {
             return Ok((conversation, false));
         }
@@ -100,8 +99,7 @@ mod tests {
             .unwrap();
 
         // Run migrations
-        let schema_sql =
-            include_str!("../../backend/db/migrations/001_initial_schema.sql");
+        let schema_sql = include_str!("../../backend/db/migrations/001_initial_schema.sql");
         for statement in schema_sql.split(';').filter(|s| !s.trim().is_empty()) {
             sqlx::query(statement).execute(&pool).await.unwrap();
         }
@@ -115,7 +113,11 @@ mod tests {
         let service = ConversationService::new(pool.clone());
 
         // Create test users
-        let user1 = User::new("alice".to_string(), "hash1".to_string(), "salt1".to_string());
+        let user1 = User::new(
+            "alice".to_string(),
+            "hash1".to_string(),
+            "salt1".to_string(),
+        );
         let user2 = User::new("bob".to_string(), "hash2".to_string(), "salt2".to_string());
 
         queries::insert_user(&pool, &user1).await.unwrap();
@@ -136,7 +138,11 @@ mod tests {
         let pool = setup_test_db().await;
         let service = ConversationService::new(pool.clone());
 
-        let user1 = User::new("alice".to_string(), "hash1".to_string(), "salt1".to_string());
+        let user1 = User::new(
+            "alice".to_string(),
+            "hash1".to_string(),
+            "salt1".to_string(),
+        );
         let user2 = User::new("bob".to_string(), "hash2".to_string(), "salt2".to_string());
 
         queries::insert_user(&pool, &user1).await.unwrap();
@@ -165,7 +171,11 @@ mod tests {
         let pool = setup_test_db().await;
         let service = ConversationService::new(pool.clone());
 
-        let user1 = User::new("alice".to_string(), "hash1".to_string(), "salt1".to_string());
+        let user1 = User::new(
+            "alice".to_string(),
+            "hash1".to_string(),
+            "salt1".to_string(),
+        );
         queries::insert_user(&pool, &user1).await.unwrap();
 
         // Try to create conversation with self
@@ -184,7 +194,11 @@ mod tests {
         let pool = setup_test_db().await;
         let service = ConversationService::new(pool.clone());
 
-        let user1 = User::new("alice".to_string(), "hash1".to_string(), "salt1".to_string());
+        let user1 = User::new(
+            "alice".to_string(),
+            "hash1".to_string(),
+            "salt1".to_string(),
+        );
         let user2 = User::new("bob".to_string(), "hash2".to_string(), "salt2".to_string());
 
         queries::insert_user(&pool, &user1).await.unwrap();

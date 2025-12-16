@@ -7,9 +7,9 @@ use chat_shared::protocol::MessageEnvelope;
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::RwLock;
 use warp::ws::Message as WsMessage;
-use tokio::sync::mpsc::UnboundedSender;
 
 /// WebSocket connection handle
 pub type ConnectionId = String;

@@ -49,34 +49,34 @@ impl FrameParser {
                 return Self::parse_text_frame(text);
             }
         }
-        
+
         if msg.is_binary() {
             return ParseResult::Error {
                 error_msg: ErrorResponse::server_error("Binary frames not supported"),
             };
         }
-        
+
         if msg.is_ping() {
             return ParseResult::Protocol {
                 frame_type: FrameType::Ping,
                 data: None,
             };
         }
-        
+
         if msg.is_pong() {
             return ParseResult::Protocol {
                 frame_type: FrameType::Pong,
                 data: None,
             };
         }
-        
+
         if msg.is_close() {
             return ParseResult::Close {
                 code: 1000,
                 reason: "Normal closure".to_string(),
             };
         }
-        
+
         ParseResult::Error {
             error_msg: ErrorResponse::server_error("Unsupported frame type"),
         }

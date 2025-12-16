@@ -23,7 +23,7 @@ pub async fn login_with_rate_limit(
     if rate_limiter.is_rate_limited(&ip_address).await {
         let remaining = rate_limiter.get_remaining_attempts(&ip_address).await;
         warn!("Rate limit exceeded for IP: {}", ip_address);
-        
+
         return Ok(reply::with_status(
             reply::json(&ErrorResponse {
                 error: "RATE_LIMITED".to_string(),
@@ -41,7 +41,7 @@ pub async fn login_with_rate_limit(
         Ok(Some(user)) => user,
         Ok(None) => {
             warn!("Login failed: user not found ({})", req.username);
-            
+
             // Record failed attempt
             rate_limiter.record_attempt(&ip_address).await;
             let _ = queries::insert_auth_log(
@@ -53,7 +53,7 @@ pub async fn login_with_rate_limit(
                 Some("User not found"),
             )
             .await;
-            
+
             return Ok(reply::with_status(
                 reply::json(&ErrorResponse {
                     error: "AUTH_ERROR".to_string(),
@@ -77,7 +77,7 @@ pub async fn login_with_rate_limit(
     // Check if user is deleted
     if user.is_deleted() {
         warn!("Login failed: deleted account ({})", req.username);
-        
+
         // Record failed attempt
         rate_limiter.record_attempt(&ip_address).await;
         let _ = queries::insert_auth_log(
@@ -89,7 +89,7 @@ pub async fn login_with_rate_limit(
             Some("Account deleted"),
         )
         .await;
-        
+
         return Ok(reply::with_status(
             reply::json(&ErrorResponse {
                 error: "ACCOUNT_DELETED".to_string(),
@@ -106,7 +106,7 @@ pub async fn login_with_rate_limit(
         }
         Ok(false) => {
             warn!("Login failed: invalid password ({})", req.username);
-            
+
             // Record failed attempt
             rate_limiter.record_attempt(&ip_address).await;
             let _ = queries::insert_auth_log(
@@ -118,7 +118,7 @@ pub async fn login_with_rate_limit(
                 Some("Invalid password"),
             )
             .await;
-            
+
             return Ok(reply::with_status(
                 reply::json(&ErrorResponse {
                     error: "AUTH_ERROR".to_string(),

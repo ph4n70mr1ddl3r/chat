@@ -8,20 +8,20 @@ use tracing::{info, warn};
 use warp::{reply, Rejection, Reply};
 
 use crate::db::queries;
+use crate::handlers::websocket::ConnectionManager;
 use crate::services::AuthService;
 use crate::validators;
-use crate::handlers::websocket::ConnectionManager;
 use std::sync::Arc;
 
 /// Signup request payload
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SignupRequest {
     pub username: String,
     pub password: String,
 }
 
 /// Login request payload
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct LoginRequest {
     pub username: String,
     pub password: String,
@@ -71,17 +71,19 @@ pub async fn logout_handler(
     if let Err(e) = queries::insert_auth_log(
         &pool,
         "unknown", // IP address not available in this context easily without extraction
-        None, // username not strictly needed if we have user_id but log takes username
+        None,      // username not strictly needed if we have user_id but log takes username
         queries::AuthEventType::Logout,
         None,
         Some(&format!("User {} logged out", user_id)),
-    ).await {
+    )
+    .await
+    {
         warn!("Failed to log logout event: {}", e);
     }
 
     // Disconnect active WebSocket connections
     connection_manager.disconnect_user(&user_id).await;
-    
+
     Ok(reply::with_status(
         reply::json(&serde_json::json!({ "message": "Logged out successfully" })),
         warp::http::StatusCode::OK,

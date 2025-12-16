@@ -2,16 +2,16 @@
 //!
 //! Runs on a background Tokio runtime and communicates with the UI through channels.
 
-use chat_shared::protocol::{AckData, MessageEnvelope, TextMessageData, TypingData, PresenceData};
+use crate::services::session;
+use chat_shared::protocol::{AckData, MessageEnvelope, PresenceData, TextMessageData, TypingData};
 use futures::{SinkExt, StreamExt};
 use serde::Deserialize;
 use std::collections::VecDeque;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
-use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::connect_async;
+use tokio_tungstenite::tungstenite::Message;
 use uuid::Uuid;
-use crate::services::session;
 
 /// Events emitted by the WebSocket client.
 #[derive(Debug, Clone)]
@@ -220,7 +220,7 @@ impl WebSocketClient {
 
     /// Disconnect WebSocket
     pub fn disconnect(&self) -> Result<(), String> {
-         self.command_tx
+        self.command_tx
             .send(WebSocketCommand::Disconnect)
             .map_err(|e| format!("Failed to queue disconnect: {}", e))
     }
@@ -249,8 +249,7 @@ where
             )) {
                 Ok(p) => p,
                 Err(e) => {
-                    let _ = event_tx
-                        .send(WebSocketEvent::Error(format!("Serialize error: {}", e)));
+                    let _ = event_tx.send(WebSocketEvent::Error(format!("Serialize error: {}", e)));
                     pending.pop_front();
                     continue;
                 }
@@ -264,8 +263,7 @@ where
             )) {
                 Ok(p) => p,
                 Err(e) => {
-                    let _ = event_tx
-                        .send(WebSocketEvent::Error(format!("Serialize error: {}", e)));
+                    let _ = event_tx.send(WebSocketEvent::Error(format!("Serialize error: {}", e)));
                     pending.pop_front();
                     continue;
                 }
@@ -385,13 +383,9 @@ fn handle_incoming_text(text: &str, event_tx: &mpsc::UnboundedSender<WebSocketEv
             let msg: Result<TextMessageData, _> = serde_json::from_value(envelope.data.clone());
             if let Ok(msg) = msg {
                 let _ = event_tx.send(WebSocketEvent::Message {
-                    conversation_id: msg
-                        .conversation_id
-                        .unwrap_or_else(|| "unknown".to_string()),
+                    conversation_id: msg.conversation_id.unwrap_or_else(|| "unknown".to_string()),
                     message_id: envelope.id,
-                    sender_username: msg
-                        .sender_username
-                        .unwrap_or_else(|| "Unknown".to_string()),
+                    sender_username: msg.sender_username.unwrap_or_else(|| "Unknown".to_string()),
                     content: msg.content,
                     status: msg.status.unwrap_or_else(|| "sent".to_string()),
                     timestamp: envelope.timestamp,

@@ -7,7 +7,8 @@
 use crate::db::queries;
 use crate::handlers::websocket::{ClientConnection, ConnectionManager, ErrorResponse};
 use crate::services::{
-    message_queue::MessageQueueService, message_service::{MessageService, MessageStatus},
+    message_queue::MessageQueueService,
+    message_service::{MessageService, MessageStatus},
 };
 use chat_shared::protocol::{MessageEnvelope, TextMessageData};
 use serde_json::json;
@@ -71,10 +72,9 @@ impl MessageHandler {
             conv_id.clone()
         } else {
             // Look up or create conversation between sender and recipient
-            let (conversation, _) = self.create_or_get_conversation(
-                sender.user_id.clone(),
-                data.recipient_id.clone(),
-            ).await?;
+            let (conversation, _) = self
+                .create_or_get_conversation(sender.user_id.clone(), data.recipient_id.clone())
+                .await?;
             conversation.id
         };
 
@@ -95,7 +95,11 @@ impl MessageHandler {
         // If message was just created (not a duplicate), deliver it
         if was_created {
             // Check if recipient is online
-            if self.connection_manager.is_user_online(&data.recipient_id).await {
+            if self
+                .connection_manager
+                .is_user_online(&data.recipient_id)
+                .await
+            {
                 // Deliver to recipient immediately
                 let delivery_message = self.build_message_envelope(
                     &message.id,
@@ -115,9 +119,7 @@ impl MessageHandler {
                     .await;
 
                 // Update message status to 'delivered'
-                self.message_service
-                    .mark_delivered(&message.id)
-                    .await?;
+                self.message_service.mark_delivered(&message.id).await?;
             } else {
                 // Recipient offline - queue for retry
                 self.message_queue
@@ -127,7 +129,12 @@ impl MessageHandler {
         }
 
         // Send acknowledgement to sender
-        let ack_status = if was_created && self.connection_manager.is_user_online(&data.recipient_id).await {
+        let ack_status = if was_created
+            && self
+                .connection_manager
+                .is_user_online(&data.recipient_id)
+                .await
+        {
             "delivered"
         } else {
             "sent"
@@ -152,7 +159,8 @@ impl MessageHandler {
         };
 
         // Check if conversation exists
-        if let Some(conversation) = queries::get_conversation_by_users(&self.pool, &u1, &u2).await? {
+        if let Some(conversation) = queries::get_conversation_by_users(&self.pool, &u1, &u2).await?
+        {
             return Ok((conversation, false));
         }
 
@@ -215,8 +223,8 @@ impl MessageHandler {
 mod tests {
     use super::*;
     use crate::handlers::websocket::ConnectionManager;
-    use crate::services::MessageQueueService;
     use crate::models::User;
+    use crate::services::MessageQueueService;
     use tokio::sync::mpsc;
 
     async fn setup_test_db() -> SqlitePool {
@@ -241,7 +249,11 @@ mod tests {
         let handler = MessageHandler::new(pool.clone(), conn_mgr.clone(), queue);
 
         // Create users
-        let user1 = User::new("alice".to_string(), "hash1".to_string(), "salt1".to_string());
+        let user1 = User::new(
+            "alice".to_string(),
+            "hash1".to_string(),
+            "salt1".to_string(),
+        );
         let user2 = User::new("bob".to_string(), "hash2".to_string(), "salt2".to_string());
 
         queries::insert_user(&pool, &user1).await.unwrap();
@@ -266,7 +278,7 @@ mod tests {
 
         // Should get acknowledgement (recipient offline)
         assert_eq!(responses.len(), 1);
-        
+
         // Verify message was stored
         let messages = queries::get_messages_by_conversation(&pool, "", 10, 0).await;
         // Note: This test would need the actual conversation ID to verify
@@ -280,7 +292,11 @@ mod tests {
         let handler = MessageHandler::new(pool.clone(), conn_mgr.clone(), queue);
 
         // Create users
-        let user1 = User::new("alice".to_string(), "hash1".to_string(), "salt1".to_string());
+        let user1 = User::new(
+            "alice".to_string(),
+            "hash1".to_string(),
+            "salt1".to_string(),
+        );
         let user2 = User::new("bob".to_string(), "hash2".to_string(), "salt2".to_string());
 
         queries::insert_user(&pool, &user1).await.unwrap();
@@ -320,7 +336,11 @@ mod tests {
         let handler = MessageHandler::new(pool.clone(), conn_mgr.clone(), queue);
 
         // Create users
-        let user1 = User::new("alice".to_string(), "hash1".to_string(), "salt1".to_string());
+        let user1 = User::new(
+            "alice".to_string(),
+            "hash1".to_string(),
+            "salt1".to_string(),
+        );
         let user2 = User::new("bob".to_string(), "hash2".to_string(), "salt2".to_string());
 
         queries::insert_user(&pool, &user1).await.unwrap();

@@ -23,10 +23,11 @@ pub fn with_auth(
 ) -> impl Filter<Extract = (String,), Error = Rejection> + Clone {
     headers_cloned()
         .and(warp::any().map(move || auth_service.clone()))
-        .and_then(|headers: HeaderMap, auth_service: Arc<AuthService>| async move {
-            extract_user_id(&headers, &auth_service)
-                .ok_or_else(|| reject::custom(Unauthorized))
-        })
+        .and_then(
+            |headers: HeaderMap, auth_service: Arc<AuthService>| async move {
+                extract_user_id(&headers, &auth_service).ok_or_else(|| reject::custom(Unauthorized))
+            },
+        )
 }
 
 /// Extract user ID from Authorization header

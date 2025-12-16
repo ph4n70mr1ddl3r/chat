@@ -1,9 +1,9 @@
 //! Login screen UI and logic
 
 use crate::services::{HttpClient, SessionManager};
-use std::sync::Arc;
 use crate::ui::LoginScreenComponent;
 use slint::ComponentHandle;
+use std::sync::Arc;
 
 /// Login screen controller
 pub struct LoginScreen {
@@ -17,7 +17,7 @@ impl LoginScreen {
         let ui = LoginScreenComponent::new().unwrap();
         let http_client = Arc::new(HttpClient::new(base_url));
         let session_manager = Arc::new(SessionManager::new());
-        
+
         let ui_weak = ui.as_weak();
         let client = http_client.clone();
         let session_mgr = session_manager.clone();
@@ -27,28 +27,28 @@ impl LoginScreen {
             let ui_handle = ui_weak.unwrap();
             let username = ui_handle.get_username().to_string();
             let password = ui_handle.get_password().to_string();
-            
+
             // Validate inputs
             if username.is_empty() {
                 ui_handle.set_error_message("Username cannot be empty".into());
                 return;
             }
-            
+
             if password.is_empty() {
                 ui_handle.set_error_message("Password cannot be empty".into());
                 return;
             }
-            
+
             // Clear previous error
             ui_handle.set_error_message("".into());
             ui_handle.set_is_loading(true);
-            
+
             // Call backend login endpoint in background thread
             let ui_weak_inner = ui_weak.clone();
             let http_client = client.clone();
             let session_manager = session_mgr.clone();
             let success_cb = callback.clone();
-            
+
             std::thread::spawn(move || {
                 let runtime = tokio::runtime::Runtime::new().unwrap();
                 match runtime.block_on(http_client.login(username.clone(), password.clone())) {
@@ -62,9 +62,9 @@ impl LoginScreen {
                         ) {
                             eprintln!("Failed to save session: {}", e);
                         }
-                        
+
                         let user_id = response.user_id.clone();
-                        
+
                         // Success! Update UI from event loop
                         slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_weak_inner.upgrade() {
@@ -88,16 +88,20 @@ impl LoginScreen {
                 }
             });
         });
-        
+
         let ui_weak = ui.as_weak();
         ui.on_navigate_to_signup(move || {
             // TODO: Navigate to signup screen
             println!("Navigate to signup");
         });
-        
-        Self { ui, http_client, session_manager }
+
+        Self {
+            ui,
+            http_client,
+            session_manager,
+        }
     }
-    
+
     pub fn show(&self) {
         self.ui.show().unwrap();
     }

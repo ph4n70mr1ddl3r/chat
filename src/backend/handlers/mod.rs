@@ -126,7 +126,11 @@ pub fn rejection(error: ApiError) -> warp::reject::Rejection {
 }
 
 /// Convenience helper to build a JSON error reply without going through rejection.
-pub fn error_reply(status: StatusCode, code: &'static str, message: impl Into<String>) -> impl warp::Reply {
+pub fn error_reply(
+    status: StatusCode,
+    code: &'static str,
+    message: impl Into<String>,
+) -> impl warp::Reply {
     warp::reply::with_status(
         warp::reply::json(&ErrorBody {
             code: code.to_string(),

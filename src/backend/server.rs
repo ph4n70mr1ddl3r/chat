@@ -11,11 +11,14 @@
 use anyhow::Error;
 use futures::{SinkExt, StreamExt};
 use sqlx::SqlitePool;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Instant;
-use tracing::{info, warn};
 use tokio::sync::mpsc;
+use tracing::{info, warn};
+use warp::cors::Cors;
 use warp::filters::ws::{WebSocket, Ws};
+use warp::http::header::{AUTHORIZATION, CONTENT_TYPE};
 use warp::http::StatusCode;
 use warp::{Filter, Rejection, Reply};
 
@@ -26,20 +29,34 @@ use crate::services::auth_service::TokenClaims;
 use crate::services::{MessageQueueService, PresenceService};
 
 use crate::handlers::{self, auth, conversation, server as server_handlers, user, websocket};
-use crate::middleware::auth as auth_middleware;
+use crate::middleware::{auth as auth_middleware, rate_limit};
 
 /// Server configuration
 #[derive(Clone)]
 pub struct ServerConfig {
     pub jwt_secret: String,
     pub max_message_size: usize,
+    pub allowed_origins: Vec<String>,
 }
 
 impl Default for ServerConfig {
     fn default() -> Self {
+        let origins = std::env::var("CORS_ALLOWED_ORIGINS")
+            .ok()
+            .map(|value| {
+                value
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect::<Vec<_>>()
+            })
+            .filter(|list| !list.is_empty())
+            .unwrap_or_else(|| vec!["*".to_string()]);
+
         Self {
             jwt_secret: std::env::var("JWT_SECRET").unwrap_or_else(|_| "secret".to_string()),
             max_message_size: 10 * 1024, // 10 KB
+            allowed_origins: origins,
         }
     }
 }
@@ -52,6 +69,8 @@ pub struct ServerState {
     pub connection_manager: Arc<websocket::ConnectionManager>,
     pub presence_service: PresenceService,
     pub message_queue: MessageQueueService,
+    pub global_rate_limiter: Arc<rate_limit::RateLimiter>,
+    pub auth_rate_limiter: Arc<rate_limit::RateLimiter>,
     pub start_time: Instant,
 }
 
@@ -59,6 +78,8 @@ impl ServerState {
     pub fn new(pool: SqlitePool, config: ServerConfig) -> Self {
         let connection_manager = Arc::new(websocket::ConnectionManager::new());
         let pool_for_services = pool.clone();
+        let global_rate_limiter = Arc::new(rate_limit::RateLimiter::global());
+        let auth_rate_limiter = Arc::new(rate_limit::RateLimiter::auth());
         Self {
             pool,
             config,
@@ -68,6 +89,8 @@ impl ServerState {
             ),
             message_queue: MessageQueueService::new(pool_for_services, connection_manager.clone()),
             connection_manager,
+            global_rate_limiter,
+            auth_rate_limiter,
             start_time: Instant::now(),
         }
     }
@@ -79,6 +102,8 @@ pub fn create_routes(
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     let state_clone_for_filter = state.clone();
     let state_filter = warp::any().map(move || state_clone_for_filter.clone());
+    let cors = build_cors(&state.config);
+    let rate_limit_filter = rate_limit::rate_limit_filter(state.global_rate_limiter.clone());
 
     let auth_service = Arc::new(crate::services::auth_service::AuthService::new(
         state.config.jwt_secret.clone(),
@@ -88,18 +113,21 @@ pub fn create_routes(
     // Health endpoint
     let health_route = warp::path!("health")
         .and(warp::get())
+        .and(rate_limit_filter.clone())
         .and(state_filter.clone())
         .and_then(server_handlers::health);
 
     // Status endpoint
     let status_route = warp::path!("status")
         .and(warp::get())
+        .and(rate_limit_filter.clone())
         .and(state_filter.clone())
         .and_then(server_handlers::status);
 
     // WebSocket endpoint with JWT authentication
     let websocket_route = warp::path!("socket")
         .and(warp::ws())
+        .and(rate_limit_filter.clone())
         .and(warp::query::raw())
         .and(state_filter.clone())
         .and_then(handle_websocket_upgrade);
@@ -109,14 +137,18 @@ pub fn create_routes(
         // POST /auth/signup
         warp::post()
             .and(warp::path("signup"))
+            .and(rate_limit_filter.clone())
             .and(warp::body::json())
+            .and(warp::addr::remote())
             .and(state_filter.clone())
             .and_then(handle_signup)
             .or(
                 // POST /auth/login
                 warp::post()
                     .and(warp::path("login"))
+                    .and(rate_limit_filter.clone())
                     .and(warp::body::json())
+                    .and(warp::addr::remote())
                     .and(state_filter.clone())
                     .and_then(handle_login),
             )
@@ -126,6 +158,7 @@ pub fn create_routes(
                     .and(warp::path("logout"))
                     .and(warp::path::end())
                     .and(with_auth.clone())
+                    .and(rate_limit_filter.clone())
                     .and(state_filter.clone())
                     .and_then(handle_logout),
             ),
@@ -138,6 +171,7 @@ pub fn create_routes(
             .and(warp::path("me"))
             .and(warp::path::end())
             .and(with_auth.clone())
+            .and(rate_limit_filter.clone())
             .and(state_filter.clone())
             .and_then(handle_get_current_user)
             .or(
@@ -146,9 +180,10 @@ pub fn create_routes(
                     .and(warp::path("me"))
                     .and(warp::path::end())
                     .and(with_auth.clone())
+                    .and(rate_limit_filter.clone())
                     .and(warp::body::json())
                     .and(state_filter.clone())
-                    .and_then(handle_delete_account)
+                    .and_then(handle_delete_account),
             )
             .or(
                 // POST /user/change-password
@@ -156,23 +191,25 @@ pub fn create_routes(
                     .and(warp::path("change-password"))
                     .and(warp::path::end())
                     .and(with_auth.clone())
+                    .and(rate_limit_filter.clone())
                     .and(warp::body::json())
                     .and(state_filter.clone())
-                    .and_then(handle_change_password)
+                    .and_then(handle_change_password),
             ),
     );
-    
+
     // User Search route (GET /users/search)
     // Note: This was separate in handlers/user.rs, likely mapped to /users/search
     let users_routes = warp::path("users").and(
         warp::path("search")
-        .and(warp::get())
-        .and(with_auth.clone())
-        .and(warp::query::<user::SearchQuery>())
-        .and(state_filter.clone())
-        .and_then(|user_id, query, state: ServerState| async move {
-            user::search_users(user_id, query, state.pool).await
-        })
+            .and(warp::get())
+            .and(with_auth.clone())
+            .and(rate_limit_filter.clone())
+            .and(warp::query::<user::SearchQuery>())
+            .and(state_filter.clone())
+            .and_then(|user_id, query, state: ServerState| async move {
+                user::search_users(user_id, query, state.pool).await
+            }),
     );
 
     // Conversations routes (stubs for Phase 3+)
@@ -181,6 +218,7 @@ pub fn create_routes(
         warp::get()
             .and(warp::path::end())
             .and(with_auth.clone())
+            .and(rate_limit_filter.clone())
             .and(warp::query::<conversation::ConversationsQuery>())
             .and(state_filter.clone())
             .and_then(|user_id, query, state: ServerState| async move {
@@ -192,6 +230,7 @@ pub fn create_routes(
                     .and(warp::path("start"))
                     .and(warp::path::end())
                     .and(with_auth.clone())
+                    .and(rate_limit_filter.clone())
                     .and(warp::body::json())
                     .and(state_filter.clone())
                     .and_then(|user_id, body, state: ServerState| async move {
@@ -205,6 +244,7 @@ pub fn create_routes(
                     .and(warp::path("messages"))
                     .and(warp::path::end())
                     .and(with_auth.clone())
+                    .and(rate_limit_filter.clone())
                     .and(warp::query::<conversation::MessagesQuery>())
                     .and(state_filter.clone())
                     .and_then(
@@ -226,6 +266,7 @@ pub fn create_routes(
                     .and(warp::path("search"))
                     .and(warp::path::end())
                     .and(with_auth.clone())
+                    .and(rate_limit_filter.clone())
                     .and(warp::query::<conversation::SearchMessagesQuery>())
                     .and(state_filter.clone())
                     .and_then(
@@ -250,14 +291,50 @@ pub fn create_routes(
         .or(user_routes)
         .or(users_routes)
         .or(conversation_routes)
-        .with(
-            warp::cors()
-                .allow_any_origin()
-                .allow_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
-                .allow_headers(vec!["Content-Type", "Authorization"]),
-        )
+        .with(cors)
+        .with(warp::reply::with::default_header(
+            "Strict-Transport-Security",
+            "max-age=63072000; includeSubDomains; preload",
+        ))
+        .with(warp::reply::with::default_header("X-Frame-Options", "DENY"))
+        .with(warp::reply::with::default_header(
+            "X-Content-Type-Options",
+            "nosniff",
+        ))
+        .with(warp::reply::with::default_header(
+            "Referrer-Policy",
+            "no-referrer",
+        ))
+        .with(warp::reply::with::default_header(
+            "Permissions-Policy",
+            "geolocation=(), microphone=()",
+        ))
+        .with(warp::reply::with::default_header(
+            "X-XSS-Protection",
+            "1; mode=block",
+        ))
         .with(warp::log("chat_server"))
         .recover(handle_rejection)
+}
+
+/// Build CORS policy based on server configuration
+fn build_cors(config: &ServerConfig) -> Cors {
+    let mut cors = warp::cors()
+        .allow_headers(vec![CONTENT_TYPE, AUTHORIZATION])
+        .allow_methods(vec!["GET", "POST", "DELETE", "OPTIONS"])
+        .max_age(86_400);
+
+    let allow_any = config.allowed_origins.iter().any(|o| o == "*");
+
+    if allow_any {
+        cors = cors.allow_any_origin();
+    } else {
+        for origin in &config.allowed_origins {
+            cors = cors.allow_origin(origin.as_str());
+        }
+    }
+
+    cors.build()
 }
 
 /// Handle WebSocket upgrade with JWT authentication
@@ -356,6 +433,17 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
                     user_id, msg
                 );
 
+                if let Err(error_response) = enforce_frame_size(&msg, state.config.max_message_size)
+                {
+                    warn!(
+                        "Closing connection for user {} due to oversized frame",
+                        user_id
+                    );
+                    let mut sender = ws_tx.lock().await;
+                    let _ = sender.send(error_response).await;
+                    break;
+                }
+
                 // Parse and dispatch message
                 let dispatch_result = MessageDispatcher::parse_message(&msg);
 
@@ -421,9 +509,17 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
 /// Handle signup request
 async fn handle_signup(
     req: auth::SignupRequest,
+    remote_addr: Option<SocketAddr>,
     state: ServerState,
 ) -> Result<impl Reply, Rejection> {
     info!("Signup request for username: {}", req.username);
+    let ip = client_ip(remote_addr);
+
+    state
+        .auth_rate_limiter
+        .check_and_record(&ip)
+        .await
+        .map_err(warp::reject::custom)?;
 
     // Delegate to auth handler
     auth::signup_handler(req, state.pool, state.config.jwt_secret).await
@@ -432,19 +528,33 @@ async fn handle_signup(
 /// Handle login request
 async fn handle_login(
     req: auth::LoginRequest,
+    remote_addr: Option<SocketAddr>,
     state: ServerState,
 ) -> Result<impl Reply, Rejection> {
     info!("Login request for username: {}", req.username);
+    let ip = client_ip(remote_addr);
+
+    if state.auth_rate_limiter.is_rate_limited(&ip).await {
+        return Err(warp::reject::custom(rate_limit::RateLimitExceeded {
+            retry_after_secs: state.auth_rate_limiter.retry_after_seconds(&ip).await,
+        }));
+    }
 
     // Delegate to auth handler
-    auth::login_handler(req, state.pool, state.config.jwt_secret).await
+    match auth::login_handler(req, state.pool.clone(), state.config.jwt_secret.clone()).await {
+        Ok(response) => {
+            state.auth_rate_limiter.reset(&ip).await;
+            Ok(response)
+        }
+        Err(err) => {
+            state.auth_rate_limiter.record_attempt(&ip).await;
+            Err(err)
+        }
+    }
 }
 
 /// Handle logout request
-async fn handle_logout(
-    user_id: String,
-    state: ServerState,
-) -> Result<impl Reply, Rejection> {
+async fn handle_logout(user_id: String, state: ServerState) -> Result<impl Reply, Rejection> {
     info!("Logout request for user: {}", user_id);
     auth::logout_handler(user_id, state.connection_manager, state.pool).await
 }
@@ -473,6 +583,27 @@ async fn handle_change_password(
     state: ServerState,
 ) -> Result<impl Reply, Rejection> {
     user::change_password(user_id, req, state.pool).await
+}
+
+fn client_ip(remote_addr: Option<SocketAddr>) -> String {
+    remote_addr
+        .map(|addr| addr.ip().to_string())
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+fn enforce_frame_size(
+    msg: &warp::ws::Message,
+    max_message_size: usize,
+) -> Result<(), warp::ws::Message> {
+    let payload_len = msg.as_bytes().len();
+    if payload_len > max_message_size {
+        Err(websocket::ErrorResponse::invalid_message_length(
+            payload_len,
+            max_message_size,
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 /// Handle rejections (errors) and convert to JSON responses
@@ -514,6 +645,21 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Rejection> {
             warp::http::StatusCode::METHOD_NOT_ALLOWED,
             "Method Not Allowed".to_string(),
         )
+    } else if let Some(rate_err) = err.find::<rate_limit::RateLimitExceeded>() {
+        let retry_after = rate_err.retry_after_secs;
+        let mut body = serde_json::json!({
+            "error": "RATE_LIMITED",
+            "message": "Too many requests; retry later"
+        });
+
+        if retry_after > 0 {
+            body["retryAfter"] = serde_json::json!(retry_after);
+        }
+
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&body),
+            warp::http::StatusCode::TOO_MANY_REQUESTS,
+        ));
     } else {
         (
             warp::http::StatusCode::INTERNAL_SERVER_ERROR,
@@ -560,6 +706,13 @@ pub async fn start_server(
 mod tests {
     use super::*;
     use sqlx::SqlitePool;
+    use std::sync::Arc;
+    use warp::http::header::CONTENT_TYPE;
+    use warp::http::header::{
+        ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_ORIGIN,
+        REFERRER_POLICY, STRICT_TRANSPORT_SECURITY, X_CONTENT_TYPE_OPTIONS, X_FRAME_OPTIONS,
+        X_XSS_PROTECTION,
+    };
     use warp::http::StatusCode;
     use warp::test::request;
 
@@ -646,6 +799,143 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
         let body = String::from_utf8_lossy(resp.body());
         assert!(body.contains("\"status\":\"running\""));
+    }
+
+    #[tokio::test]
+    async fn test_global_rate_limit_blocks_requests() {
+        let pool = init_test_pool().await;
+        let mut state = ServerState::new(pool, ServerConfig::default());
+        state.global_rate_limiter = Arc::new(rate_limit::RateLimiter::new(1, 60));
+        let routes = create_routes(state);
+
+        let first = request().method("GET").path("/health").reply(&routes).await;
+        assert_eq!(first.status(), StatusCode::OK);
+
+        let second = request().method("GET").path("/health").reply(&routes).await;
+        assert_eq!(second.status(), StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    #[tokio::test]
+    async fn test_auth_rate_limit_blocks_after_failures() {
+        let pool = init_test_pool().await;
+        let mut state = ServerState::new(pool, ServerConfig::default());
+        state.global_rate_limiter = Arc::new(rate_limit::RateLimiter::new(10, 60));
+        state.auth_rate_limiter = Arc::new(rate_limit::RateLimiter::new(2, 60));
+        let routes = create_routes(state);
+
+        let login_req = auth::LoginRequest {
+            username: "ghost".to_string(),
+            password: "wrong".to_string(),
+        };
+
+        let first = request()
+            .method("POST")
+            .path("/auth/login")
+            .header(CONTENT_TYPE, "application/json")
+            .json(&login_req)
+            .reply(&routes)
+            .await;
+        assert_eq!(first.status(), StatusCode::UNAUTHORIZED);
+
+        let second = request()
+            .method("POST")
+            .path("/auth/login")
+            .header(CONTENT_TYPE, "application/json")
+            .json(&login_req)
+            .reply(&routes)
+            .await;
+        assert_eq!(second.status(), StatusCode::UNAUTHORIZED);
+
+        let third = request()
+            .method("POST")
+            .path("/auth/login")
+            .header(CONTENT_TYPE, "application/json")
+            .json(&login_req)
+            .reply(&routes)
+            .await;
+        assert_eq!(third.status(), StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    #[tokio::test]
+    async fn test_security_headers_present() {
+        let pool = init_test_pool().await;
+        let state = ServerState::new(pool, ServerConfig::default());
+        let routes = create_routes(state);
+
+        let resp = request().method("GET").path("/health").reply(&routes).await;
+        let headers = resp.headers();
+
+        assert_eq!(
+            headers
+                .get(STRICT_TRANSPORT_SECURITY)
+                .and_then(|h| h.to_str().ok()),
+            Some("max-age=63072000; includeSubDomains; preload")
+        );
+        assert_eq!(
+            headers.get(X_FRAME_OPTIONS).and_then(|h| h.to_str().ok()),
+            Some("DENY")
+        );
+        assert_eq!(
+            headers
+                .get(X_CONTENT_TYPE_OPTIONS)
+                .and_then(|h| h.to_str().ok()),
+            Some("nosniff")
+        );
+        assert_eq!(
+            headers.get(X_XSS_PROTECTION).and_then(|h| h.to_str().ok()),
+            Some("1; mode=block")
+        );
+        assert_eq!(
+            headers.get(REFERRER_POLICY).and_then(|h| h.to_str().ok()),
+            Some("no-referrer")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cors_headers_present_on_options() {
+        let pool = init_test_pool().await;
+        let state = ServerState::new(pool, ServerConfig::default());
+        let routes = create_routes(state);
+
+        let resp = request()
+            .method("OPTIONS")
+            .path("/health")
+            .header("Origin", "https://example.com")
+            .header("Access-Control-Request-Method", "GET")
+            .reply(&routes)
+            .await;
+
+        let headers = resp.headers();
+        assert_eq!(
+            headers
+                .get(ACCESS_CONTROL_ALLOW_ORIGIN)
+                .and_then(|h| h.to_str().ok()),
+            Some("*")
+        );
+        let methods = headers
+            .get(ACCESS_CONTROL_ALLOW_METHODS)
+            .and_then(|h| h.to_str().ok())
+            .unwrap_or("")
+            .to_ascii_uppercase();
+        assert!(methods.contains("GET"));
+        assert!(methods.contains("POST"));
+        assert!(methods.contains("DELETE"));
+        assert!(methods.contains("OPTIONS"));
+
+        let allowed_headers = headers
+            .get(ACCESS_CONTROL_ALLOW_HEADERS)
+            .and_then(|h| h.to_str().ok())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        assert!(allowed_headers.contains("content-type"));
+        assert!(allowed_headers.contains("authorization"));
+    }
+
+    #[test]
+    fn test_enforce_frame_size_rejects_large_frames() {
+        let msg = warp::ws::Message::text("123456");
+        let result = enforce_frame_size(&msg, 4);
+        assert!(result.is_err());
     }
 
     async fn init_test_pool() -> SqlitePool {

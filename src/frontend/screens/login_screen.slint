@@ -66,6 +66,13 @@ export component LoginScreenComponent inherits Window {
             font-size: 12px;
             visible: root.error_message != "";
         }
+
+        Text {
+            text: "This is a self-hosted chat application. Your data is stored locally and never shared externally.";
+            color: #555;
+            font-size: 12px;
+            wrap: word-wrap;
+        }
         
         HorizontalBox {
             Text {

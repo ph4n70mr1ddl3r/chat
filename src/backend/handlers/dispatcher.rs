@@ -40,20 +40,20 @@ impl MessageDispatcher {
                 return Self::parse_text_frame(text);
             }
         }
-        
+
         if msg.is_binary() {
             return DispatchResult::Error {
                 error_msg: WsMessage::text("Binary frames not supported"),
             };
         }
-        
+
         if msg.is_close() {
             return DispatchResult::Close {
                 code: 1000,
                 reason: "Normal closure".to_string(),
             };
         }
-        
+
         if msg.is_ping() {
             return DispatchResult::Success {
                 msg_type: "ping".to_string(),
@@ -65,7 +65,7 @@ impl MessageDispatcher {
                 },
             };
         }
-        
+
         if msg.is_pong() {
             return DispatchResult::Success {
                 msg_type: "pong".to_string(),
@@ -77,7 +77,7 @@ impl MessageDispatcher {
                 },
             };
         }
-        
+
         DispatchResult::Error {
             error_msg: WsMessage::text("Unsupported message type"),
         }

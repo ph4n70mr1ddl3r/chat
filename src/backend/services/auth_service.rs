@@ -142,12 +142,7 @@ impl AuthService {
     }
 
     /// Verify user login credentials with structured logging around outcomes.
-    pub fn verify_login(
-        &self,
-        username: &str,
-        password: &str,
-        hash: &str,
-    ) -> Result<bool, String> {
+    pub fn verify_login(&self, username: &str, password: &str, hash: &str) -> Result<bool, String> {
         match Self::verify_password(password, hash) {
             Ok(true) => {
                 info!(

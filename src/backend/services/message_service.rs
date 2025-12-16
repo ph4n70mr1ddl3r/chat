@@ -181,7 +181,8 @@ impl MessageService {
         offset: u32,
     ) -> Result<Vec<Message>, String> {
         // Verify user is participant in conversation
-        let conversation = queries::get_conversation_by_id(&self.pool, conversation_id).await?
+        let conversation = queries::get_conversation_by_id(&self.pool, conversation_id)
+            .await?
             .ok_or("Conversation not found".to_string())?;
 
         if conversation.user1_id != user_id && conversation.user2_id != user_id {
@@ -321,7 +322,11 @@ mod tests {
         let service = MessageService::new(pool.clone());
 
         // Create users and conversation
-        let user1 = User::new("alice".to_string(), "hash1".to_string(), "salt1".to_string());
+        let user1 = User::new(
+            "alice".to_string(),
+            "hash1".to_string(),
+            "salt1".to_string(),
+        );
         let user2 = User::new("bob".to_string(), "hash2".to_string(), "salt2".to_string());
 
         queries::insert_user(&pool, &user1).await.unwrap();
@@ -357,7 +362,11 @@ mod tests {
         let pool = setup_test_db().await;
         let service = MessageService::new(pool.clone());
 
-        let mut user1 = User::new("alice".to_string(), "hash1".to_string(), "salt1".to_string());
+        let mut user1 = User::new(
+            "alice".to_string(),
+            "hash1".to_string(),
+            "salt1".to_string(),
+        );
         let user2 = User::new("bob".to_string(), "hash2".to_string(), "salt2".to_string());
 
         queries::insert_user(&pool, &user1).await.unwrap();
@@ -371,12 +380,7 @@ mod tests {
 
         // Try to send message
         let result = service
-            .send_message(
-                conv.id,
-                user1.id,
-                user2.id,
-                "Hello".to_string(),
-            )
+            .send_message(conv.id, user1.id, user2.id, "Hello".to_string())
             .await;
 
         assert!(result.is_err());

@@ -68,13 +68,17 @@ impl ChatScreen {
 
         // WebSocket client bootstrap
         let ui_weak = ui.as_weak();
-        let session_token = crate::services::session::get_token()
-            .ok_or("No authentication token found")?;
-        let ws_url =
-            std::env::var("SERVER_WS_URL").unwrap_or_else(|_| "ws://localhost:8080/socket".to_string());
+        let session_token =
+            crate::services::session::get_token().ok_or("No authentication token found")?;
+        let ws_url = std::env::var("SERVER_WS_URL")
+            .unwrap_or_else(|_| "ws://localhost:8080/socket".to_string());
         let (event_tx, event_rx) = mpsc::unbounded_channel::<crate::services::WebSocketEvent>();
-        let websocket_client =
-            Some(crate::services::WebSocketClient::connect(ws_url, session_token, event_tx, &runtime));
+        let websocket_client = Some(crate::services::WebSocketClient::connect(
+            ws_url,
+            session_token,
+            event_tx,
+            &runtime,
+        ));
         let event_handle = spawn_event_listener(
             event_rx,
             ui_weak.clone(),
@@ -103,13 +107,15 @@ impl ChatScreen {
             runtime.spawn(async move {
                 // 1. Call API logout
                 let _ = api_logout().await;
-                
+
                 // 2. Clear session locally
-                let _ = crate::services::session::get_session_manager().clear_session().await;
+                let _ = crate::services::session::get_session_manager()
+                    .clear_session()
+                    .await;
 
                 // 3. Disconnect WebSocket
                 if let Some(ws) = ws_client.as_ref() {
-                    ws.disconnect(); 
+                    ws.disconnect();
                 }
 
                 slint::invoke_from_event_loop(move || {
@@ -117,7 +123,8 @@ impl ChatScreen {
                         ui.hide().unwrap(); // Hide chat screen
                         logout_cb_inner(); // Trigger callback
                     }
-                }).ok();
+                })
+                .ok();
             });
         });
 
@@ -127,8 +134,8 @@ impl ChatScreen {
         ui.on_open_settings(move || {
             let ui_weak = ui_weak_settings.clone();
             let settings_cb_inner = settings_cb.clone();
-            
-            // Just hide and call callback, no async needed here strictly speaking, 
+
+            // Just hide and call callback, no async needed here strictly speaking,
             // but for consistency we use invoke_from_event_loop if we were in async.
             // Here we are in UI callback (main thread).
             // But we want to ensure clean state.
@@ -146,7 +153,7 @@ impl ChatScreen {
         let selected_conv_for_select = selected_conversation_id.clone();
         let selected_participant_for_select = selected_participant_id.clone();
         let ui_weak_select = ui.as_weak();
-        
+
         // Set up conversation selection callback
         ui.on_conversation_selected(move |conversation_id| {
             let ui_weak = ui_weak_select.clone();
@@ -156,14 +163,14 @@ impl ChatScreen {
             let selected_conv = selected_conv_for_select.clone();
             let selected_participant = selected_participant_for_select.clone();
             let user_id = user_id_clone.clone();
-            
+
             let ui = match ui_weak.upgrade() {
                 Some(ui) => ui,
                 None => return,
             };
-            
+
             let conv_id = conversation_id.to_string();
-            
+
             // Update selected conversation metadata
             if let Some(conv) = conversations
                 .lock()
@@ -178,19 +185,21 @@ impl ChatScreen {
                 slint::invoke_from_event_loop({
                     let conv_id = conv_id.clone();
                     let ui_weak = ui_weak.clone();
-                        move || {
-                            if let Some(ui) = ui_weak.upgrade() {
-                                ui.set_selected_conversation_id(conv_id.clone().into());
-                                ui.set_selected_participant_id(conv.participant_id.clone().into());
-                                ui.set_selected_participant_username(conv.participant_username.clone().into());
-                                ui.set_selected_participant_is_online(conv.participant_is_online);
-                                ui.set_typing_indicator("".into());
-                            }
+                    move || {
+                        if let Some(ui) = ui_weak.upgrade() {
+                            ui.set_selected_conversation_id(conv_id.clone().into());
+                            ui.set_selected_participant_id(conv.participant_id.clone().into());
+                            ui.set_selected_participant_username(
+                                conv.participant_username.clone().into(),
+                            );
+                            ui.set_selected_participant_is_online(conv.participant_is_online);
+                            ui.set_typing_indicator("".into());
                         }
-                    })
+                    }
+                })
                 .ok();
             }
-            
+
             runtime.spawn(async move {
                 // Load messages for selected conversation
                 match load_messages(&conv_id).await {
@@ -211,36 +220,37 @@ impl ChatScreen {
                             if let Some(ui) = ui_weak.upgrade() {
                                 ui.set_error_message(err_msg.into());
                             }
-                        }).ok();
+                        })
+                        .ok();
                     }
                 }
             });
         });
-        
+
         // Set up send message callback
         let ui_weak_send = ui.as_weak();
         let messages_send = messages.clone();
         let selected_participant_for_send = selected_participant_id.clone();
         let ws_for_send = websocket_client.clone();
         let typing_state_for_send = typing_state.clone();
-        
+
         ui.on_send_message(move |content| {
             let ui_weak = ui_weak_send.clone();
             let messages = messages_send.clone();
             let selected_participant = selected_participant_for_send.clone();
             let ws_client = ws_for_send.clone();
             let typing_state = typing_state_for_send.clone();
-            
+
             let ui = match ui_weak.upgrade() {
                 Some(ui) => ui,
                 None => return,
             };
-            
+
             let conversation_id = ui.get_selected_conversation_id().to_string();
             if conversation_id.is_empty() {
                 return;
             }
-            
+
             let participant_id = selected_participant
                 .lock()
                 .unwrap()
@@ -249,7 +259,7 @@ impl ChatScreen {
             if participant_id.is_empty() {
                 return;
             }
-            
+
             let message_content = content.to_string();
             let message_id = Uuid::new_v4().to_string();
             let timestamp = chrono::Utc::now().timestamp();
@@ -272,7 +282,7 @@ impl ChatScreen {
                 messages.clone(),
                 conversation_id.clone(),
             );
-            
+
             if let Some(ws) = ws_client.as_ref() {
                 if let Err(e) = ws.send_message(
                     message_id.clone(),
@@ -312,7 +322,7 @@ impl ChatScreen {
             let ws_client = ws_for_typing.clone();
             let typing_state = typing_state_for_cb.clone();
             let selected_participant = selected_participant_for_typing.clone();
-            
+
             let participant_id = selected_participant
                 .lock()
                 .unwrap()
@@ -341,31 +351,31 @@ impl ChatScreen {
                 }
             }
         });
-        
+
         // Search callbacks
         let ui_weak_search = ui.as_weak();
         let runtime_for_search = runtime.clone();
         ui.on_search_in_conversation(move |query| {
             let ui_weak = ui_weak_search.clone();
             let runtime = runtime_for_search.clone();
-            
+
             let ui = match ui_weak.upgrade() {
                 Some(ui) => ui,
                 None => return,
             };
-            
+
             let conversation_id = ui.get_selected_conversation_id().to_string();
             if conversation_id.is_empty() {
                 return;
             }
-            
+
             ui.set_is_search_active(true);
             ui.set_search_query(query.clone().into());
-            
+
             runtime.spawn(async move {
                 match search_messages(&conversation_id, &query).await {
                     Ok(messages) => {
-                         let ui_messages: Vec<MessageItem> = messages
+                        let ui_messages: Vec<MessageItem> = messages
                             .iter()
                             .map(|m| MessageItem {
                                 message_id: m.message_id.clone().into(),
@@ -383,7 +393,8 @@ impl ChatScreen {
                                 let model = Rc::new(VecModel::from(ui_messages));
                                 ui.set_messages(ModelRc::from(model));
                             }
-                        }).ok();
+                        })
+                        .ok();
                     }
                     Err(e) => {
                         let err_msg = format!("Search failed: {}", e);
@@ -391,7 +402,8 @@ impl ChatScreen {
                             if let Some(ui) = ui_weak.upgrade() {
                                 ui.set_error_message(err_msg.into());
                             }
-                        }).ok();
+                        })
+                        .ok();
                     }
                 }
             });
@@ -402,26 +414,22 @@ impl ChatScreen {
         ui.on_clear_search(move || {
             let ui_weak = ui_weak_clear.clone();
             let messages = messages_for_clear.clone();
-            
+
             let ui = match ui_weak.upgrade() {
                 Some(ui) => ui,
                 None => return,
             };
-            
+
             let conversation_id = ui.get_selected_conversation_id().to_string();
             if conversation_id.is_empty() {
                 return;
             }
-            
+
             ui.set_is_search_active(false);
             ui.set_search_query("".into());
-            
+
             // Restore original messages
-            render_messages_for_conversation(
-                ui_weak.clone(),
-                messages.clone(),
-                conversation_id,
-            );
+            render_messages_for_conversation(ui_weak.clone(), messages.clone(), conversation_id);
         });
 
         // Load initial conversations
@@ -443,19 +451,20 @@ impl ChatScreen {
                             message_count: c.message_count,
                         })
                         .collect();
-                    
+
                     {
                         let mut cache = conversations_init.lock().unwrap();
                         *cache = conversations;
                     }
-                    
+
                     let ui_weak = ui_weak_init.clone();
                     slint::invoke_from_event_loop(move || {
                         if let Some(ui) = ui_weak.upgrade() {
                             let model = Rc::new(VecModel::from(slint_conversations));
                             ui.set_conversations(ModelRc::from(model));
                         }
-                    }).ok();
+                    })
+                    .ok();
                 }
                 Err(e) => {
                     let err_msg = format!("Failed to load conversations: {}", e);
@@ -464,11 +473,12 @@ impl ChatScreen {
                         if let Some(ui) = ui_weak.upgrade() {
                             ui.set_error_message(err_msg.into());
                         }
-                    }).ok();
+                    })
+                    .ok();
                 }
             }
         });
-        
+
         Ok(Self {
             ui,
             current_user_id,
@@ -483,11 +493,11 @@ impl ChatScreen {
             _event_handle: Some(event_handle),
         })
     }
-    
+
     pub fn show(&self) {
         self.ui.show().unwrap();
     }
-    
+
     pub fn as_weak(&self) -> slint::Weak<ChatScreenComponent> {
         self.ui.as_weak()
     }
@@ -560,7 +570,10 @@ fn spawn_event_listener(
                                         let mut cache = conversations_refresh.lock().unwrap();
                                         *cache = fresh_conversations.clone();
                                     }
-                                    render_conversations(ui_refresh.clone(), conversations_refresh.clone());
+                                    render_conversations(
+                                        ui_refresh.clone(),
+                                        conversations_refresh.clone(),
+                                    );
                                 }
 
                                 if let Some(active_conv) =
@@ -593,20 +606,27 @@ fn spawn_event_listener(
                             slint::invoke_from_event_loop({
                                 let reason = reason.clone();
                                 move || {
-                                if let Some(ui) = ui_for_status.upgrade() {
-                                    ui.set_connection_status(format!("Disconnected: {}", reason).into());
-                                    ui.set_connection_online(false);
-                                    ui.set_error_dialog_title("Disconnected".into());
-                                    ui.set_error_dialog_message(reason.clone().into());
-                                    ui.set_show_error_dialog(true);
-                                }
+                                    if let Some(ui) = ui_for_status.upgrade() {
+                                        ui.set_connection_status(
+                                            format!("Disconnected: {}", reason).into(),
+                                        );
+                                        ui.set_connection_online(false);
+                                        ui.set_error_dialog_title("Disconnected".into());
+                                        ui.set_error_dialog_message(reason.clone().into());
+                                        ui.set_show_error_dialog(true);
+                                    }
                                 }
                             })
                             .ok();
                         }
                     }
                 }
-                crate::services::WebSocketEvent::Presence { user_id, username: _, is_online, last_seen_at: _ } => {
+                crate::services::WebSocketEvent::Presence {
+                    user_id,
+                    username: _,
+                    is_online,
+                    last_seen_at: _,
+                } => {
                     // Update conversation list
                     let mut needs_refresh = false;
                     {
@@ -618,7 +638,7 @@ fn spawn_event_listener(
                             }
                         }
                     }
-                    
+
                     if needs_refresh {
                         render_conversations(ui_weak.clone(), conversations.clone());
                     }
@@ -632,12 +652,21 @@ fn spawn_event_listener(
                                 if let Some(ui) = ui_weak_update.upgrade() {
                                     ui.set_selected_participant_is_online(is_online);
                                 }
-                            }).ok();
+                            })
+                            .ok();
                         }
                     }
                 }
-                crate::services::WebSocketEvent::Message { conversation_id, message_id, sender_username, content, status, timestamp } => {
-                    if selected_conversation_id.lock().unwrap().as_deref() != Some(&conversation_id) {
+                crate::services::WebSocketEvent::Message {
+                    conversation_id,
+                    message_id,
+                    sender_username,
+                    content,
+                    status,
+                    timestamp,
+                } => {
+                    if selected_conversation_id.lock().unwrap().as_deref() != Some(&conversation_id)
+                    {
                         continue;
                     }
 
@@ -654,16 +683,23 @@ fn spawn_event_listener(
                         });
                     }
 
-                    let is_searching = ui_weak.upgrade().map(|ui| ui.get_is_search_active()).unwrap_or(false);
+                    let is_searching = ui_weak
+                        .upgrade()
+                        .map(|ui| ui.get_is_search_active())
+                        .unwrap_or(false);
                     if !is_searching {
-                         render_messages_for_conversation(
+                        render_messages_for_conversation(
                             ui_weak.clone(),
                             messages.clone(),
                             conversation_id.clone(),
                         );
                     }
                 }
-                crate::services::WebSocketEvent::Ack { message_id, status, conversation_id } => {
+                crate::services::WebSocketEvent::Ack {
+                    message_id,
+                    status,
+                    conversation_id,
+                } => {
                     {
                         let mut cache = messages.lock().unwrap();
                         if let Some(msg) = cache.iter_mut().find(|m| {
@@ -679,7 +715,10 @@ fn spawn_event_listener(
 
                     let selected = selected_conversation_id.lock().unwrap().clone();
                     if let Some(selected_id) = selected {
-                        let is_searching = ui_weak.upgrade().map(|ui| ui.get_is_search_active()).unwrap_or(false);
+                        let is_searching = ui_weak
+                            .upgrade()
+                            .map(|ui| ui.get_is_search_active())
+                            .unwrap_or(false);
                         if !is_searching {
                             render_messages_for_conversation(
                                 ui_weak.clone(),
@@ -689,7 +728,12 @@ fn spawn_event_listener(
                         }
                     }
                 }
-                crate::services::WebSocketEvent::Typing { sender_id, sender_username, recipient_id, is_typing } => {
+                crate::services::WebSocketEvent::Typing {
+                    sender_id,
+                    sender_username,
+                    recipient_id,
+                    is_typing,
+                } => {
                     if recipient_id != current_user_id {
                         continue;
                     }
@@ -859,7 +903,7 @@ fn resend_pending_messages(
 fn format_timestamp(timestamp: Option<i64>) -> String {
     match timestamp {
         Some(ts) => {
-            use chrono::{DateTime, Utc, Local};
+            use chrono::{DateTime, Local, Utc};
             let dt = DateTime::<Utc>::from_timestamp(ts, 0).unwrap_or_default();
             let local: DateTime<Local> = dt.into();
             local.format("%I:%M %p").to_string()
@@ -870,30 +914,31 @@ fn format_timestamp(timestamp: Option<i64>) -> String {
 
 // API call to logout
 async fn api_logout() -> Result<(), Box<dyn std::error::Error>> {
-    let base_url = std::env::var("SERVER_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
-    
+    let base_url =
+        std::env::var("SERVER_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
+
     let token = match crate::services::session::get_token() {
         Some(t) => t,
         None => return Ok(()), // Already logged out or no token
     };
-    
+
     let client = reqwest::Client::new();
     let _ = client
         .post(format!("{}/auth/logout", base_url))
         .header("Authorization", format!("Bearer {}", token))
         .send()
         .await?;
-    
+
     Ok(())
 }
 
 // API call to load conversations
 async fn load_conversations() -> Result<Vec<ConversationData>, Box<dyn std::error::Error>> {
-    let base_url = std::env::var("SERVER_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
-    
-    let token = crate::services::session::get_token()
-        .ok_or("No authentication token found")?;
-    
+    let base_url =
+        std::env::var("SERVER_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
+
+    let token = crate::services::session::get_token().ok_or("No authentication token found")?;
+
     #[derive(serde::Deserialize)]
     struct ApiConversation {
         conversation_id: String,
@@ -903,7 +948,7 @@ async fn load_conversations() -> Result<Vec<ConversationData>, Box<dyn std::erro
         last_message_at: Option<i64>,
         message_count: i32,
     }
-    
+
     let client = reqwest::Client::new();
     let response = client
         .get(format!("{}/conversations", base_url))
@@ -911,13 +956,13 @@ async fn load_conversations() -> Result<Vec<ConversationData>, Box<dyn std::erro
         .header("Authorization", format!("Bearer {}", token))
         .send()
         .await?;
-    
+
     if !response.status().is_success() {
         return Err(format!("Failed to load conversations: {}", response.status()).into());
     }
-    
+
     let api_conversations: Vec<ApiConversation> = response.json().await?;
-    
+
     Ok(api_conversations
         .into_iter()
         .map(|c| ConversationData {
@@ -933,16 +978,18 @@ async fn load_conversations() -> Result<Vec<ConversationData>, Box<dyn std::erro
 }
 
 // API call to load messages for a conversation
-async fn load_messages(conversation_id: &str) -> Result<Vec<MessageData>, Box<dyn std::error::Error>> {
-    let base_url = std::env::var("SERVER_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
-    
-    let token = crate::services::session::get_token()
-        .ok_or("No authentication token found")?;
-    
+async fn load_messages(
+    conversation_id: &str,
+) -> Result<Vec<MessageData>, Box<dyn std::error::Error>> {
+    let base_url =
+        std::env::var("SERVER_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
+
+    let token = crate::services::session::get_token().ok_or("No authentication token found")?;
+
     let session = crate::services::session::get_session_manager()
         .get_current_session()
         .ok_or("No session found")?;
-    
+
     #[derive(serde::Deserialize)]
     struct ApiMessage {
         id: String,
@@ -952,21 +999,24 @@ async fn load_messages(conversation_id: &str) -> Result<Vec<MessageData>, Box<dy
         created_at: i64,
         status: String,
     }
-    
+
     let client = reqwest::Client::new();
     let response = client
-        .get(format!("{}/conversations/{}/messages", base_url, conversation_id))
+        .get(format!(
+            "{}/conversations/{}/messages",
+            base_url, conversation_id
+        ))
         .query(&[("limit", "100"), ("offset", "0")])
         .header("Authorization", format!("Bearer {}", token))
         .send()
         .await?;
-    
+
     if !response.status().is_success() {
         return Err(format!("Failed to load messages: {}", response.status()).into());
     }
-    
+
     let api_messages: Vec<ApiMessage> = response.json().await?;
-    
+
     Ok(api_messages
         .into_iter()
         .map(|m| MessageData {
@@ -982,16 +1032,19 @@ async fn load_messages(conversation_id: &str) -> Result<Vec<MessageData>, Box<dy
 }
 
 // API call to search messages in a conversation
-async fn search_messages(conversation_id: &str, query: &str) -> Result<Vec<MessageData>, Box<dyn std::error::Error>> {
-    let base_url = std::env::var("SERVER_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
-    
-    let token = crate::services::session::get_token()
-        .ok_or("No authentication token found")?;
-    
+async fn search_messages(
+    conversation_id: &str,
+    query: &str,
+) -> Result<Vec<MessageData>, Box<dyn std::error::Error>> {
+    let base_url =
+        std::env::var("SERVER_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
+
+    let token = crate::services::session::get_token().ok_or("No authentication token found")?;
+
     let session = crate::services::session::get_session_manager()
         .get_current_session()
         .ok_or("No session found")?;
-    
+
     #[derive(serde::Deserialize)]
     struct ApiMessage {
         id: String,
@@ -1001,21 +1054,24 @@ async fn search_messages(conversation_id: &str, query: &str) -> Result<Vec<Messa
         created_at: i64,
         status: String,
     }
-    
+
     let client = reqwest::Client::new();
     let response = client
-        .get(format!("{}/conversations/{}/search", base_url, conversation_id))
+        .get(format!(
+            "{}/conversations/{}/search",
+            base_url, conversation_id
+        ))
         .query(&[("q", query), ("limit", "50")])
         .header("Authorization", format!("Bearer {}", token))
         .send()
         .await?;
-    
+
     if !response.status().is_success() {
         return Err(format!("Failed to search messages: {}", response.status()).into());
     }
-    
+
     let api_messages: Vec<ApiMessage> = response.json().await?;
-    
+
     Ok(api_messages
         .into_iter()
         .map(|m| MessageData {

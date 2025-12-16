@@ -44,8 +44,7 @@ impl PresenceService {
             None => return Ok(()), // User removed; nothing to do
         };
 
-        let conversations =
-            queries::get_user_conversations(&self.pool, user_id, 200, 0).await?;
+        let conversations = queries::get_user_conversations(&self.pool, user_id, 200, 0).await?;
 
         // Collect participant ids (the other user in each conversation)
         let mut recipients = Vec::new();

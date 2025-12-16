@@ -611,12 +611,12 @@ Goal: Implement observability, security hardening, performance optimization, and
 
 ### Security & Input Validation
 
-- [ ] T134 [P] Implement CORS headers at `src/backend/server.rs` (allow origin, methods, headers)
-- [ ] T135 [P] Implement rate limiting middleware at `src/backend/middleware/rate_limit.rs` (1000 req/min global, 5 attempts/15min auth)
-- [ ] T136 [P] Add SQL injection prevention via sqlx parameterized queries (verify all queries in Phase 6-9)
-- [ ] T137 [P] Implement WebSocket frame size limits at `src/backend/handlers/websocket.rs` (reject frames > 10 KB)
-- [ ] T138 Create security headers at `src/backend/server.rs` (Strict-Transport-Security, X-Frame-Options, etc.)
-- [ ] T138_A [P] Implement data privacy & encryption compliance (satisfies FR-012)
+- [X] T134 [P] Implement CORS headers at `src/backend/server.rs` (allow origin, methods, headers)
+- [X] T135 [P] Implement rate limiting middleware at `src/backend/middleware/rate_limit.rs` (1000 req/min global, 5 attempts/15min auth)
+- [X] T136 [P] Add SQL injection prevention via sqlx parameterized queries (verify all queries in Phase 6-9)
+- [X] T137 [P] Implement WebSocket frame size limits at `src/backend/handlers/websocket.rs` (reject frames > 10 KB)
+- [X] T138 Create security headers at `src/backend/server.rs` (Strict-Transport-Security, X-Frame-Options, etc.)
+- [X] T138_A [P] Implement data privacy & encryption compliance (satisfies FR-012)
   - **MVP (Dev/Test)**: Use plaintext SQLite; add code comment documenting production encryption requirement
   - **Production Implementation** (separate task): Document encryption strategy in `docs/DEPLOYMENT.md`:
     - Linux: Full-disk encryption using LUKS (dm-crypt)
@@ -642,9 +642,9 @@ Goal: Implement observability, security hardening, performance optimization, and
 
 ### Performance Optimization
 
-- [ ] T139 [P] Add database indexes (per data-model.md) at `src/backend/db/migrations/001_initial_schema.sql`
+- [X] T139 [P] Add database indexes (per data-model.md) at `src/backend/db/migrations/001_initial_schema.sql`
 - [ ] T140 [P] Implement query result caching for user searches at `src/backend/services/user_service.rs` (60s TTL)
-- [ ] T141 Create connection pooling at `src/backend/db/mod.rs` (sqlx pool with 10-20 connections)
+- [X] T141 Create connection pooling at `src/backend/db/mod.rs` (sqlx pool with 10-20 connections)
 - [ ] T142 [P] Implement message batching for offline delivery at `src/backend/services/message_queue.rs`
 
 ### Testing & Quality Assurance

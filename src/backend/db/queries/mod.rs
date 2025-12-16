@@ -67,7 +67,7 @@ pub async fn get_failed_attempts(
 
     let result = sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*) FROM auth_logs 
-         WHERE ip_address = ? AND event_type = 'login_failed' AND created_at > ?"
+         WHERE ip_address = ? AND event_type = 'login_failed' AND created_at > ?",
     )
     .bind(ip_address)
     .bind(window_start)
@@ -179,14 +179,16 @@ pub async fn update_password(
 ) -> Result<(), String> {
     let now = chrono::Utc::now().timestamp_millis();
 
-    sqlx::query("UPDATE users SET password_hash = ?, password_salt = ?, updated_at = ? WHERE id = ?")
-        .bind(password_hash)
-        .bind(password_salt)
-        .bind(now)
-        .bind(user_id)
-        .execute(pool)
-        .await
-        .map_err(|e| format!("Failed to update password: {}", e))?;
+    sqlx::query(
+        "UPDATE users SET password_hash = ?, password_salt = ?, updated_at = ? WHERE id = ?",
+    )
+    .bind(password_hash)
+    .bind(password_salt)
+    .bind(now)
+    .bind(user_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Failed to update password: {}", e))?;
 
     Ok(())
 }
@@ -284,7 +286,7 @@ pub async fn get_conversation_by_users(
     sqlx::query_as::<_, Conversation>(
         "SELECT id, user1_id, user2_id, created_at, updated_at, last_message_at, message_count
          FROM conversations
-         WHERE user1_id = ? AND user2_id = ?"
+         WHERE user1_id = ? AND user2_id = ?",
     )
     .bind(user1_id)
     .bind(user2_id)
@@ -301,7 +303,7 @@ pub async fn get_conversation_by_id(
     sqlx::query_as::<_, Conversation>(
         "SELECT id, user1_id, user2_id, created_at, updated_at, last_message_at, message_count
          FROM conversations
-         WHERE id = ?"
+         WHERE id = ?",
     )
     .bind(conversation_id)
     .fetch_optional(pool)
@@ -321,7 +323,7 @@ pub async fn get_user_conversations(
          FROM conversations
          WHERE user1_id = ? OR user2_id = ?
          ORDER BY updated_at DESC
-         LIMIT ? OFFSET ?"
+         LIMIT ? OFFSET ?",
     )
     .bind(user_id)
     .bind(user_id)
@@ -529,6 +531,41 @@ mod tests {
         let found = find_user_by_username(&pool, "alice").await?;
         assert!(found.is_some());
         assert_eq!(found.unwrap().username, "alice");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_search_users_is_safe_against_sql_injection(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .connect("sqlite::memory:")
+            .await?;
+
+        // Run migrations
+        let schema_sql = include_str!("../migrations/001_initial_schema.sql");
+        for statement in schema_sql.split(';').filter(|s| !s.trim().is_empty()) {
+            sqlx::query(statement).execute(&pool).await?;
+        }
+
+        // Insert a benign user
+        let user = User::new(
+            "alice".to_string(),
+            "hash123".to_string(),
+            "salt456".to_string(),
+        );
+        insert_user(&pool, &user).await?;
+
+        // Attempt an injection payload in the search query
+        let malicious = "alice'; DROP TABLE users; --";
+        let results = search_users_by_prefix(&pool, malicious, 10).await?;
+        assert!(results.is_empty());
+
+        // Verify the table still exists and contains the original row
+        let remaining: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users")
+            .fetch_one(&pool)
+            .await?;
+        assert_eq!(remaining.0, 1);
 
         Ok(())
     }

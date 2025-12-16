@@ -43,11 +43,7 @@ impl HttpClient {
     }
 
     /// Sign up a new user
-    pub async fn signup(
-        &self,
-        username: String,
-        password: String,
-    ) -> Result<AuthResponse, String> {
+    pub async fn signup(&self, username: String, password: String) -> Result<AuthResponse, String> {
         let url = format!("{}/auth/signup", self.base_url);
         let request = SignupRequest { username, password };
 

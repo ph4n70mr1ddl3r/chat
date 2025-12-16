@@ -54,10 +54,7 @@ pub struct ChangePasswordRequest {
 }
 
 /// Handle GET /user/me
-pub async fn get_current_user(
-    user_id: String,
-    pool: SqlitePool,
-) -> Result<impl Reply, Rejection> {
+pub async fn get_current_user(user_id: String, pool: SqlitePool) -> Result<impl Reply, Rejection> {
     // Fetch user from database
     let user = match queries::find_user_by_id(&pool, &user_id).await {
         Ok(Some(user)) => user,
@@ -268,7 +265,7 @@ pub async fn change_password(
 
     // 2. Verify current password
     match AuthService::verify_password(&request.current_password, &user.password_hash) {
-        Ok(true) => {},
+        Ok(true) => {}
         Ok(false) => {
             return Ok(reply::with_status(
                 reply::json(&ErrorResponse {

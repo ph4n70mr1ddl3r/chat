@@ -42,10 +42,7 @@ pub struct MessageQueueService {
 
 impl MessageQueueService {
     /// Create a new message queue service
-    pub fn new(
-        pool: SqlitePool,
-        connection_manager: Arc<ConnectionManager>,
-    ) -> Self {
+    pub fn new(pool: SqlitePool, connection_manager: Arc<ConnectionManager>) -> Self {
         let message_service = MessageService::new(pool.clone());
         Self {
             pool,
@@ -102,7 +99,10 @@ impl MessageQueueService {
                 // Attempt delivery for each message
                 for queued_msg in messages_to_retry {
                     // Check if recipient is now online
-                    if connection_manager.is_user_online(&queued_msg.recipient_id).await {
+                    if connection_manager
+                        .is_user_online(&queued_msg.recipient_id)
+                        .await
+                    {
                         // Attempt delivery
                         match Self::deliver_message(
                             &pool,
@@ -115,7 +115,10 @@ impl MessageQueueService {
                             Ok(_) => {
                                 // Success - mark as sent
                                 let _ = message_service
-                                    .update_message_status(&queued_msg.message_id, MessageStatus::Sent)
+                                    .update_message_status(
+                                        &queued_msg.message_id,
+                                        MessageStatus::Sent,
+                                    )
                                     .await;
                             }
                             Err(_) => {
@@ -212,9 +215,7 @@ impl MessageQueueService {
         }
 
         // Mark delivered and send ack to sender if connected
-        message_service
-            .mark_delivered(&message.id)
-            .await?;
+        message_service.mark_delivered(&message.id).await?;
 
         let ack = MessageEnvelope {
             id: uuid::Uuid::new_v4().to_string(),
@@ -228,12 +229,9 @@ impl MessageQueueService {
             }),
         };
         let ack_msg = WsMessage::text(
-            serde_json::to_string(&ack)
-                .map_err(|e| format!("Failed to serialize ack: {}", e))?,
+            serde_json::to_string(&ack).map_err(|e| format!("Failed to serialize ack: {}", e))?,
         );
-        let _ = connection_manager
-            .send_to_user(&sender.id, ack_msg)
-            .await;
+        let _ = connection_manager.send_to_user(&sender.id, ack_msg).await;
 
         Ok(())
     }
@@ -246,7 +244,7 @@ impl MessageQueueService {
         // Calculate next retry time with exponential backoff
         let retry_index = queued_msg.retry_count.min(RETRY_SCHEDULE.len() - 1);
         let delay_seconds = RETRY_SCHEDULE[retry_index];
-        
+
         queued_msg.retry_count += 1;
         queued_msg.next_retry_at = chrono::Utc::now().timestamp() as u64 + delay_seconds;
 
@@ -316,7 +314,9 @@ mod tests {
         let conn_mgr = Arc::new(ConnectionManager::new());
         let queue_service = MessageQueueService::new(pool, conn_mgr);
 
-        queue_service.queue_message("msg-123".to_string(), "user-456".to_string()).await;
+        queue_service
+            .queue_message("msg-123".to_string(), "user-456".to_string())
+            .await;
 
         let stats = queue_service.get_queue_stats().await;
         assert_eq!(stats.get("user-456"), Some(&1));
@@ -338,7 +338,11 @@ mod tests {
         let queue_service = MessageQueueService::new(pool.clone(), conn_mgr);
 
         // Create users and conversation
-        let user1 = User::new("alice".to_string(), "hash1".to_string(), "salt1".to_string());
+        let user1 = User::new(
+            "alice".to_string(),
+            "hash1".to_string(),
+            "salt1".to_string(),
+        );
         let user2 = User::new("bob".to_string(), "hash2".to_string(), "salt2".to_string());
 
         queries::insert_user(&pool, &user1).await.unwrap();

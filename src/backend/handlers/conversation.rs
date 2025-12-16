@@ -394,26 +394,22 @@ pub async fn search_messages(
         ));
     }
 
-    let messages = match queries::search_messages_in_conversation(
-        &pool,
-        &conversation_id,
-        &query.q,
-        limit,
-    )
-    .await
-    {
-        Ok(msgs) => msgs,
-        Err(e) => {
-            warn!("Failed to search messages: {}", e);
-            return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "DATABASE_ERROR".to_string(),
-                    message: "Failed to search messages".to_string(),
-                }),
-                warp::http::StatusCode::INTERNAL_SERVER_ERROR,
-            ));
-        }
-    };
+    let messages =
+        match queries::search_messages_in_conversation(&pool, &conversation_id, &query.q, limit)
+            .await
+        {
+            Ok(msgs) => msgs,
+            Err(e) => {
+                warn!("Failed to search messages: {}", e);
+                return Ok(reply::with_status(
+                    reply::json(&ErrorResponse {
+                        error: "DATABASE_ERROR".to_string(),
+                        message: "Failed to search messages".to_string(),
+                    }),
+                    warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+                ));
+            }
+        };
 
     let mut responses = Vec::new();
     for msg in messages {

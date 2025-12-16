@@ -31,7 +31,7 @@ impl SessionManager {
     /// - macOS: ~/Library/Application Support/chat-app/session.json
     pub fn new() -> Self {
         let session_file = Self::get_session_file_path();
-        
+
         Self {
             session_file,
             current_session: Arc::new(Mutex::new(None)),
@@ -45,7 +45,7 @@ impl SessionManager {
             let appdata = std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string());
             PathBuf::from(appdata).join("chat-app").join("session.json")
         }
-        
+
         #[cfg(target_os = "macos")]
         {
             let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
@@ -55,7 +55,7 @@ impl SessionManager {
                 .join("chat-app")
                 .join("session.json")
         }
-        
+
         #[cfg(not(any(target_os = "windows", target_os = "macos")))]
         {
             let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
@@ -89,16 +89,22 @@ impl SessionManager {
 
         Ok(())
     }
-    
+
     /// Save session with individual parameters (synchronous helper)
-    pub fn save_session_sync(&self, user_id: &str, token: &str, username: &str, expires_at: i64) -> Result<(), String> {
+    pub fn save_session_sync(
+        &self,
+        user_id: &str,
+        token: &str,
+        username: &str,
+        expires_at: i64,
+    ) -> Result<(), String> {
         let session = SessionData {
             user_id: user_id.to_string(),
             token: token.to_string(),
             username: username.to_string(),
             expires_at,
         };
-        
+
         // Ensure parent directory exists
         if let Some(parent) = self.session_file.parent() {
             std::fs::create_dir_all(parent)
@@ -160,28 +166,28 @@ impl SessionManager {
     pub fn get_current_session(&self) -> Option<SessionData> {
         self.current_session.lock().unwrap().clone()
     }
-    
+
     /// Get session (synchronous version that loads from disk if not in memory)
     pub fn get_session(&self) -> Result<Option<SessionData>, String> {
         // First check memory
         if let Some(session) = self.get_current_session() {
             return Ok(Some(session));
         }
-        
+
         // If not in memory, try loading from disk synchronously
         if !self.session_file.exists() {
             return Ok(None);
         }
-        
+
         let contents = std::fs::read_to_string(&self.session_file)
             .map_err(|e| format!("Failed to read session file: {}", e))?;
-        
+
         let session: SessionData = serde_json::from_str(&contents)
             .map_err(|e| format!("Failed to parse session file: {}", e))?;
-        
+
         // Update in-memory session
         *self.current_session.lock().unwrap() = Some(session.clone());
-        
+
         Ok(Some(session))
     }
 
@@ -190,7 +196,7 @@ impl SessionManager {
         if let Some(session) = self.get_current_session() {
             let now = chrono::Utc::now().timestamp();
             let expires_in = session.expires_at - now;
-            
+
             // Refresh if expires in less than 5 minutes
             expires_in < 300
         } else {
@@ -220,9 +226,7 @@ pub fn get_session_manager() -> &'static SessionManager {
 
 /// Helper function to get the current token
 pub fn get_token() -> Option<String> {
-    get_session_manager()
-        .get_current_session()
-        .map(|s| s.token)
+    get_session_manager().get_current_session().map(|s| s.token)
 }
 
 /// Helper function to check if logged in
@@ -246,7 +250,7 @@ mod tests {
         let json = serde_json::to_string(&session).unwrap();
         assert!(json.contains("user123"));
         assert!(json.contains("alice"));
-        
+
         let deserialized: SessionData = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.user_id, "user123");
         assert_eq!(deserialized.username, "alice");
@@ -255,7 +259,7 @@ mod tests {
     #[tokio::test]
     async fn test_session_manager_save_and_load() {
         let manager = SessionManager::new();
-        
+
         let session = SessionData {
             user_id: "test_user".to_string(),
             username: "testuser".to_string(),
@@ -265,12 +269,12 @@ mod tests {
 
         // Save
         manager.save_session(session.clone()).await.unwrap();
-        
+
         // Load
         let loaded = manager.load_session().await.unwrap();
         assert!(loaded.is_some());
         assert_eq!(loaded.unwrap().user_id, "test_user");
-        
+
         // Clear
         manager.clear_session().await.unwrap();
         assert!(manager.get_current_session().is_none());
