@@ -663,12 +663,12 @@ Goal: Implement observability, security hardening, performance optimization, and
 
 ### Documentation & Release Preparation
 
-- [ ] T147 Create API documentation at `docs/API.md` (auto-generated from contracts or manually curated)
-- [ ] T148 Create deployment guide at `docs/DEPLOYMENT.md` (SQLite to PostgreSQL migration path)
-- [ ] T149 Create troubleshooting guide at `docs/TROUBLESHOOTING.md` (common issues and solutions)
-- [ ] T150 Create CHANGELOG.md documenting all features, bug fixes, and breaking changes
-- [ ] T151 Create code coverage report (target 80%+ for backend, 60%+ for frontend)
-- [ ] T157 [P] Create PostgreSQL migration strategy document at `docs/DEPLOYMENT_POSTGRES_MIGRATION.md`
+- [X] T147 Create API documentation at `docs/API.md` (auto-generated from contracts or manually curated)
+- [X] T148 Create deployment guide at `docs/DEPLOYMENT.md` (SQLite to PostgreSQL migration path)
+- [X] T149 Create troubleshooting guide at `docs/TROUBLESHOOTING.md` (common issues and solutions)
+- [X] T150 Create CHANGELOG.md documenting all features, bug fixes, and breaking changes
+- [X] T151 Create code coverage report (target 80%+ for backend, 60%+ for frontend)
+- [X] T157 [P] Create PostgreSQL migration strategy document at `docs/DEPLOYMENT_POSTGRES_MIGRATION.md`
   - **Current state**: MVP uses SQLite (single-file database)
   - **Target state**: PostgreSQL with async replication (production-grade)
   - **Migration strategy**:

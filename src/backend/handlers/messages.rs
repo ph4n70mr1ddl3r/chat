@@ -268,7 +268,7 @@ mod tests {
             msg_type: "message".to_string(),
             timestamp: chrono::Utc::now().timestamp_millis() as u64,
             data: json!({
-                "recipientId": user2.id,
+                "recipient_id": user2.id,
                 "content": "Hello, Bob!",
             }),
         };
@@ -316,7 +316,7 @@ mod tests {
             msg_type: "message".to_string(),
             timestamp: chrono::Utc::now().timestamp_millis() as u64,
             data: json!({
-                "recipientId": user2.id,
+                "recipient_id": user2.id,
                 "content": "Hello, Bob!",
             }),
         };
@@ -355,7 +355,7 @@ mod tests {
             msg_type: "message".to_string(),
             timestamp: chrono::Utc::now().timestamp_millis() as u64,
             data: json!({
-                "recipientId": user2.id,
+                "recipient_id": user2.id,
                 "content": "Hello, Bob!",
             }),
         };

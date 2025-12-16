@@ -36,8 +36,9 @@ impl UserSearchScreen {
 
             // Set loading state immediately if query is not empty
             if !query.is_empty() {
+                let ui_weak_loading = ui_weak.clone();
                 slint::invoke_from_event_loop(move || {
-                    if let Some(ui) = ui_weak.upgrade() {
+                    if let Some(ui) = ui_weak_loading.upgrade() {
                         ui.set_is_searching(true);
                         ui.set_error_message("".into());
                     }
@@ -45,8 +46,9 @@ impl UserSearchScreen {
                 .ok();
             } else {
                 // Clear results if empty
+                let ui_weak_clear = ui_weak.clone();
                 slint::invoke_from_event_loop(move || {
-                    if let Some(ui) = ui_weak.upgrade() {
+                    if let Some(ui) = ui_weak_clear.upgrade() {
                         ui.set_is_searching(false);
                         ui.set_search_results(ModelRc::from(Rc::new(VecModel::from(vec![]))));
                     }

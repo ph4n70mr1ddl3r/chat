@@ -576,9 +576,11 @@ fn spawn_event_listener(
                                     );
                                 }
 
-                                if let Some(active_conv) =
+                                let active_conv = {
                                     selected_conv_refresh.lock().unwrap().clone()
-                                {
+                                };
+                                
+                                if let Some(active_conv) = active_conv {
                                     if let Ok(fresh_messages) = load_messages(&active_conv).await {
                                         {
                                             let mut cache = messages_refresh.lock().unwrap();

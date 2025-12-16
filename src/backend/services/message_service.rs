@@ -332,7 +332,13 @@ mod tests {
         queries::insert_user(&pool, &user1).await.unwrap();
         queries::insert_user(&pool, &user2).await.unwrap();
 
-        let conv = crate::models::Conversation::new(user1.id.clone(), user2.id.clone());
+        // Sort user IDs to satisfy database constraint
+        let (user1_id, user2_id) = if user1.id < user2.id {
+            (user1.id.clone(), user2.id.clone())
+        } else {
+            (user2.id.clone(), user1.id.clone())
+        };
+        let conv = crate::models::Conversation::new(user1_id, user2_id);
         queries::insert_conversation(&pool, &conv).await.unwrap();
 
         // Send message
@@ -375,7 +381,13 @@ mod tests {
         // Mark user2 as deleted
         queries::soft_delete_user(&pool, &user2.id).await.unwrap();
 
-        let conv = crate::models::Conversation::new(user1.id.clone(), user2.id.clone());
+        // Sort user IDs to satisfy database constraint
+        let (user1_id, user2_id) = if user1.id < user2.id {
+            (user1.id.clone(), user2.id.clone())
+        } else {
+            (user2.id.clone(), user1.id.clone())
+        };
+        let conv = crate::models::Conversation::new(user1_id, user2_id);
         queries::insert_conversation(&pool, &conv).await.unwrap();
 
         // Try to send message

@@ -35,7 +35,7 @@ export component ChatScreenComponent inherits Window {
     in-out property <string> message_input;
     in property <bool> is_loading;
     in property <string> error_message;
-    in property <bool> show_error_dialog;
+    in-out property <bool> show_error_dialog;
     in property <string> error_dialog_title;
     in property <string> error_dialog_message;
     in property <string> connection_status;
@@ -73,7 +73,6 @@ export component ChatScreenComponent inherits Window {
                     height: 10px;
                     border-radius: 5px;
                     background: root.connection_online ? #9BE7B0 : #FFE0B2;
-                    vertical-alignment: center;
                 }
                 Text {
                     text: root.connection_status;
