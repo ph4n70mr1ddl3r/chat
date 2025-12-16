@@ -66,64 +66,65 @@ planning:
 # PHASE 2: SOLUTIONING (REQUIRED)
 # =================================
 solutioning:
-  - id: "create-architecture"
-    name: "Create Architecture"
-    type: "workflow"
-    status: "complete"
-    status_file: "docs/architecture.md"
-    recommended: true
-    agent: "architect"
-    command: "create-architecture"
-    note: "Integration architecture - solution design for this project"
-    steps_completed: [1, 2, 3, 4, 5, 6, 7, 8]
-    completedAt: "2025-12-17T00:00:00Z"
-    deliverables:
-      - "9 core architectural decisions documented"
-      - "9 implementation patterns with examples"
-      - "Complete project structure with 150+ files"
-      - "Requirements to structure mapping"
-      - "Validation confirming coherence and completeness"
-      - "Implementation readiness checklist"
+   - id: "create-architecture"
+     name: "Create Architecture"
+     type: "workflow"
+     status: "complete"
+     status_file: "docs/architecture.md"
+     recommended: true
+     agent: "architect"
+     command: "create-architecture"
+     note: "Integration architecture - solution design for this project"
+     steps_completed: [1, 2, 3, 4, 5, 6, 7, 8]
+     completedAt: "2025-12-17T00:00:00Z"
+     deliverables:
+       - "9 core architectural decisions documented"
+       - "9 implementation patterns with examples"
+       - "Complete project structure with 150+ files"
+       - "Requirements to structure mapping"
+       - "Validation confirming coherence and completeness"
+       - "Implementation readiness checklist"
 
-  - id: "create-epics-and-stories"
-    name: "Create Epics & Stories"
-    type: "workflow"
-    status: "pending"
-    required: true
-    agent: "pm"
-    command: "create-epics-and-stories"
-    note: "Break down PRD into implementable epics and stories"
-    blockedBy: "create-architecture"
+   - id: "create-epics-and-stories"
+     name: "Create Epics & Stories"
+     type: "workflow"
+     status: "pending"
+     required: true
+     agent: "pm"
+     command: "create-epics-and-stories"
+     note: "Break down PRD into implementable epics and stories"
+     blockedBy: "create-architecture"
 
-  - id: "test-design"
-    name: "Test Design"
-    type: "workflow"
-    status: "pending"
-    recommended: true
-    agent: "tea"
-    command: "test-design"
-    note: "Testability assessment before gate check"
-    blockedBy: "create-architecture"
+   - id: "test-design"
+     name: "Test Design"
+     type: "workflow"
+     status: "complete"
+     status_file: "docs/test-design-system.md"
+     recommended: true
+     agent: "tea"
+     command: "test-design"
+     note: "Testability assessment before gate check"
+     completedAt: "2025-12-17T00:00:00Z"
 
-  - id: "validate-architecture"
-    name: "Validate Architecture"
-    type: "workflow"
-    status: "complete"
-    optional: true
-    agent: "architect"
-    command: "validate-architecture"
-    note: "Validation completed as part of create-architecture workflow"
-    completedAt: "2025-12-17T00:00:00Z"
+   - id: "validate-architecture"
+     name: "Validate Architecture"
+     type: "workflow"
+     status: "complete"
+     optional: true
+     agent: "architect"
+     command: "validate-architecture"
+     note: "Validation completed as part of create-architecture workflow"
+     completedAt: "2025-12-17T00:00:00Z"
 
-  - id: "implementation-readiness"
-    name: "Implementation Readiness"
-    type: "workflow"
-    status: "pending"
-    required: true
-    agent: "architect"
-    command: "implementation-readiness"
-    note: "Validates PRD + Architecture + Epics + UX (optional)"
-    blockedBy: ["create-architecture", "create-epics-and-stories"]
+   - id: "implementation-readiness"
+     name: "Implementation Readiness"
+     type: "workflow"
+     status: "pending"
+     required: true
+     agent: "architect"
+     command: "implementation-readiness"
+     note: "Validates PRD + Architecture + Epics + UX (optional)"
+     blockedBy: ["create-architecture", "create-epics-and-stories"]
 
 # PHASE 3: IMPLEMENTATION (REQUIRED)
 # ====================================
@@ -150,26 +151,28 @@ project_context:
     - "WebSocket (real-time messaging)"
     - "Tokio (async runtime)"
     - "Warp (web framework)"
-    - "Tungstenite (WebSocket)"
-  status: "active-development"
-  architecture_status: "complete"
-  existing_artifacts:
-    - "specs/001-private-chat/spec.md - Complete feature specification"
-    - "docs/architecture.md - Complete architecture with 9 decisions and patterns"
-    - "docs/prd.md - Product requirements document"
-    - "docs/ux-design-specification.md - UX design specification"
-    - "Rust backend with handlers, auth, services"
-    - "Slint frontend with UI components and screens"
-    - "Integration and contract tests"
-    - "Deployment documentation"
+     - "Tungstenite (WebSocket)"
+   status: "active-development"
+   architecture_status: "complete"
+   existing_artifacts:
+     - "specs/001-private-chat/spec.md - Complete feature specification"
+     - "docs/architecture.md - Complete architecture with 9 decisions and patterns"
+     - "docs/prd.md - Product requirements document"
+     - "docs/ux-design-specification.md - UX design specification"
+     - "docs/test-design-system.md - System-level testability assessment"
+     - "docs/epics.md - 9 epics with 100 stories (planned)"
+     - "Rust backend with handlers, auth, services"
+     - "Slint frontend with UI components and screens"
+     - "Integration and contract tests"
+     - "Deployment documentation"
 
 # NEXT STEPS
 # ===========
 next_phase: "Create Epics & Stories"
 next_agent: "pm"
 recommended_sequence:
-  - "Review architecture document at docs/architecture.md"
-  - "Create epics and stories based on architecture"
-  - "Design test strategy aligned with architecture"
-  - "Validate implementation readiness"
-  - "Plan sprints for implementation"
+   - "Review architecture document at docs/architecture.md"
+   - "Review test-design strategy at docs/test-design-system.md"
+   - "Create epics and stories based on architecture"
+   - "Validate implementation readiness"
+   - "Plan sprints for implementation"
