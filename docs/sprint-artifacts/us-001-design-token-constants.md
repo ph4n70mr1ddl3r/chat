@@ -493,11 +493,28 @@ cargo clippy --all-targets --all-features
 - Functions: detect_system_preference(), should_show_animations(), refresh()
 - Tests: 3 unit tests verify preference detection logic
 
-**Unit Tests** (`tests/unit/tokens_test.rs`)
+**Unit Tests** (`src/backend/tests/tokens_test.rs`)
 - 10 comprehensive test cases covering all token types
 - Tests: color validation, spacing grid, typography, motion, accessibility
-- All tests passing (139 total suite pass)
+- **ALL TESTS NOW DISCOVERED AND RUNNING** (✅ Code review fix applied)
+- Tests wired into proper Cargo test infrastructure (149 total suite pass)
 - Validates: MOTION_DURATION_REDUCED logic, grid alignment, contrast
+
+**Test Infrastructure Fixes** (Post-Review Enhancement)
+- Created `tests/unit/mod.rs` and `tests/integration/mod.rs` routing
+- Moved token tests to `src/backend/tests/tokens_test.rs` for discovery
+- Fixed test module structure (removed cfg(test) wrapper)
+- All 10 token tests now execute: 
+  - test_color_tokens_valid_hex ✅
+  - test_spacing_tokens_on_grid ✅
+  - test_typography_font_sizes_valid ✅
+  - test_typography_font_weights_valid ✅
+  - test_typography_line_heights_valid ✅
+  - test_motion_durations_valid ✅
+  - test_motion_duration_reduced_logic ✅
+  - test_token_completeness ✅
+  - test_accessibility_compliance ✅
+  - test_naming_conventions ✅
 
 **Typography Test Component** (`src/frontend/components/typography_test.slint`)
 - Visual demonstration of all typography tokens
@@ -552,6 +569,59 @@ cargo clippy --all-targets --all-features
 - Created comprehensive token reference documentation
 - Verified zero warnings on build and clippy checks
 - All Week 1 components (US-002 through US-006) now unblocked
+
+---
+
+## 🔧 Post-Review Infrastructure Enhancement (Dec 16, 21:13 UTC)
+
+**Status:** ✅ **COMPLETED**
+
+After fresh adversarial code review identified that token tests weren't executing, Amelia performed infrastructure fix:
+
+### Problem Identified
+- Token test file existed (`tests/unit/tokens_test.rs`) with 10 test functions
+- Tests were **NOT** discovered or executed by Cargo
+- Root cause: Workspace structure + test module organization issue
+
+### Solution Implemented
+**Commit:** dde6c3d
+
+1. **Relocated token tests** → `src/backend/tests/tokens_test.rs`
+   - Backend package properly discovers tests in `tests/` subdirectory
+   - Integrated into main test runner
+
+2. **Created test routing infrastructure:**
+   - `tests/unit/mod.rs` - Routes all unit tests
+   - `tests/integration/mod.rs` - Routes all integration tests
+   - `tests/mod.rs` - Root test harness
+
+3. **Fixed test module structure:**
+   - Removed `#[cfg(test)] mod tests {}` wrapper from tokens_test.rs
+   - Changed to top-level test functions (Cargo can discover them)
+   - Maintained all 10 test cases unchanged
+
+### Results
+**Before Fix:** 0 token tests running, 136 total tests  
+**After Fix:** ✅ **All 10 token tests running, 149 total tests** (10 + 136 backend + 3 frontend)
+
+**All Token Tests Now Passing:**
+```
+test test_color_tokens_valid_hex ... ok
+test test_spacing_tokens_on_grid ... ok
+test test_typography_font_sizes_valid ... ok
+test test_typography_font_weights_valid ... ok
+test test_typography_line_heights_valid ... ok
+test test_motion_durations_valid ... ok
+test test_motion_duration_reduced_logic ... ok
+test test_token_completeness ... ok
+test test_accessibility_compliance ... ok
+test test_naming_conventions ... ok
+```
+
+### Verification
+✅ `cargo build --release`: PASS (0 warnings)
+✅ `cargo clippy --all-targets --all-features`: PASS (0 warnings)  
+✅ `cargo test`: PASS (149 tests, 0 failures)
 
 ---
 
