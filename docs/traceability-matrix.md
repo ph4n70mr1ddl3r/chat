@@ -34,11 +34,11 @@ Observed results (local):
 
 | Priority  | Total Criteria | FULL Coverage | Coverage % | Status |
 | --------- | -------------- | ------------- | ---------- | ------ |
-| P0        | 10             | 0             | 0%         | ❌ FAIL |
+| P0        | 10             | 1             | 10%        | ❌ FAIL |
 | P1        | 7              | 0             | 0%         | ❌ FAIL |
 | P2        | 0              | 0             | N/A        | N/A    |
 | P3        | 0              | 0             | N/A        | N/A    |
-| **Total** | **17**         | **0**         | **0%**     | **❌ FAIL** |
+| **Total** | **17**         | **1**         | **6%**     | **❌ FAIL** |
 
 **Gate thresholds (deterministic):**
 
@@ -106,12 +106,12 @@ Observed results (local):
   - `src/backend/server.rs:738` (`test_websocket_upgrade_without_token`) – rejects unauthenticated upgrade.
   - `src/backend/server.rs:763` (`test_websocket_upgrade_with_invalid_token`) – rejects invalid token.
   - `src/backend/handlers/messages.rs:286` (`test_handle_message_to_online_recipient`) – processes inbound message envelope and acks.
+  - `src/backend/handlers/dispatcher.rs:249` (`test_dispatcher_message_too_long`) – rejects oversize message envelope at WebSocket boundary.
 - **Supplemental (Not executed by `cargo test`):**
   - `tests/integration/websocket_handshake_test.rs:116` (`T060-001`+) – handshake cases (requires wiring).
   - `tests/integration/message_delivery_test.rs:18` (`T096-001`+) – delivery pipeline tests (requires wiring).
 - **Gaps:**
   - Full WebSocket client/server round-trip (tungstenite) not covered in executed suite.
-  - Message-length rejection path not exercised at WebSocket boundary in executed suite.
 - **Recommendation:** Add a server-spawned integration test (bind to ephemeral port) using `tokio-tungstenite` to validate end-to-end send/receive + length rejection.
 
 ---
@@ -211,14 +211,13 @@ Observed results (local):
 
 #### FR-013: Reject messages >5000 characters with user-facing validation error (P0)
 
-- **Coverage:** PARTIAL ⚠️
-- **Executed Tests (Unit):**
+- **Coverage:** FULL ✅
+- **Executed Tests (Unit/WebSocket boundary):**
   - `src/backend/services/message_service.rs:360` (`test_validate_content_length`) – length validation rejects >5000.
+  - `src/backend/handlers/dispatcher.rs:249` (`test_dispatcher_message_too_long`) – error response includes `INVALID_MESSAGE_LENGTH`.
 - **Supplemental (Not executed by `cargo test`):**
   - `tests/unit/message_validation_test.rs:54` (`T501-003`) – send_message rejects 5001 chars (requires wiring).
-- **Gaps:**
-  - No executed test asserts error message and response mapping at WebSocket/API boundary.
-- **Recommendation:** Add executed tests that call `send_message` with 5001 chars and assert the returned error message; add handler tests verifying user-facing error is surfaced.
+- **Recommendation:** Keep this behavior stable by treating `INVALID_MESSAGE_LENGTH` as part of the wire contract (document it in the protocol and avoid breaking changes).
 
 ---
 
@@ -320,3 +319,42 @@ P1 criteria without FULL coverage:
 
 1. Add executed tests for message history, message search, presence updates, logout, and delivery status indicators.
 2. Improve `warp::test` coverage for auth/signup/login paths with realistic IP handling.
+
+---
+
+## Integrated YAML Snippet (CI/CD)
+
+```yaml
+traceability_and_gate:
+  traceability:
+    story_id: "001-private-chat"
+    date: "2025-12-17"
+    coverage:
+      overall: 6%
+      p0: 10%
+      p1: 0%
+      p2: 0%
+      p3: 0%
+    gaps:
+      critical: 9 # P0 criteria without FULL executed coverage
+      high: 7 # P1 criteria without FULL executed coverage
+      medium: 0
+      low: 0
+    quality:
+      passing_tests: 149
+      ignored_tests: 1
+      failing_tests: 0
+    evidence:
+      test_results: "local:cargo test"
+      traceability: "docs/traceability-matrix.md"
+      gate_decision: "docs/gate-decision-story-001-private-chat.md"
+      atdd: "docs/atdd-checklist-001-private-chat.md"
+      automate: "docs/automation-summary.md"
+```
+
+## Related Artifacts
+
+- `specs/001-private-chat/spec.md`
+- `docs/gate-decision-story-001-private-chat.md`
+- `docs/atdd-checklist-001-private-chat.md` (HALTED; framework missing)
+- `docs/automation-summary.md` (HALTED; framework missing)

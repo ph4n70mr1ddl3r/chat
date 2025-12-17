@@ -38,6 +38,7 @@ impl SessionManager {
         }
     }
 
+    #[cfg(test)]
     fn new_with_session_file(session_file: PathBuf) -> Self {
         Self {
             session_file,

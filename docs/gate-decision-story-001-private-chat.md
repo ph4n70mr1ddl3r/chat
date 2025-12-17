@@ -19,9 +19,9 @@
 
 Source: `docs/traceability-matrix.md`
 
-- **P0 FULL coverage:** 0/10 (0%) → **fails** (requires 100%)
+- **P0 FULL coverage:** 1/10 (10%) → **fails** (requires 100%)
 - **P1 FULL coverage:** 0/7 (0%) → **fails** (recommends 90%)
-- **Overall FULL coverage:** 0/17 (0%) → **fails** (recommends 80%)
+- **Overall FULL coverage:** 1/17 (6%) → **fails** (recommends 80%)
 
 ### Test Execution Results
 
@@ -48,6 +48,7 @@ Ignored tests:
    - FR-005 offline retry/backoff is not validated by executed tests.
    - FR-017 auth endpoint rate limiting is not validated end-to-end (ignored route test).
 2. **Majority of the story-aligned tests live under `tests/**` but are not executed by `cargo test`**, so they cannot be used as release evidence without wiring.
+3. **Note:** FR-013 message length rejection is now FULL at the WebSocket boundary (see `src/backend/handlers/dispatcher.rs:249`), but it does not change the overall gate outcome.
 
 ---
 

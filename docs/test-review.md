@@ -1,181 +1,180 @@
-# Test Quality Review: Full Test Suite
+# Test Quality Review: Rust Test Suite (Executed + Unwired)
 
-**Quality Score**: 84/100 (A - Good)  
+**Quality Score (Executed Tests)**: 76/100 (B - Acceptable)  
+**Quality Score (Unwired `tests/**`)**: 68/100 (C - Needs Improvement)  
 **Review Date**: 2025-12-17  
-**Review Scope**: suite (23 Rust test files with tests; 29 Rust files total under `tests/`)  
+**Review Scope**: suite  
 **Reviewer**: Murat - Master Test Architect (TEA)
 
 ---
 
 ## Executive Summary
 
-**Overall Assessment**: Good — strong structure, strong isolation, good traceability in most tests  
-**Recommendation**: Approve with Comments
+This repository effectively has **two test suites**:
 
-The suite is well-organized and aligns with a sane test pyramid: unit tests cover low-level invariants, integration tests cover DB + service behavior, and contract tests cover protocol/schema correctness. The biggest quality risks are (1) hard waits (`sleep(...)`) embedded in a few tests/helpers, (2) a few “meta-tests” that always pass and therefore provide no behavioral signal, (3) several oversized files that would benefit from modularization, and (4) missing explicit priority markers (P0–P3) for selective execution and gate decisions.
+1. **Executed automated tests** inside the Rust crates (`src/**` and `src/backend/tests/**`) that run under `cargo test`.
+2. A **second Rust suite under workspace-root `tests/**`** that has strong BDD/Test-ID structure but is **not executed by `cargo test`** (root has no crate, and the directory is not a workspace member).
 
-**Current `cargo test` status (local run)**: ✅ passing (136 passed; 1 ignored).
+**Recommendation**: Approve with Comments (test signal is real and green), but treat the **unwired `tests/**`** as a **P0 test-quality blocker** if you expect those tests to act as release evidence.
 
-### Key Strengths
+### Test Execution Evidence
 
-✅ **Clear test levels** — `tests/unit`, `tests/integration`, `tests/contract` separation  
-✅ **Traceability** — 18/23 test files contain explicit `Test ID:` blocks  
-✅ **BDD clarity** — 18/23 files include Given/When/Then structure (or equivalent)  
-✅ **Isolation via fixtures** — integration tests consistently use `setup_test_db()` (and `create_users_and_conversation`)  
-✅ **Protocol/schema coverage** — contract tests validate message shapes and schema rules  
-✅ **Assertions present** — no “zero assertion” test files detected (but see meta-tests below); 149 total `#[test]`/`#[tokio::test]` blocks
+Command: `cargo test`
 
-### Key Weaknesses
+Observed results (local):
 
-❌ **Hard waits present** — 16 `sleep(...)` calls across:
-- `tests/helpers/polling.rs` (8)
-- `tests/integration/performance_test.rs` (6)
-- `tests/integration/e2e_test.rs` (1)
-- `tests/integration/message_delivery_test.rs` (1)
+- Total: 149 passed, 1 ignored, 0 failed
+  - `chat_backend`: 136 passed, 1 ignored
+  - `chat_backend` integration test `src/backend/tests/tokens_test.rs`: 10 passed
+  - `chat_gui`: 3 passed
 
-❌ **Non-signal “meta-tests”** — `assert!(true, ...)` appears in:
-- `tests/integration/button_test.rs`
-- `tests/integration/button_integration_tests.rs`
+Ignored tests:
 
-❌ **Large files** — 8 files exceed 300 lines (largest: `tests/contract/schema_validator.rs` at 565 lines)
+- `src/backend/server.rs:830` (`test_auth_rate_limit_blocks_after_failures`) is `#[ignore]`
 
-❌ **No priority markers** — no explicit P0/P1/P2/P3 markers detected in `tests/`
+---
 
-❌ **Factories not adopted** — `tests/helpers/factories.rs` exists but is not referenced by other test files
+## Test Suite Discovery
+
+### Executed Tests (Build/Run)
+
+- Test blocks (`#[test]` / `#[tokio::test]`): **153** under `src/**`
+  - `src/backend/**`: **150**
+  - `src/frontend/**`: **3**
+- Per-crate integration tests: present under `src/backend/tests/**` (example: `src/backend/tests/tokens_test.rs`)
+
+### Unwired Tests (Not Run)
+
+- Rust files under workspace-root `tests/**`: **29**
+- Test blocks under `tests/**`: **150**
+- BDD/Test ID richness under `tests/**`:
+  - `Test ID:` occurrences: **104**
+  - `Given:` occurrences: **104**
 
 ---
 
 ## Quality Criteria Assessment
 
-| Criterion                            | Status  | Violations | Notes |
-| ------------------------------------ | ------- | ---------- | ----- |
-| BDD Format (Given-When-Then)         | ✅ PASS | 5          | Missing in contract + helper/fixture files (acceptable, but standardize over time) |
-| Test IDs                             | ✅ PASS | 5          | Missing in contract + helper/fixture files |
-| Priority Markers (P0/P1/P2/P3)       | ❌ FAIL | 23         | None detected |
-| Hard Waits (sleep, waitForTimeout)   | ⚠️ WARN | 16         | `sleep(...)` used in polling/perf and a couple integration tests |
-| Determinism (no random flow control) | ✅ PASS | 0          | No random input generation detected; branches/loops exist but don’t change assertions |
-| Isolation (cleanup, no shared state) | ✅ PASS | 0          | Fixtures establish fresh DB state; no shared global state detected |
-| Fixture Patterns                     | ✅ PASS | 0          | Good centralization in `tests/fixtures/` |
-| Data Factories                       | ⚠️ WARN | 1          | Factory module exists but not adopted across suite |
-| Network-First Pattern                | ✅ PASS | 0          | Rust analogue: explicit timeouts + ordered steps, no implicit “sleep then assert” style |
-| Explicit Assertions                  | ⚠️ WARN | 3          | “Always true” meta-assertions provide no behavioral signal |
-| Test Length (≤300 lines)             | ⚠️ WARN | 8          | Refactor candidates |
-| Test Duration (≤1.5 min)             | ⚠️ WARN | 1          | Cannot validate without timing; perf tests likely slow default suite |
-| Flakiness Patterns                   | ⚠️ WARN | 2          | Hard waits + non-signal tests are the biggest confidence drags |
+### Executed Tests (crates in `src/**`)
 
-**Total Violations**: 0 Critical, 2 High, 7 Medium, 4 Low
+| Criterion                            | Status  | Notes |
+| ------------------------------------ | ------- | ----- |
+| Determinism (no hard waits)          | ⚠️ WARN | Some sleeps exist in tests (e.g., rate limiter window expiry); most waits are bounded and purposeful |
+| Isolation (cleanup, no shared state) | ✅ PASS | SQLite in-memory patterns are used consistently |
+| Explicit assertions                  | ✅ PASS | Assertions are present; failures should be actionable |
+| Test duration                        | ✅ PASS | Entire suite completes quickly locally |
+| Test IDs + BDD structure             | ⚠️ WARN | Most executed tests do not use `Test ID:` / Given-When-Then style (acceptable for unit tests, but reduces traceability) |
+| Priority markers (P0–P3)             | ❌ FAIL | No consistent priority tagging strategy for selective execution in Rust tests |
+
+### Unwired `tests/**` (strong structure, but no executable signal)
+
+| Criterion                            | Status  | Notes |
+| ------------------------------------ | ------- | ----- |
+| Determinism (no hard waits)          | ⚠️ WARN | `sleep(...)` appears in several files/helpers |
+| Isolation (cleanup, no shared state) | ✅ PASS | Uses DB fixtures consistently |
+| Explicit assertions                  | ❌ FAIL | `assert!(true, ...)` meta-asserts provide no behavioral signal |
+| Test IDs + BDD structure             | ✅ PASS | Good discipline (Test IDs + Given/When/Then are common) |
+| Priority markers (P0–P3)             | ❌ FAIL | None detected |
+| Executability                         | ❌ FAIL | Not run by `cargo test` as currently structured |
+
+---
+
+## Findings (Top Issues)
+
+### P0 (Must Fix)
+
+1. **`tests/**` is not executed**
+   - Impact: you have “tests as documentation” but not “tests as safety net”.
+   - Fix options:
+     - Move relevant suites into crate integration tests (e.g., `src/backend/tests/…`), or
+     - Create a workspace test crate (e.g., `chat-tests/`) with a `Cargo.toml` that compiles/runs the `tests/**` modules.
+
+2. **Always-true meta tests**
+   - `assert!(true, ...)` occurrences: **2**
+   - These are green even when the product is broken; mark as `#[ignore]` or replace with real assertions.
+
+### P1 (Should Fix)
+
+1. **Hard waits / sleeps in tests**
+   - `sleep(...)` occurrences across `src/` + `tests/`: **10**
+   - Prefer deterministic waits and controllable time sources (see “Recommendations”).
+
+2. **No priority/selection strategy**
+   - Without P0/P1/P2/P3 tagging, you cannot run a fast “smoke” subset or enforce gates without running everything.
+
+### P2 (Nice to Fix)
+
+1. **Oversized files**
+   - Files >300 lines:
+     - `tests/**`: **8**
+     - `src/**`: **1**
+   - Split along domains (auth, messages, presence) or extract helpers/fixtures.
 
 ---
 
 ## Quality Score Breakdown
 
-```
-Starting Score:          100
+Scoring follows TEA DoD principles (determinism, isolation, explicit assertions, selective execution).
 
-Critical Violations:     0 × -10 =   0
-High Violations:         2 ×  -5 = -10   (Hard waits, Always-true meta tests)
-Medium Violations:       7 ×  -2 = -14   (Missing priorities, Factories not adopted, Large files, Duration unknown, Minor BDD/ID gaps)
-Low Violations:          4 ×  -1 =  -4   (unwrap/expect noise, minor consistency gaps)
+### Executed Tests (76/100)
 
-Bonus Points:
-  Strong Isolation:      +5
-  Test IDs & BDD:        +5
-  Contract Coverage:     +5
-  Multi-level Suite:     +5
-                         --------
-Final Score:             84/100 (A - Good)
-```
+- Deductions:
+  - Some sleep-based timing in tests (flakiness risk)
+  - No priority tagging strategy
+  - Limited BDD/Test-ID traceability for unit tests
+- Bonuses:
+  - Fast suite execution
+  - Strong in-memory integration patterns
+  - Clear, assertion-driven failures
+
+### Unwired `tests/**` (68/100)
+
+- Deductions:
+  - Not executable (no signal in CI/local `cargo test`)
+  - Meta-asserts (`assert!(true, ...)`)
+  - Sleeps in helpers/tests
+  - No priority tagging
+- Bonuses:
+  - Strong Test IDs + Given/When/Then clarity
+  - Good fixture discipline
 
 ---
 
-## High Priority Recommendations (Should Fix Soon)
+## Recommendations
 
-### 1) Replace Always-True “Meta Tests” With Real Signal
+### 1) Make `tests/**` Executable (Highest ROI)
 
-**Files**:
-- `tests/integration/button_test.rs`
-- `tests/integration/button_integration_tests.rs`
-
-**Problem**: `assert!(true, "...")` means “green even when broken”. If you need placeholders, make that explicit and non-default.
-
-**Options**:
-- Replace with real assertions (best).
-- Mark them `#[ignore]` (or gate them behind a feature) until a Slint harness exists.
-- Convert them into compile-time checks (e.g., `include_str!` + basic invariants), but avoid always-true asserts.
-
-**Knowledge**: `_bmad/bmm/testarch/knowledge/test-quality.md` (tests must provide deterministic signal).
+Convert the BDD/Test-ID rich suite into real signal by compiling/running it as part of the workspace.
 
 ### 2) Replace Hard Waits With Deterministic Signals
 
-**Problem**: `sleep(...)` is a timing guess; it slows runs and can become flaky under load.
+Guidance (translated to Rust):
 
-**Options**:
-- Prefer event-driven signals (ACKs, state transitions) over fixed delays.
-- When polling is necessary, keep it bounded and explicit (max attempts / timeout) and centralize it in one helper (you already have `tests/helpers/polling.rs` — tighten it and keep sleeps only there).
-- Treat performance simulations as non-default tests (see “Selective execution” below).
+- Prefer event-driven assertions (channels, state transitions, DB state) over `sleep`.
+- When time is inherent to the logic (rate limit window), consider injecting a time source or using `tokio::time::pause()` + `advance()` where feasible.
 
-**Knowledge**: `_bmad/bmm/testarch/knowledge/network-first.md` + `_bmad/bmm/testarch/knowledge/test-quality.md`.
+### 3) Add Selective Execution Metadata (P0–P3)
 
----
+Rust-native options:
 
-## Medium Priority Recommendations (Nice-to-Have Improvements)
+- Naming conventions: prefix critical tests with `p0_…` and run via `cargo test p0_`.
+- Grouping: keep P0 tests in a module and run via `cargo test p0::`.
+- Use `#[ignore]` for slow/perf tests and execute them explicitly via `cargo test -- --ignored`.
 
-### 1) Add Priority Markers (P0–P3) for Selective Runs
+### 4) Kill “Green But Useless” Tests
 
-**Problem**: No P0/P1/P2/P3 markers detected in `tests/`. That makes it hard to define “must-pass” vs “slow/optional”.
-
-**Approach**:
-- Add a doc line (per test or per module): `/// Priority: P0`
-- Define a simple convention for local vs PR vs merge validation (smoke subset vs full suite).
-
-**Knowledge**: `_bmad/bmm/testarch/knowledge/selective-testing.md`.
-
-### 2) Adopt `tests/helpers/factories.rs` Across the Suite
-
-**Problem**: A factory module exists, but other test files don’t use it, so hardcoded values persist and schemas won’t evolve cleanly.
-
-**Approach**:
-- Replace repeated literals (tokens/ids/users) with override-driven factory builders.
-- Keep “defaults + overrides” so intent stays explicit and updates are centralized.
-
-**Knowledge**: `_bmad/bmm/testarch/knowledge/data-factories.md`.
-
-### 3) Split the Largest Test Files
-
-**Files > 300 lines**:
-- `tests/contract/schema_validator.rs` (565)
-- `tests/integration/performance_test.rs` (420)
-- `tests/unit/property_tests.rs` (382)
-- `tests/unit/tokens_test.rs` (347)
-- `tests/integration/websocket_handshake_test.rs` (345)
-- `tests/integration/e2e_test.rs` (343)
-- `tests/integration/tokens_integration_test.rs` (343)
-- `tests/integration/button_test.rs` (313)
-
-**Approach**:
-- Extract helpers into `tests/helpers/` (pure functions) and keep tests short.
-- Split “one giant module” into multiple focused modules (per scenario group).
-
-**Knowledge**: `_bmad/bmm/testarch/knowledge/test-quality.md` (keep tests focused and readable).
+Replace `assert!(true, …)` with domain assertions, or mark tests `#[ignore]` until the harness exists.
 
 ---
 
-## Low Priority Notes (Style / Polish)
+## Notes on External Doc Cross-Check
 
-### Reduce unwrap()/expect() Noise Where It Obscures Intent
-
-**Observation**: High `unwrap()`/`expect()` usage can hide why a failure happened.
-
-**Approach**:
-- Prefer `expect("context")` over `unwrap()` when failure context matters.
-- If you have repeated patterns, wrap them in a helper that returns `Result` and use `?` (tests can still fail, but with structured context).
+This repo’s automated suite is Rust-native (not Playwright/Cypress/Pact). Cross-checking those external tool docs is therefore not directly applicable, and this environment has restricted network access.
 
 ---
 
-## Next Steps
+## Decision
 
-1) Replace or gate the always-true meta-tests (`button_test`, `button_integration_tests`)  
-2) Confine sleeps to bounded polling helpers and treat performance simulations as non-default  
-3) Add P0/P1 markers to critical flows and define selective execution (local/PR/full)  
-4) Adopt `tests/helpers/factories.rs` across the suite to eliminate hardcoded values  
-5) Split the 8 oversized files into smaller, intent-focused modules
+**Recommendation**: Approve with Comments  
+**Rationale**: Executed tests provide real, fast, mostly deterministic signal; however, the presence of a second unwired suite under `tests/**` creates a false sense of coverage unless wired into `cargo test` and CI.
+

@@ -106,6 +106,17 @@ solutioning:
      note: "Testability assessment before gate check"
      completedAt: "2025-12-17T00:00:00Z"
 
+   - id: "trace"
+     name: "Traceability & Gate"
+     type: "workflow"
+     status: "complete"
+     status_file: "docs/traceability-matrix.md"
+     recommended: true
+     agent: "tea"
+     command: "trace"
+     note: "Requirements-to-tests mapping and deterministic gate decision (currently FAIL/BLOCKED for 001-private-chat)"
+     completedAt: "2025-12-17T00:00:00Z"
+
    - id: "validate-architecture"
      name: "Validate Architecture"
      type: "workflow"
