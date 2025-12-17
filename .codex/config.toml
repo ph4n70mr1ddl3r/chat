@@ -1,4 +1,7 @@
-model = "gpt-5.1-codex-max"
+model = "gpt-5.2"
 model_reasoning_effort = "medium"
 [projects."/home/riddler/chat"]
 trust_level = "trusted"
+
+[notice.model_migrations]
+"gpt-5.1-codex-mini" = "gpt-5.1-codex-max"

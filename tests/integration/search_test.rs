@@ -1,25 +1,11 @@
 // Integration tests for message search within a conversation
 //
 // Covers happy path, empty result set, and behavior when participants are offline.
+// Requirement: T097 - Message Search
 
 use chat_backend::db::queries;
 use chat_backend::models::{Conversation, Message, User};
-use sqlx::SqlitePool;
-
-async fn setup_test_db() -> SqlitePool {
-    let pool = sqlx::sqlite::SqlitePoolOptions::new()
-        .connect("sqlite::memory:")
-        .await
-        .unwrap();
-
-    // Run migrations
-    let schema_sql = include_str!("../../src/backend/db/migrations/001_initial_schema.sql");
-    for statement in schema_sql.split(';').filter(|s| !s.trim().is_empty()) {
-        sqlx::query(statement).execute(&pool).await.unwrap();
-    }
-
-    pool
-}
+use crate::fixtures::setup_test_db;
 
 fn sorted_conversation(user1_id: &str, user2_id: &str) -> Conversation {
     if user1_id < user2_id {
@@ -29,6 +15,10 @@ fn sorted_conversation(user1_id: &str, user2_id: &str) -> Conversation {
     }
 }
 
+/// Test ID: T097-001
+/// Given: Multiple messages in a conversation with different content
+/// When: Searching for a specific keyword
+/// Then: Only messages containing that keyword should be returned
 #[tokio::test]
 async fn search_returns_matching_messages() {
     let pool = setup_test_db().await;
@@ -68,8 +58,11 @@ async fn search_returns_matching_messages() {
     assert_eq!(results[0].content, hello.content);
 }
 
+/// Test ID: T097-002
+/// Given: Messages in a conversation
+/// When: Searching for text that doesn't appear in any message
+/// Then: Search should return an empty result set
 #[tokio::test]
-async fn search_returns_empty_when_no_matches() {
     let pool = setup_test_db().await;
 
     let alice = User::new("alice".to_string(), "hash1".to_string(), "salt1".to_string());
@@ -98,8 +91,11 @@ async fn search_returns_empty_when_no_matches() {
     assert!(results.is_empty());
 }
 
+/// Test ID: T097-003
+/// Given: A conversation where both participants are offline
+/// When: Performing a message search in that conversation
+/// Then: Search should still return matching messages regardless of participant online status
 #[tokio::test]
-async fn search_works_when_participants_offline() {
     let pool = setup_test_db().await;
 
     let mut alice = User::new("alice".to_string(), "hash1".to_string(), "salt1".to_string());

@@ -1,25 +1,16 @@
 // Integration tests for account deletion
+// Requirement: T004 - Account Deletion
 
 use chat_backend::db::queries;
 use chat_backend::models::{User, Message, Conversation};
 use chat_backend::handlers::user::{delete_account, DeleteAccountRequest};
 use chat_backend::services::AuthService;
-use sqlx::SqlitePool;
+use crate::fixtures::setup_test_db;
 
-async fn setup_test_db() -> SqlitePool {
-    let pool = sqlx::sqlite::SqlitePoolOptions::new()
-        .connect("sqlite::memory:")
-        .await
-        .unwrap();
-
-    let schema_sql = include_str!("../../src/backend/db/migrations/001_initial_schema.sql");
-    for statement in schema_sql.split(';').filter(|s| !s.trim().is_empty()) {
-        sqlx::query(statement).execute(&pool).await.unwrap();
-    }
-
-    pool
-}
-
+/// Test ID: T004-001
+/// Given: A user account with correct password
+/// When: The account deletion request is made with correct password
+/// Then: The user account should be marked as deleted
 #[tokio::test]
 async fn test_account_deletion_success() {
     let pool = setup_test_db().await;
@@ -43,8 +34,11 @@ async fn test_account_deletion_success() {
     assert!(db_user.is_deleted());
 }
 
+/// Test ID: T004-002
+/// Given: A user account with correct password set
+/// When: The account deletion is attempted with an incorrect password
+/// Then: The account should NOT be deleted
 #[tokio::test]
-async fn test_account_deletion_wrong_password() {
     let pool = setup_test_db().await;
     
     let (hash, salt) = AuthService::hash_password("Password123").unwrap();
@@ -64,8 +58,11 @@ async fn test_account_deletion_wrong_password() {
     assert!(!db_user.is_deleted());
 }
 
+/// Test ID: T004-003
+/// Given: A user who has sent messages in conversations
+/// When: The user's account is deleted
+/// Then: The user's messages should be anonymized (marked with is_anonymized flag)
 #[tokio::test]
-async fn test_account_deletion_anonymizes_messages() {
     let pool = setup_test_db().await;
     
     let (hash, salt) = AuthService::hash_password("Password123").unwrap();

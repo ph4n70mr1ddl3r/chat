@@ -6,6 +6,7 @@
 // - Message content validation
 //
 // Property-based testing explores input space automatically to find edge cases.
+// Requirement: T600 - Property-Based Testing
 
 #[cfg(test)]
 mod property_tests {
@@ -58,6 +59,10 @@ mod property_tests {
         Ok(())
     }
 
+    /// Test ID: T600-001
+    /// Given: Randomly generated valid usernames
+    /// When: Username validation is performed
+    /// Then: All valid patterns should pass
     // Property test: Valid usernames should always pass validation
     proptest! {
         #[test]
@@ -72,6 +77,10 @@ mod property_tests {
         }
     }
 
+    /// Test ID: T600-002
+    /// Given: Usernames with invalid characters
+    /// When: Username validation is performed
+    /// Then: All invalid patterns should fail
     // Property test: Usernames with invalid characters should always fail
     proptest! {
         #[test]
@@ -86,6 +95,10 @@ mod property_tests {
         }
     }
 
+    /// Test ID: T600-003
+    /// Given: Usernames longer than 50 characters
+    /// When: Username validation is performed
+    /// Then: All long usernames should fail
     // Property test: Usernames longer than 50 chars should fail
     proptest! {
         #[test]
@@ -101,6 +114,10 @@ mod property_tests {
         }
     }
 
+    /// Test ID: T600-004
+    /// Given: Empty username string
+    /// When: Username validation is performed
+    /// Then: Empty username should always fail
     // Property test: Empty username should fail
     #[test]
     fn test_empty_username_fails() {
@@ -110,6 +127,10 @@ mod property_tests {
         );
     }
 
+    /// Test ID: T600-005
+    /// Given: Randomly generated valid passwords
+    /// When: Password validation is performed
+    /// Then: All valid patterns should pass
     // Property test: Valid passwords should always pass
     proptest! {
         #[test]
@@ -129,6 +150,10 @@ mod property_tests {
         }
     }
 
+    /// Test ID: T600-006
+    /// Given: Passwords without uppercase letters
+    /// When: Password validation is performed
+    /// Then: All passwords missing uppercase should fail
     // Property test: Passwords without uppercase should fail
     proptest! {
         #[test]
@@ -144,108 +169,140 @@ mod property_tests {
         }
     }
 
-    // Property test: Passwords without lowercase should fail
-    proptest! {
-        #[test]
-        fn test_password_without_lowercase_fails(
-            password in "[A-Z0-9]{8,20}"
-        ) {
-            prop_assume!(!password.chars().any(|c| c.is_lowercase()));
-            assert!(
-                validate_password(&password).is_err(),
-                "Password without lowercase should fail: {}",
-                password
-            );
-        }
-    }
+     /// Test ID: T600-007
+     /// Given: Passwords without lowercase letters
+     /// When: Password validation is performed
+     /// Then: All passwords missing lowercase should fail
+     // Property test: Passwords without lowercase should fail
+     proptest! {
+         #[test]
+         fn test_password_without_lowercase_fails(
+             password in "[A-Z0-9]{8,20}"
+         ) {
+             prop_assume!(!password.chars().any(|c| c.is_lowercase()));
+             assert!(
+                 validate_password(&password).is_err(),
+                 "Password without lowercase should fail: {}",
+                 password
+             );
+         }
+     }
 
-    // Property test: Passwords without digit should fail
-    proptest! {
-        #[test]
-        fn test_password_without_digit_fails(
-            password in "[a-zA-Z]{8,20}"
-        ) {
-            prop_assume!(!password.chars().any(|c| c.is_numeric()));
-            assert!(
-                validate_password(&password).is_err(),
-                "Password without digit should fail: {}",
-                password
-            );
-        }
-    }
+     /// Test ID: T600-008
+     /// Given: Passwords without digit characters
+     /// When: Password validation is performed
+     /// Then: All passwords missing digits should fail
+     // Property test: Passwords without digit should fail
+     proptest! {
+         #[test]
+         fn test_password_without_digit_fails(
+             password in "[a-zA-Z]{8,20}"
+         ) {
+             prop_assume!(!password.chars().any(|c| c.is_numeric()));
+             assert!(
+                 validate_password(&password).is_err(),
+                 "Password without digit should fail: {}",
+                 password
+             );
+         }
+     }
 
-    // Property test: Passwords shorter than 8 chars should fail
-    proptest! {
-        #[test]
-        fn test_password_too_short_fails(
-            password in "[a-zA-Z0-9]{1,7}"
-        ) {
-            assert!(
-                validate_password(&password).is_err(),
-                "Password shorter than 8 chars should fail: {} (len={})",
-                password,
-                password.len()
-            );
-        }
-    }
+     /// Test ID: T600-009
+     /// Given: Passwords shorter than 8 characters
+     /// When: Password validation is performed
+     /// Then: All passwords below minimum length should fail
+     // Property test: Passwords shorter than 8 chars should fail
+     proptest! {
+         #[test]
+         fn test_password_too_short_fails(
+             password in "[a-zA-Z0-9]{1,7}"
+         ) {
+             assert!(
+                 validate_password(&password).is_err(),
+                 "Password shorter than 8 chars should fail: {} (len={})",
+                 password,
+                 password.len()
+             );
+         }
+     }
 
-    // Property test: Valid message content should always pass
-    proptest! {
-        #[test]
-        fn test_valid_message_content_always_passes(
-            content in "[a-zA-Z0-9 .,!?\\n]{1,5000}"
-        ) {
-            assert!(
-                validate_message_content(&content).is_ok(),
-                "Valid message content should pass (len={})",
-                content.len()
-            );
-        }
-    }
+     /// Test ID: T600-010
+     /// Given: Valid message content patterns
+     /// When: Message content validation is performed
+     /// Then: All valid message patterns should pass
+     // Property test: Valid message content should always pass
+     proptest! {
+         #[test]
+         fn test_valid_message_content_always_passes(
+             content in "[a-zA-Z0-9 .,!?\\n]{1,5000}"
+         ) {
+             assert!(
+                 validate_message_content(&content).is_ok(),
+                 "Valid message content should pass (len={})",
+                 content.len()
+             );
+         }
+     }
 
-    // Property test: Message content longer than 5000 chars should fail
-    proptest! {
-        #[test]
-        fn test_message_content_too_long_fails(
-            content in "[a-zA-Z0-9 ]{5001,6000}"
-        ) {
-            assert!(
-                validate_message_content(&content).is_err(),
-                "Message content longer than 5000 chars should fail (len={})",
-                content.len()
-            );
-        }
-    }
+     /// Test ID: T600-011
+     /// Given: Message content exceeding 5000 character limit
+     /// When: Message content validation is performed
+     /// Then: All oversized messages should fail
+     // Property test: Message content longer than 5000 chars should fail
+     proptest! {
+         #[test]
+         fn test_message_content_too_long_fails(
+             content in "[a-zA-Z0-9 ]{5001,6000}"
+         ) {
+             assert!(
+                 validate_message_content(&content).is_err(),
+                 "Message content longer than 5000 chars should fail (len={})",
+                 content.len()
+             );
+         }
+     }
 
-    // Property test: Empty message content should fail
-    #[test]
-    fn test_empty_message_content_fails() {
-        assert!(
-            validate_message_content("").is_err(),
-            "Empty message content should fail"
-        );
-    }
+     /// Test ID: T600-012
+     /// Given: Empty message content
+     /// When: Message content validation is performed
+     /// Then: Empty message should always fail
+     // Property test: Empty message content should fail
+     #[test]
+     fn test_empty_message_content_fails() {
+         assert!(
+             validate_message_content("").is_err(),
+             "Empty message content should fail"
+         );
+     }
 
-    // Property test: Unicode message content should be valid
-    proptest! {
-        #[test]
-        fn test_unicode_message_content_valid(
-            content in "\\PC{1,1000}"  // Unicode characters (excluding control chars)
-        ) {
-            prop_assume!(content.len() <= 5000);
-            prop_assume!(!content.is_empty());
-            assert!(
-                validate_message_content(&content).is_ok(),
-                "Unicode message content should be valid (len={})",
-                content.len()
-            );
-        }
-    }
+     /// Test ID: T600-013
+     /// Given: Unicode message content patterns
+     /// When: Message content validation is performed
+     /// Then: All valid Unicode patterns should pass
+     // Property test: Unicode message content should be valid
+     proptest! {
+         #[test]
+         fn test_unicode_message_content_valid(
+             content in "\\PC{1,1000}"  // Unicode characters (excluding control chars)
+         ) {
+             prop_assume!(content.len() <= 5000);
+             prop_assume!(!content.is_empty());
+             assert!(
+                 validate_message_content(&content).is_ok(),
+                 "Unicode message content should be valid (len={})",
+                 content.len()
+             );
+         }
+     }
 
-    // Edge case tests
+     // Edge case tests
 
-    #[test]
-    fn test_username_edge_cases() {
+     /// Test ID: T600-014
+     /// Given: Username boundary conditions (0, 1, 50, 51 characters)
+     /// When: Username validation is performed on edge cases
+     /// Then: Boundary values should be correctly handled
+     #[test]
+     fn test_username_edge_cases() {
         // Exactly 50 characters (boundary)
         let username_50 = "a".repeat(50);
         assert!(validate_username(&username_50).is_ok());
@@ -269,8 +326,12 @@ mod property_tests {
         assert!(validate_username("user-name").is_err());
     }
 
-    #[test]
-    fn test_password_edge_cases() {
+     /// Test ID: T600-015
+     /// Given: Password boundary conditions (7, 8, 100+ characters, all combinations)
+     /// When: Password validation is performed on edge cases
+     /// Then: Boundary values should be correctly handled
+     #[test]
+     fn test_password_edge_cases() {
         // Exactly 8 characters with all requirements (valid)
         assert!(validate_password("Aa1bbbbb").is_ok());
 
@@ -291,8 +352,12 @@ mod property_tests {
         assert!(validate_password("AbCdEfGh").is_err());
     }
 
-    #[test]
-    fn test_message_content_edge_cases() {
+     /// Test ID: T600-016
+     /// Given: Message content boundary conditions (0, 1, 5000, 5001 characters, Unicode)
+     /// When: Message content validation is performed on edge cases
+     /// Then: Boundary values should be correctly handled
+     #[test]
+     fn test_message_content_edge_cases() {
         // Exactly 5000 characters (boundary)
         let content_5000 = "a".repeat(5000);
         assert!(validate_message_content(&content_5000).is_ok());

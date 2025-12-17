@@ -1,27 +1,17 @@
 // Integration tests for user search functionality
 //
 // Tests search endpoint, pagination, and filtering
+// Requirement: T003 - User Search
 
 use chat_backend::db;
 use chat_backend::models::User;
 use chat_backend::handlers::user;
-use sqlx::SqlitePool;
+use crate::fixtures::setup_test_db;
 
-async fn setup_test_db() -> SqlitePool {
-    let pool = sqlx::sqlite::SqlitePoolOptions::new()
-        .connect("sqlite::memory:")
-        .await
-        .unwrap();
-
-    // Run migrations
-    let schema_sql = include_str!("../../src/backend/db/migrations/001_initial_schema.sql");
-    for statement in schema_sql.split(';').filter(|s| !s.trim().is_empty()) {
-        sqlx::query(statement).execute(&pool).await.unwrap();
-    }
-
-    pool
-}
-
+/// Test ID: T003-001
+/// Given: Multiple users with similar usernames
+/// When: Searching for users by prefix that matches multiple users
+/// Then: All matching users should be returned
 #[tokio::test]
 async fn test_user_search_valid_query() {
     let pool = setup_test_db().await;
@@ -47,8 +37,11 @@ async fn test_user_search_valid_query() {
     assert!(results.iter().any(|u| u.username == "alicia"));
 }
 
+/// Test ID: T003-002
+/// Given: Multiple users with username prefixes that match search criteria
+/// When: Searching for users with a prefix
+/// Then: Search results should exclude the current user from results
 #[tokio::test]
-async fn test_user_search_excludes_self() {
     let pool = setup_test_db().await;
     
     let user1 = User::new("alice".to_string(), "hash1".to_string(), "salt1".to_string());
@@ -66,8 +59,11 @@ async fn test_user_search_excludes_self() {
     assert_eq!(results.len(), 2);
 }
 
+/// Test ID: T003-003
+/// Given: 5 users with similar usernames and a search limit of 3
+/// When: Searching for users with the common prefix
+/// Then: Only 3 users should be returned (pagination limit enforced)
 #[tokio::test]
-async fn test_user_search_pagination() {
     let pool = setup_test_db().await;
     
     // Create 5 users with similar names
@@ -88,8 +84,11 @@ async fn test_user_search_pagination() {
     assert_eq!(results.len(), 3);
 }
 
+/// Test ID: T003-004
+/// Given: Users exist in the database
+/// When: Searching for a prefix that doesn't match any user
+/// Then: Search should return an empty result set
 #[tokio::test]
-async fn test_user_search_no_results() {
     let pool = setup_test_db().await;
     
     let user = User::new("alice".to_string(), "hash1".to_string(), "salt1".to_string());

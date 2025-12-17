@@ -1,46 +1,21 @@
 //! Presence latency SLA tests.
 //!
 //! Validates 1-second SLA for presence updates.
+//! Requirement: T106 - Presence Latency SLA
 
 use chat_backend::db;
 use chat_backend::handlers::websocket::{ClientConnection, ConnectionManager};
-use chat_backend::models::{Conversation, User};
+use chat_backend::models::User;
 use chat_backend::services::PresenceService;
-use sqlx::SqlitePool;
 use std::sync::Arc;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::time::{Instant, timeout, Duration};
+use crate::fixtures::{setup_test_db, create_users_and_conversation};
 
-async fn setup_test_db() -> SqlitePool {
-    let pool = sqlx::sqlite::SqlitePoolOptions::new()
-        .connect("sqlite::memory:")
-        .await
-        .unwrap();
-
-    let schema_sql = include_str!("../../src/backend/db/migrations/001_initial_schema.sql");
-    for statement in schema_sql.split(';').filter(|s| !s.trim().is_empty()) {
-        sqlx::query(statement).execute(&pool).await.unwrap();
-    }
-
-    pool
-}
-
-async fn create_users_and_conversation(pool: &SqlitePool) -> (User, User, Conversation) {
-    let user1 = User::new("alice".to_string(), "hash1".to_string(), "salt1".to_string());
-    let user2 = User::new("bob".to_string(), "hash2".to_string(), "salt2".to_string());
-    db::queries::insert_user(pool, &user1).await.unwrap();
-    db::queries::insert_user(pool, &user2).await.unwrap();
-
-    let mut ids = vec![user1.id.clone(), user2.id.clone()];
-    ids.sort();
-    let conversation = Conversation::new(ids[0].clone(), ids[1].clone());
-    db::queries::insert_conversation(pool, &conversation)
-        .await
-        .unwrap();
-
-    (user1, user2, conversation)
-}
-
+/// Test ID: T106-001
+/// Given: A presence service with connected observers
+/// When: Triggering 10 rapid online/offline status changes
+/// Then: All broadcasts should arrive within 1 second SLA (< 100ms average in-memory)
 #[tokio::test]
 async fn test_presence_latency_sla() {
     let pool = setup_test_db().await;

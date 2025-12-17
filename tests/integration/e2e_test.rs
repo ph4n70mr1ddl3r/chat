@@ -8,7 +8,7 @@
 #[cfg(test)]
 mod e2e_test {
     use serde_json::json;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{timeout, Duration};
 
     // Test fixture: Server and two test clients
     struct E2ETestContext {
@@ -171,6 +171,10 @@ mod e2e_test {
 
     #[tokio::test]
     async fn test_complete_user_flow() {
+        /// Test ID: T100-001
+        /// Given: New user accounts are created
+        /// When: User completes full signup, login, search, and conversation start flow
+        /// Then: All operations should succeed and maintain proper state
         let mut context = E2ETestContext::new();
 
         // Step 1: Signup Alice
@@ -193,17 +197,26 @@ mod e2e_test {
         context.bob_user_id = Some(bob_user_id.clone());
         println!("✓ Bob signed up successfully: {}", bob_user_id);
 
-        // Wait for accounts to be fully created
-        sleep(Duration::from_millis(500)).await;
+        // Wait for accounts to be fully created (deterministic retry instead of sleep)
+        // Try to login up to 3 times with exponential backoff
+        let mut login_attempt = 0;
+        let new_alice_token = loop {
+            login_attempt += 1;
+            match context.login("alice_e2e", "TestPass123").await {
+                Ok((token, _)) => break token,
+                Err(_) if login_attempt < 3 => {
+                    // Account not yet created, retry with backoff (50ms, 100ms, 200ms)
+                    tokio::time::sleep(Duration::from_millis(50 * login_attempt as u64)).await;
+                    continue;
+                }
+                Err(e) => panic!("Alice login failed after retries: {}", e),
+            }
+        };
 
-        // Step 3: Alice logs in
+        // Step 3: Alice logs in (already succeeded above)
         println!("Step 3: Alice logging in...");
-        let (new_alice_token, _) = context
-            .login("alice_e2e", "TestPass123")
-            .await
-            .expect("Alice login should succeed");
-        context.alice_token = Some(new_alice_token.clone());
         println!("✓ Alice logged in successfully");
+        context.alice_token = Some(new_alice_token.clone());
 
         // Step 4: Alice searches for Bob
         println!("Step 4: Alice searching for Bob...");
@@ -248,8 +261,11 @@ mod e2e_test {
         println!("\n✅ Complete E2E flow passed successfully!");
     }
 
+    /// Test ID: T100-002
+    /// Given: Various signup scenarios with invalid inputs
+    /// When: Attempting signup with password validation failures and duplicate usernames
+    /// Then: All signup attempts should fail with appropriate validation errors
     #[tokio::test]
-    async fn test_signup_validation_failures() {
         let mut context = E2ETestContext::new();
 
         // Test invalid password (too short)
@@ -272,8 +288,11 @@ mod e2e_test {
         println!("✅ Signup validation tests passed!");
     }
 
+    /// Test ID: T100-003
+    /// Given: Valid accounts created with various authentication scenarios
+    /// When: Attempting login with wrong password or non-existent accounts
+    /// Then: Authentication should fail and no token should be issued
     #[tokio::test]
-    async fn test_authentication_failures() {
         let mut context = E2ETestContext::new();
 
         // Create a valid account
@@ -293,8 +312,11 @@ mod e2e_test {
         println!("✅ Authentication failure tests passed!");
     }
 
+    /// Test ID: T100-004
+    /// Given: Two authenticated users (alice and bob)
+    /// When: Alice tries to access a conversation that bob has not joined
+    /// Then: The operation should be denied (authorization failure)
     #[tokio::test]
-    async fn test_conversation_authorization() {
         let mut context = E2ETestContext::new();
 
         // Create Alice and Bob

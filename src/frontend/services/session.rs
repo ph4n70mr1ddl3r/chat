@@ -38,6 +38,13 @@ impl SessionManager {
         }
     }
 
+    fn new_with_session_file(session_file: PathBuf) -> Self {
+        Self {
+            session_file,
+            current_session: Arc::new(Mutex::new(None)),
+        }
+    }
+
     /// Get the session file path based on the OS
     fn get_session_file_path() -> PathBuf {
         #[cfg(target_os = "windows")]
@@ -263,7 +270,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_session_manager_save_and_load() {
-        let manager = SessionManager::new();
+        let unique = {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos();
+            format!("{}-{}", std::process::id(), now)
+        };
+        let session_dir = std::env::temp_dir().join(format!("chat-app-test-session-{}", unique));
+        let session_file = session_dir.join("session.json");
+        let manager = SessionManager::new_with_session_file(session_file);
 
         let session = SessionData {
             user_id: "test_user".to_string(),
@@ -283,5 +299,8 @@ mod tests {
         // Clear
         manager.clear_session().await.unwrap();
         assert!(manager.get_current_session().is_none());
+
+        // Best-effort cleanup
+        let _ = std::fs::remove_dir_all(session_dir);
     }
 }

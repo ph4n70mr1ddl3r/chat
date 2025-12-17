@@ -2,6 +2,7 @@
 //!
 //! Tests JWT token validation during WebSocket upgrade handshake.
 //! Validates that only authenticated users with valid JWT tokens can establish WebSocket connections.
+//! Requirement: T060 - WebSocket Handshake & Authentication
 
 use chat_backend::services::auth_service::{generate_jwt_token, TokenClaims};
 use chat_backend::{db, server};
@@ -112,6 +113,10 @@ fn generate_expired_token(user_id: &str, secret: &str) -> String {
     .expect("Failed to generate token")
 }
 
+/// Test ID: T060-001
+/// Given: A valid JWT token for an authenticated user
+/// When: WebSocket connection is attempted with valid token in handshake
+/// Then: Connection should succeed and user should be connected
 #[tokio::test]
 async fn test_websocket_handshake_with_valid_token() {
     // Note: This test requires a running server
@@ -171,6 +176,10 @@ async fn test_websocket_handshake_with_valid_token() {
     println!("Test setup complete: user created, token generated");
 }
 
+/// Test ID: T060-002
+/// Given: No JWT token is provided
+/// When: WebSocket connection is attempted without token
+/// Then: Connection should fail with authentication error
 #[tokio::test]
 async fn test_websocket_handshake_without_token() {
     // Test that WebSocket upgrade fails when no token is provided
@@ -181,6 +190,10 @@ async fn test_websocket_handshake_without_token() {
     println!("Test: WebSocket handshake without token should fail");
 }
 
+/// Test ID: T060-003
+/// Given: A malformed or invalid JWT token
+/// When: WebSocket connection is attempted with invalid token
+/// Then: Connection should fail with token validation error
 #[tokio::test]
 async fn test_websocket_handshake_with_invalid_token() {
     // Test that WebSocket upgrade fails with malformed token
@@ -195,6 +208,10 @@ async fn test_websocket_handshake_with_invalid_token() {
     println!("Test: WebSocket handshake with invalid token should fail");
 }
 
+/// Test ID: T060-004
+/// Given: An expired JWT token (past expiration time)
+/// When: WebSocket connection is attempted with expired token
+/// Then: Connection should fail with token expiration error
 #[tokio::test]
 async fn test_websocket_handshake_with_expired_token() {
     // Test that WebSocket upgrade fails with expired token
@@ -213,6 +230,10 @@ async fn test_websocket_handshake_with_expired_token() {
     println!("Test: WebSocket handshake with expired token should fail");
 }
 
+/// Test ID: T060-005
+/// Given: A JWT token signed with incorrect secret
+/// When: WebSocket connection is attempted with token signed with wrong secret
+/// Then: Connection should fail with token signature validation error
 #[tokio::test]
 async fn test_websocket_handshake_with_wrong_secret() {
     // Test that WebSocket upgrade fails with token signed with wrong secret
@@ -231,6 +252,10 @@ async fn test_websocket_handshake_with_wrong_secret() {
     println!("Test: WebSocket handshake with wrong secret should fail");
 }
 
+/// Test ID: T060-006
+/// Given: JWT token validation logic with various inputs
+/// When: Token validator is tested with valid, invalid, and missing tokens
+/// Then: Validator should correctly accept valid tokens and reject invalid ones
 #[tokio::test]
 async fn test_jwt_token_validation_logic() {
     use chat_backend::handlers::handshake::HandshakeValidator;
@@ -264,6 +289,10 @@ async fn test_jwt_token_validation_logic() {
     println!("JWT token validation logic tests passed");
 }
 
+/// Test ID: T060-007
+/// Given: JWT tokens with various expiration times
+/// When: Token expiration check is performed
+/// Then: System should correctly identify expired vs. valid tokens
 #[tokio::test]
 async fn test_jwt_token_expiration_check() {
     use chat_backend::handlers::handshake::HandshakeValidator;
@@ -290,6 +319,10 @@ async fn test_jwt_token_expiration_check() {
     println!("JWT token expiration check test passed");
 }
 
+/// Test ID: T060-008
+/// Given: WebSocket query string with multiple parameters including token
+/// When: Handshake validator parses the query string
+/// Then: Token should be correctly extracted and validated despite other parameters
 #[tokio::test]
 async fn test_multiple_tokens_in_query() {
     use chat_backend::handlers::handshake::HandshakeValidator;

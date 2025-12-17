@@ -8,8 +8,14 @@
 // - Button integrates with MessageInput (US-010)
 // - Button integrates with ConversationHeader (US-011)
 // - Button integrates with MessageList actions (US-014)
+//
+// Requirement: T001 - UI Button Component Integration
 // ============================================================================
 
+/// Test ID: T001-001
+/// Given: Button component is used as send button in MessageInput
+/// When: Button is rendered within MessageInput layout
+/// Then: Button should render correctly and respond to clicks
 #[test]
 #[ignore = "Waiting for MessageInput component implementation (US-010)"]
 fn test_button_integration_with_message_input() {
@@ -34,9 +40,11 @@ fn test_button_integration_with_message_input() {
     // 6. Test keyboard (Tab to button, Enter to activate)
 }
 
+/// Test ID: T001-002
+/// Given: Button component is used for settings/actions in ConversationHeader
+/// When: Button is rendered in the header UI
+/// Then: Button should render correctly and not interfere with header layout
 #[test]
-#[ignore = "Waiting for ConversationHeader component implementation (US-011)"]
-fn test_button_integration_with_conversation_header() {
     // When ConversationHeader component is implemented:
     // This test will verify that Button (used for settings/actions) works correctly
     //
@@ -48,9 +56,11 @@ fn test_button_integration_with_conversation_header() {
     // This ensures US-011 (ConversationHeader) won't break due to Button issues
 }
 
+/// Test ID: T001-003
+/// Given: Button component is used for message actions in MessageList
+/// When: Multiple buttons are rendered for actions (Reply, Delete, etc.)
+/// Then: All buttons should render correctly and not interfere with each other
 #[test]
-#[ignore = "Waiting for MessageList component implementation (US-014)"]
-fn test_button_integration_with_message_list_actions() {
     // When MessageList component is implemented:
     // This test will verify that Button (used for message actions) works correctly
     //
@@ -66,8 +76,11 @@ fn test_button_integration_with_message_list_actions() {
 // Regression Test: Button Doesn't Break Existing Components
 // ============================================================================
 
+/// Test ID: T001-004
+/// Given: Button component is part of the overall project build
+/// When: The project is compiled
+/// Then: No compilation errors or regressions should occur
 #[test]
-fn test_button_compilation_no_regressions() {
     // Verify that Button component compiles without breaking the overall build.
     // This is a smoke test to catch any major compilation issues.
     //

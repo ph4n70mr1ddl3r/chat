@@ -1,35 +1,29 @@
 //! Unit tests for message validation rules (content length, UTF-8 validity, recipient authorization)
 //!
-//! Covers T097: content length constraints, invalid characters, and recipient existence checks.
+//! Covers T501: content length constraints, invalid characters, and recipient existence checks.
+//! Requirement: T501 - Message Validation
 
 use chat_backend::db;
 use chat_backend::models::{Conversation, User};
 use chat_backend::services::message_service::MessageService;
-use sqlx::SqlitePool;
+use crate::fixtures::setup_test_db;
 use uuid::Uuid;
 
-async fn setup_test_db() -> SqlitePool {
-    let pool = sqlx::sqlite::SqlitePoolOptions::new()
-        .connect("sqlite::memory:")
-        .await
-        .unwrap();
-
-    let schema_sql = include_str!("../../src/backend/db/migrations/001_initial_schema.sql");
-    for statement in schema_sql.split(';').filter(|s| !s.trim().is_empty()) {
-        sqlx::query(statement).execute(&pool).await.unwrap();
-    }
-
-    pool
-}
-
+/// Test ID: T501-001
+/// Given: Message content with valid and invalid characters
+/// When: Message validation is performed
+/// Then: Valid UTF-8 text should pass, control characters should be rejected
 #[tokio::test]
 async fn rejects_invalid_characters_in_content() {
     assert!(MessageService::validate_content("Hello, world!"));
     assert!(!MessageService::validate_content("bad\u{0007}chars")); // control character should be rejected
 }
 
+/// Test ID: T501-002
+/// Given: A message is being sent to a non-existent recipient
+/// When: Message validation checks recipient exists
+/// Then: Validation should fail with "recipient not found" error
 #[tokio::test]
-async fn rejects_missing_recipient() {
     let pool = setup_test_db().await;
     let service = MessageService::new(pool.clone());
 
@@ -57,8 +51,11 @@ async fn rejects_missing_recipient() {
     assert!(result.unwrap_err().to_lowercase().contains("recipient"));
 }
 
+/// Test ID: T501-003
+/// Given: A message with content exceeding 5000 characters
+/// When: Message length validation is performed
+/// Then: Validation should fail with "content must be between 1 and 5000 characters" error
 #[tokio::test]
-async fn rejects_message_too_long() {
     let pool = setup_test_db().await;
     let service = MessageService::new(pool.clone());
 

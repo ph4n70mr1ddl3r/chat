@@ -17,8 +17,14 @@
 //   - Manual testing with Slint preview
 //   - Slint integration tests (when framework available)
 //   - E2E tests with actual app rendering
+//
+// Requirement: T002 - Button Component Unit Tests
 // ============================================================================
 
+/// Test ID: T002-001
+/// Given: Button component source file exists
+/// When: The component is compiled
+/// Then: All Slint syntax should be valid and no compilation errors occur
 // Meta-test: Verify button.slint file exists and compiles
 #[test]
 fn test_button_component_structure() {
@@ -28,8 +34,11 @@ fn test_button_component_structure() {
     assert!(true, "Button component compiles successfully");
 }
 
+/// Test ID: T002-002
+/// Given: Button component imports design tokens
+/// When: The component structure is validated
+/// Then: All required design tokens (FLUENT_BLUE, ERROR, SPACING, DURATION) should be available
 #[test]
-fn test_button_uses_design_tokens() {
     // Meta-test: Button component imports and uses design tokens from tokens.slint
     // Expected: FLUENT_BLUE, ERROR, SPACING_*, DURATION_* tokens are available
     // This ensures design consistency across components.
@@ -135,6 +144,10 @@ fn test_button_uses_design_tokens() {
 //
 // ============================================================================
 
+/// Test ID: T002-003
+/// Given: Button is used as send button in MessageInput component
+/// When: Button is integrated within MessageInput parent
+/// Then: Button should render within parent and respond to parent state changes
 // Integration test placeholder for when MessageInput tests are added
 #[test]
 #[ignore = "Waiting for MessageInput component to test Button integration"]
@@ -147,6 +160,10 @@ fn test_button_integrates_with_message_input_parent() {
     // This ensures Button works correctly in downstream components.
 }
 
+/// Test ID: T002-004
+/// Given: Button component with primary variant
+/// When: The component is rendered
+/// Then: Button should display with FLUENT_BLUE (#0078D4) background and white text
 #[test]
 #[ignore = "Requires Slint testing framework"]
 fn test_button_renders_primary_variant() {
@@ -166,6 +183,10 @@ fn test_button_renders_primary_variant() {
     // - Launch app and check button colors match
 }
 
+/// Test ID: T002-005
+/// Given: Button component with secondary variant
+/// When: The component is rendered
+/// Then: Button should display with white background, blue border, and blue text
 #[test]
 #[ignore = "Requires Slint testing framework"]
 fn test_button_renders_secondary_variant() {
@@ -173,6 +194,10 @@ fn test_button_renders_secondary_variant() {
     // Expected: Secondary button renders with white background, 1px Fluent Blue border, blue text
 }
 
+/// Test ID: T002-006
+/// Given: Button component with different size options
+/// When: Button is rendered with sizes: small, medium, large
+/// Then: Button should render in correct sizes (28px, 36px, 44px respectively)
 #[test]
 #[ignore = "Requires Slint testing framework"]
 fn test_button_renders_all_sizes() {
@@ -183,6 +208,10 @@ fn test_button_renders_all_sizes() {
     //   - Large: 44px height, generous padding
 }
 
+/// Test ID: T002-007
+/// Given: Button component with on_clicked callback
+/// When: Button is clicked by user
+/// Then: The on_clicked callback should be triggered
 #[test]
 #[ignore = "Requires Slint testing framework"]
 fn test_on_clicked_fires() {
@@ -195,6 +224,10 @@ fn test_on_clicked_fires() {
     // - Verify callback was invoked
 }
 
+/// Test ID: T002-008
+/// Given: Button component with focus and keyboard support
+/// When: Enter key is pressed on focused button
+/// Then: The on_clicked callback should be triggered (keyboard accessible)
 #[test]
 #[ignore = "Requires Slint testing framework"]
 fn test_keyboard_enter_activates() {
@@ -202,6 +235,10 @@ fn test_keyboard_enter_activates() {
     // Expected: Pressing Enter on focused button triggers callback
 }
 
+/// Test ID: T002-009
+/// Given: Button component with focus and keyboard support
+/// When: Space key is pressed on focused button
+/// Then: The on_clicked callback should be triggered (keyboard accessible)
 #[test]
 #[ignore = "Requires Slint testing framework"]
 fn test_keyboard_space_activates() {
@@ -209,6 +246,10 @@ fn test_keyboard_space_activates() {
     // Expected: Pressing Space on focused button triggers callback
 }
 
+/// Test ID: T002-010
+/// Given: Button with is_loading=true and user prefers reduced motion
+/// When: Reduced motion preference is enabled
+/// Then: Button spinner animation should be disabled (no motion)
 #[test]
 #[ignore = "Requires Slint testing framework"]
 fn test_reduce_motion_disables_animation() {
@@ -219,6 +260,10 @@ fn test_reduce_motion_disables_animation() {
     // of being skipped entirely. This test would verify the fix.
 }
 
+/// Test ID: T002-011
+/// Given: Button with is_disabled=true
+/// When: User attempts to click disabled button
+/// Then: Button should ignore clicks and callback should not fire
 #[test]
 #[ignore = "Requires Slint testing framework"]
 fn test_is_disabled_prevents_clicks() {
@@ -226,6 +271,10 @@ fn test_is_disabled_prevents_clicks() {
     // Expected: Click events have no effect; is_disabled=false allows clicks
 }
 
+/// Test ID: T002-012
+/// Given: Button with is_loading=true
+/// When: Loading state is activated
+/// Then: Spinner should display and button label should be hidden
 #[test]
 #[ignore = "Requires Slint testing framework"]
 fn test_loading_state_shows_spinner() {
@@ -233,6 +282,10 @@ fn test_loading_state_shows_spinner() {
     // Expected: is_loading toggles between label display and spinner display
 }
 
+/// Test ID: T002-013
+/// Given: Button with screen reader (accessible-label)
+/// When: Button is in loading state
+/// Then: Accessible label should include loading state information
 #[test]
 #[ignore = "Requires Slint testing framework"]
 fn test_accessible_label_includes_state() {
@@ -243,6 +296,10 @@ fn test_accessible_label_includes_state() {
     // This test would verify that accessible-label updates when state changes.
 }
 
+/// Test ID: T002-014
+/// Given: Button used on touch-enabled device
+/// When: Button is interacted with via touch followed by keyboard
+/// Then: Keyboard interaction should work correctly after touch interaction
 #[test]
 #[ignore = "Requires Slint testing framework + mobile device"]
 fn test_keyboard_works_after_touch_interaction() {

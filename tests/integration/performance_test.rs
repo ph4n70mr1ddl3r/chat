@@ -6,6 +6,7 @@
 // - WebSocket handshake latency (target: <100ms)
 //
 // These tests validate that the system meets performance requirements.
+// Requirement: T070 - Performance & Load Testing
 
 #[cfg(test)]
 mod performance_test {
@@ -133,6 +134,10 @@ mod performance_test {
         }
     }
 
+    /// Test ID: T070-001
+    /// Given: Online users sending and receiving messages
+    /// When: Message delivery latency is measured over 100 messages
+    /// Then: Average latency should be <2s and P99 <2000ms
     #[tokio::test]
     async fn test_message_delivery_latency_online() {
         println!("\n🧪 Testing: Message Delivery Latency (Online Users)");
@@ -185,6 +190,10 @@ mod performance_test {
         println!("✅ Message delivery latency test PASSED");
     }
 
+    /// Test ID: T070-002
+    /// Given: Message sending over a 10-second interval
+    /// When: Messages are sent as fast as possible
+    /// Then: System should achieve ≥100 messages/second throughput
     #[tokio::test]
     async fn test_message_throughput() {
         println!("\n🧪 Testing: Message Throughput");
@@ -233,6 +242,10 @@ mod performance_test {
         println!("✅ Message throughput test PASSED");
     }
 
+    /// Test ID: T070-003
+    /// Given: WebSocket clients establishing connections
+    /// When: 50 handshakes are performed
+    /// Then: Average handshake latency should be <100ms and P99 <150ms
     #[tokio::test]
     async fn test_websocket_handshake_latency() {
         println!("\n🧪 Testing: WebSocket Handshake Latency");
@@ -282,6 +295,10 @@ mod performance_test {
         println!("✅ WebSocket handshake latency test PASSED");
     }
 
+    /// Test ID: T070-004
+    /// Given: 100 concurrent clients connecting simultaneously
+    /// When: All clients connect, send messages, and disconnect
+    /// Then: System should handle all connections within 30s and avg latency <200ms
     #[tokio::test]
     async fn test_concurrent_connections() {
         println!("\n🧪 Testing: Concurrent Connections");
@@ -356,6 +373,10 @@ mod performance_test {
         println!("✅ Concurrent connections test PASSED");
     }
 
+    /// Test ID: T070-005
+    /// Given: 1000 messages sent with latency tracking
+    /// When: Latency distribution is analyzed across percentiles
+    /// Then: P99 latency should be within reasonable bounds (<100ms)
     #[tokio::test]
     async fn test_message_latency_histogram() {
         println!("\n🧪 Testing: Message Latency Histogram");

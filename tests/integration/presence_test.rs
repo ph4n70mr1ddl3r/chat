@@ -1,46 +1,21 @@
 //! Integration tests for presence tracking and broadcasting.
 //!
 //! Covers T106 scenarios (online/offline broadcast, database updates).
+//! Requirement: T105-T106 - Presence & Status
 
 use chat_backend::db;
 use chat_backend::handlers::websocket::{ClientConnection, ConnectionManager};
-use chat_backend::models::{Conversation, User};
+use chat_backend::models::User;
 use chat_backend::services::PresenceService;
-use sqlx::SqlitePool;
 use std::sync::Arc;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::time::{timeout, Duration};
+use crate::fixtures::{setup_test_db, create_users_and_conversation};
 
-async fn setup_test_db() -> SqlitePool {
-    let pool = sqlx::sqlite::SqlitePoolOptions::new()
-        .connect("sqlite::memory:")
-        .await
-        .unwrap();
-
-    let schema_sql = include_str!("../../src/backend/db/migrations/001_initial_schema.sql");
-    for statement in schema_sql.split(';').filter(|s| !s.trim().is_empty()) {
-        sqlx::query(statement).execute(&pool).await.unwrap();
-    }
-
-    pool
-}
-
-async fn create_users_and_conversation(pool: &SqlitePool) -> (User, User, Conversation) {
-    let user1 = User::new("alice".to_string(), "hash1".to_string(), "salt1".to_string());
-    let user2 = User::new("bob".to_string(), "hash2".to_string(), "salt2".to_string());
-    db::queries::insert_user(pool, &user1).await.unwrap();
-    db::queries::insert_user(pool, &user2).await.unwrap();
-
-    let mut ids = vec![user1.id.clone(), user2.id.clone()];
-    ids.sort();
-    let conversation = Conversation::new(ids[0].clone(), ids[1].clone());
-    db::queries::insert_conversation(pool, &conversation)
-        .await
-        .unwrap();
-
-    (user1, user2, conversation)
-}
-
+/// Test ID: T105-001
+/// Given: A user is online with an active WebSocket connection
+/// When: Another user comes online
+/// Then: An online presence broadcast should be sent to connected users
 #[tokio::test]
 async fn broadcasts_presence_when_user_goes_online() {
     let pool = setup_test_db().await;
@@ -74,8 +49,11 @@ async fn broadcasts_presence_when_user_goes_online() {
     assert!(user.is_online);
 }
 
+/// Test ID: T105-002
+/// Given: A user is online with an active WebSocket connection
+/// When: Another user goes offline
+/// Then: An offline presence broadcast should be sent to connected users
 #[tokio::test]
-async fn broadcasts_presence_when_user_goes_offline() {
     let pool = setup_test_db().await;
     let connection_manager = Arc::new(ConnectionManager::new());
     let presence_service = PresenceService::new(pool.clone(), connection_manager.clone());
@@ -107,8 +85,11 @@ async fn broadcasts_presence_when_user_goes_offline() {
     assert!(!user.is_online);
 }
 
+/// Test ID: T105-003
+/// Given: Two unrelated users (no conversation between them)
+/// When: One user's presence status changes
+/// Then: The presence update should NOT be broadcast to unrelated users
 #[tokio::test]
-async fn presence_not_broadcast_to_unrelated_users() {
     let pool = setup_test_db().await;
     let connection_manager = Arc::new(ConnectionManager::new());
     let presence_service = PresenceService::new(pool.clone(), connection_manager.clone());

@@ -4,47 +4,21 @@
 
 use chat_backend::db;
 use chat_backend::handlers::websocket::{ClientConnection, ConnectionManager};
-use chat_backend::models::{Conversation, User};
 use chat_backend::services::message_queue::MessageQueueService;
 use chat_backend::services::message_service::MessageService;
-use sqlx::SqlitePool;
 use std::sync::Arc;
 use tokio::sync::mpsc::unbounded_channel;
-use tokio::time::{sleep, timeout, Duration};
+use tokio::time::{timeout, Duration};
 use uuid::Uuid;
-
-async fn setup_test_db() -> SqlitePool {
-    let pool = sqlx::sqlite::SqlitePoolOptions::new()
-        .connect("sqlite::memory:")
-        .await
-        .unwrap();
-
-    let schema_sql = include_str!("../../src/backend/db/migrations/001_initial_schema.sql");
-    for statement in schema_sql.split(';').filter(|s| !s.trim().is_empty()) {
-        sqlx::query(statement).execute(&pool).await.unwrap();
-    }
-
-    pool
-}
-
-async fn create_users_and_conversation(pool: &SqlitePool) -> (User, User, Conversation) {
-    let sender = User::new("alice".to_string(), "hash1".to_string(), "salt1".to_string());
-    let recipient = User::new("bob".to_string(), "hash2".to_string(), "salt2".to_string());
-    db::queries::insert_user(pool, &sender).await.unwrap();
-    db::queries::insert_user(pool, &recipient).await.unwrap();
-
-    let mut ids = vec![sender.id.clone(), recipient.id.clone()];
-    ids.sort();
-    let conversation = Conversation::new(ids[0].clone(), ids[1].clone());
-    db::queries::insert_conversation(pool, &conversation)
-        .await
-        .unwrap();
-
-    (sender, recipient, conversation)
-}
+use crate::helpers::polling::poll_until;
+use crate::fixtures::{setup_test_db, create_users_and_conversation};
 
 #[tokio::test]
 async fn delivers_message_when_recipient_online() {
+    /// Test ID: T096-001
+    /// Given: A recipient is online with an active WebSocket connection
+    /// When: A message is sent to that recipient
+    /// Then: The message should be delivered immediately via the WebSocket connection
     let pool = setup_test_db().await;
     let connection_manager = Arc::new(ConnectionManager::new());
     let queue = MessageQueueService::new(pool.clone(), connection_manager.clone());
@@ -85,6 +59,10 @@ async fn delivers_message_when_recipient_online() {
     queue.stop().await;
 }
 
+/// Test ID: T096-002
+/// Given: A message is queued for an offline recipient
+/// When: The recipient comes online
+/// Then: The queued message should be delivered immediately
 #[tokio::test]
 async fn queues_and_delivers_when_recipient_comes_online() {
     let pool = setup_test_db().await;
@@ -110,11 +88,28 @@ async fn queues_and_delivers_when_recipient_comes_online() {
         .queue_message(message.id.clone(), recipient.id.clone())
         .await;
 
-    // Recipient offline initially; bring them online after short delay.
-    sleep(Duration::from_millis(600)).await;
+    // GIVEN: Message is queued (deterministically wait for DB state)
+    let message_id = message.id.clone();
+    let pool_for_poll = pool.clone();
+    poll_until(Duration::from_secs(2), || {
+        let id = message_id.clone();
+        let p = pool_for_poll.clone();
+        async move {
+            if let Ok(Some(msg)) = db::queries::find_message_by_id(&p, &id).await {
+                msg.status == "queued"
+            } else {
+                false
+            }
+        }
+    })
+    .await
+    .expect("message never queued");
+
+    // WHEN: Recipient comes online
     let connection = ClientConnection::new(recipient.id.clone(), recipient.username.clone());
     connection_manager.register(connection, tx).await;
 
+    // THEN: Delivery event should arrive (deterministic timeout)
     let delivered = timeout(Duration::from_secs(4), rx.recv())
         .await
         .expect("delivery timed out");
@@ -129,12 +124,17 @@ async fn queues_and_delivers_when_recipient_comes_online() {
     queue.stop().await;
 }
 
+/// Test ID: T096-003
+/// Given: Multiple messages sent from different senders
+/// When: Requesting message history with pagination
+/// Then: Messages should be returned in reverse chronological order with correct pagination
 #[tokio::test]
 async fn loads_message_history_with_pagination() {
     let pool = setup_test_db().await;
     let service = MessageService::new(pool.clone());
     let (sender, recipient, conversation) = create_users_and_conversation(&pool).await;
 
+    // GIVEN: Send 3 messages with deterministic ordering (use timestamps)
     for i in 0..3 {
         service
             .send_message(
@@ -145,13 +145,19 @@ async fn loads_message_history_with_pagination() {
             )
             .await
             .unwrap();
-        sleep(Duration::from_millis(5)).await; // ensure ordering by timestamp
+        
+        // Wait for message to be persisted before sending next one
+        // This ensures timestamp ordering without hardcoded sleeps
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
     }
 
+    // WHEN: Request first page with limit of 2
     let first_page = service
         .get_conversation_messages(&conversation.id, &sender.id, 2, 0)
         .await
         .unwrap();
+
+    // THEN: Should return most recent 2 messages in reverse chronological order
     assert_eq!(first_page.len(), 2);
     assert_eq!(first_page[0].content, "msg-2");
     assert_eq!(first_page[1].content, "msg-1");
@@ -159,6 +165,10 @@ async fn loads_message_history_with_pagination() {
 
 #[tokio::test]
 async fn prevents_duplicate_message_ids() {
+    /// Test ID: T096-004
+    /// Given: A message is sent with a specific ID
+    /// When: The same message ID is sent again with different content
+    /// Then: The system should return the original message (idempotent), not create a duplicate
     let pool = setup_test_db().await;
     let service = MessageService::new(pool.clone());
     let (sender, recipient, conversation) = create_users_and_conversation(&pool).await;

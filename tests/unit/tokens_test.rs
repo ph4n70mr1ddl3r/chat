@@ -9,6 +9,10 @@
 // - MOTION_DURATION_REDUCED helper works correctly
 // ============================================================================
 
+/// Test ID: T700-001
+/// Given: Color design tokens with hex values
+/// When: Color token validation is performed
+/// Then: All colors should have valid hex format
 /// Test that all color tokens are valid hex values
 #[test]
 fn test_color_tokens_valid_hex() {
@@ -41,6 +45,10 @@ fn test_color_tokens_valid_hex() {
     }
 }
 
+/// Test ID: T700-002
+/// Given: Spacing design tokens
+/// When: Spacing token validation is performed
+/// Then: All spacings should be multiples of 4px and in valid range
 /// Test that all spacing tokens are on 8px grid (multiples of 4px)
 #[test]
 fn test_spacing_tokens_on_grid() {
@@ -72,6 +80,10 @@ fn test_spacing_tokens_on_grid() {
     }
 }
 
+/// Test ID: T700-003
+/// Given: Font size design tokens
+/// When: Typography font size validation is performed
+/// Then: All sizes should be positive and within readable range (12-72px)
 /// Test that all font sizes are positive and within readable range
 #[test]
 fn test_typography_font_sizes_valid() {
@@ -99,6 +111,10 @@ fn test_typography_font_sizes_valid() {
     assert!(48 > 28 && 28 > 18 && 18 > 14 && 14 > 12, "Font sizes not in descending order");
 }
 
+/// Test ID: T700-004
+/// Given: Font weight design tokens
+/// When: Font weight validation is performed
+/// Then: All weights should be valid CSS values (100-900, multiples of 100)
 /// Test that all font weights are valid CSS values
 #[test]
 fn test_typography_font_weights_valid() {
@@ -123,6 +139,10 @@ fn test_typography_font_weights_valid() {
     assert!(400 < 500 && 500 < 600 && 600 < 700, "Font weights not in ascending order");
 }
 
+/// Test ID: T700-005
+/// Given: Line height design tokens
+/// When: Line height validation is performed
+/// Then: All line heights should be reasonable (1.0-2.0 range)
 /// Test that all line heights are reasonable for typography
 #[test]
 fn test_typography_line_heights_valid() {
@@ -146,6 +166,10 @@ fn test_typography_line_heights_valid() {
     assert!(1.2 < 1.4 && 1.4 < 1.6, "Line heights not in ascending order");
 }
 
+/// Test ID: T700-006
+/// Given: Motion duration design tokens
+/// When: Motion duration validation is performed
+/// Then: All durations should be positive and in valid range (100-1000ms)
 /// Test that all motion durations are positive and reasonable
 #[test]
 fn test_motion_durations_valid() {
@@ -172,6 +196,10 @@ fn test_motion_durations_valid() {
     assert!(200 < 300 && 300 < 400 && 400 < 800, "Durations not in ascending order");
 }
 
+/// Test ID: T700-007
+/// Given: Motion preference settings (reduced motion enabled/disabled)
+/// When: Motion duration helper function is called
+/// Then: Helper should return 0ms when reduced motion enabled, original otherwise
 /// Test that MOTION_DURATION_REDUCED helper works correctly
 #[test]
 fn test_motion_duration_reduced_logic() {
@@ -208,6 +236,10 @@ fn test_motion_duration_reduced_logic() {
     assert_eq!(prefs_reduced.motion_duration_reduced(200), 0, "Should return 0ms for all durations when reduced motion");
 }
 
+/// Test ID: T700-008
+/// Given: Required design token sets (colors, typography, spacing, motion)
+/// When: Token completeness validation is performed
+/// Then: All required token types should be present in correct quantities
 /// Test that we have all required token types
 #[test]
 fn test_token_completeness() {
@@ -232,6 +264,10 @@ fn test_token_completeness() {
     assert!(total_expected > 0, "Should have sufficient tokens for full UI");
 }
 
+/// Test ID: T700-009
+/// Given: Design token color combinations
+/// When: Accessibility compliance (WCAG AA) is validated
+/// Then: All color pairs should have minimum 4.5:1 contrast ratio
 /// Test accessibility compliance
 #[test]
 fn test_accessibility_compliance() {
@@ -280,6 +316,10 @@ fn test_accessibility_compliance() {
     );
 }
 
+/// Test ID: T700-010
+/// Given: Design token naming conventions
+/// When: Token naming validation is performed
+/// Then: All tokens should follow UPPER_CASE_WITH_UNDERSCORES convention
 /// Test token naming conventions
 #[test]
 fn test_naming_conventions() {

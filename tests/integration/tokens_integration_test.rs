@@ -2,6 +2,7 @@
 // Design Token Tests Integration Test
 // ============================================================================
 // This file runs the token validation tests through the integration test runner
+// Requirement: T200 - Design Tokens & System
 
 // ============================================================================
 // Token Unit Tests
@@ -14,7 +15,10 @@
 // - MOTION_DURATION_REDUCED helper works correctly
 // ============================================================================
 
-/// Test that all color tokens are valid hex values
+/// Test ID: T200-001
+/// Given: Design system color tokens
+/// When: Color token values are validated
+/// Then: All colors should be valid hex format (#RRGGBB)
 #[test]
 fn test_color_tokens_valid_hex() {
     let colors = vec![
@@ -46,7 +50,10 @@ fn test_color_tokens_valid_hex() {
     }
 }
 
-/// Test that all spacing tokens are on 8px grid (multiples of 4px)
+/// Test ID: T200-002
+/// Given: Spacing token values
+/// When: Spacing values are validated
+/// Then: All spacing should be multiples of 4px (on design grid)
 #[test]
 fn test_spacing_tokens_on_grid() {
     let spacings = vec![
@@ -77,7 +84,10 @@ fn test_spacing_tokens_on_grid() {
     }
 }
 
-/// Test that all font sizes are positive and within readable range
+/// Test ID: T200-003
+/// Given: Typography font size tokens
+/// When: Font sizes are validated
+/// Then: All font sizes should be positive and within readable range (8px-72px)
 #[test]
 fn test_typography_font_sizes_valid() {
     let sizes = vec![
@@ -104,7 +114,10 @@ fn test_typography_font_sizes_valid() {
     assert!(48 > 28 && 28 > 18 && 18 > 14 && 14 > 12, "Font sizes not in descending order");
 }
 
-/// Test that all font weights are valid CSS values
+/// Test ID: T200-004
+/// Given: Typography font weight tokens
+/// When: Font weight values are validated
+/// Then: All font weights should be valid CSS values (300, 400, 500, 600, 700)
 #[test]
 fn test_typography_font_weights_valid() {
     let weights = vec![
@@ -128,7 +141,10 @@ fn test_typography_font_weights_valid() {
     assert!(400 < 500 && 500 < 600 && 600 < 700, "Font weights not in ascending order");
 }
 
-/// Test that all line heights are reasonable for typography
+/// Test ID: T200-005
+/// Given: Typography line height tokens
+/// When: Line height values are validated
+/// Then: All line heights should be between 1.0 and 2.0 for readable text
 #[test]
 fn test_typography_line_heights_valid() {
     let line_heights = vec![
@@ -151,7 +167,10 @@ fn test_typography_line_heights_valid() {
     assert!(1.2 < 1.4 && 1.4 < 1.6, "Line heights not in ascending order");
 }
 
-/// Test that all motion durations are positive and reasonable
+/// Test ID: T200-006
+/// Given: Motion duration tokens
+/// When: Motion duration values are validated
+/// Then: All durations should be positive and reasonable (100-1000ms)
 #[test]
 fn test_motion_durations_valid() {
     let durations = vec![
@@ -177,7 +196,10 @@ fn test_motion_durations_valid() {
     assert!(200 < 300 && 300 < 400 && 400 < 800, "Durations not in ascending order");
 }
 
-/// Test that MOTION_DURATION_REDUCED helper works correctly
+/// Test ID: T200-007
+/// Given: Motion preference settings (reduced motion enabled/disabled)
+/// When: MOTION_DURATION_REDUCED helper function is called
+/// Then: Should return 0ms when reduced motion is enabled, original duration otherwise
 #[test]
 fn test_motion_duration_reduced_logic() {
     // Simulating the MOTION_DURATION_REDUCED function logic:
@@ -213,7 +235,10 @@ fn test_motion_duration_reduced_logic() {
     assert_eq!(prefs_reduced.motion_duration_reduced(200), 0, "Should return 0ms for all durations when reduced motion");
 }
 
-/// Test that we have all required token types
+/// Test ID: T200-008
+/// Given: Design token system requirements
+/// When: Token completeness is verified
+/// Then: System should have all required tokens (colors, typography, spacing, motion)
 #[test]
 fn test_token_completeness() {
     // Color tokens: 8 required
@@ -237,7 +262,10 @@ fn test_token_completeness() {
     assert!(total_expected > 0, "Should have sufficient tokens for full UI");
 }
 
-/// Test accessibility compliance
+/// Test ID: T200-009
+/// Given: Design system color tokens for UI
+/// When: Accessibility compliance is verified
+/// Then: All color combinations should meet WCAG AA contrast ratio (4.5:1)
 #[test]
 fn test_accessibility_compliance() {
     // WCAG AA contrast requirement: 4.5:1 for normal text
@@ -285,7 +313,10 @@ fn test_accessibility_compliance() {
     );
 }
 
-/// Test token naming conventions
+/// Test ID: T200-010
+/// Given: Design system tokens with naming convention
+/// When: Token names are validated
+/// Then: All tokens should follow UPPER_CASE_WITH_UNDERSCORES convention
 #[test]
 fn test_naming_conventions() {
     // All tokens should use UPPER_CASE_WITH_UNDERSCORES (Rust constant convention)

@@ -1,27 +1,17 @@
 // Integration tests for conversation functionality
 //
 // Tests conversation creation, retrieval, and constraints
+// Requirement: T050 - Conversation Management
 
 use chat_backend::db;
-use chat_backend::models::{User, Conversation};
+use chat_backend::models::User;
 use chat_backend::services::ConversationService;
-use sqlx::SqlitePool;
+use crate::fixtures::setup_test_db;
 
-async fn setup_test_db() -> SqlitePool {
-    let pool = sqlx::sqlite::SqlitePoolOptions::new()
-        .connect("sqlite::memory:")
-        .await
-        .unwrap();
-
-    // Run migrations
-    let schema_sql = include_str!("../../src/backend/db/migrations/001_initial_schema.sql");
-    for statement in schema_sql.split(';').filter(|s| !s.trim().is_empty()) {
-        sqlx::query(statement).execute(&pool).await.unwrap();
-    }
-
-    pool
-}
-
+/// Test ID: T050-001
+/// Given: Two users exist
+/// When: Creating a conversation between them
+/// Then: A new conversation should be created with a unique ID
 #[tokio::test]
 async fn test_start_conversation_creates_new() {
     let pool = setup_test_db().await;
@@ -44,8 +34,11 @@ async fn test_start_conversation_creates_new() {
     assert!(!conversation.id.is_empty());
 }
 
+/// Test ID: T050-002
+/// Given: A user tries to create a conversation with themselves
+/// When: Attempting to start a conversation with same user ID
+/// Then: The operation should fail with a "self" error message
 #[tokio::test]
-async fn test_start_conversation_prevents_self_chat() {
     let pool = setup_test_db().await;
     let service = ConversationService::new(pool.clone());
     
@@ -61,8 +54,11 @@ async fn test_start_conversation_prevents_self_chat() {
     assert!(result.unwrap_err().contains("self"));
 }
 
+/// Test ID: T050-003
+/// Given: A conversation already exists between two users
+/// When: Attempting to create a conversation between the same users again
+/// Then: The existing conversation should be returned without creating a duplicate
 #[tokio::test]
-async fn test_get_existing_conversation() {
     let pool = setup_test_db().await;
     let service = ConversationService::new(pool.clone());
     
@@ -90,8 +86,11 @@ async fn test_get_existing_conversation() {
     assert_eq!(conv1.id, conv2.id);
 }
 
+/// Test ID: T050-004
+/// Given: A user has multiple conversations with different users
+/// When: Listing conversations for that user
+/// Then: All conversations should be returned in the result set
 #[tokio::test]
-async fn test_list_conversations() {
     let pool = setup_test_db().await;
     let service = ConversationService::new(pool.clone());
     
@@ -116,8 +115,11 @@ async fn test_list_conversations() {
     assert_eq!(conversations.len(), 2);
 }
 
+/// Test ID: T050-005
+/// Given: A user has 5 conversations
+/// When: Requesting conversations with limit=3 and offset=0, then offset=3
+/// Then: First page should return 3 conversations, second page should return 2
 #[tokio::test]
-async fn test_conversation_pagination() {
     let pool = setup_test_db().await;
     let service = ConversationService::new(pool.clone());
     
