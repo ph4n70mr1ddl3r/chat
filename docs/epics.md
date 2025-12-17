@@ -565,6 +565,27 @@ Users get fast startup, fast switching, and stable performance at scale.
 
 Users can find, organize, and switch between conversations confidently.
 
+### Story 1.0: Brownfield Integration Checkpoint (WebSocket + SQLite)
+
+**Implements:** (Derived)
+**Derived Requirement:** Brownfield compatibility with existing WebSocket protocol and SQLite schema/migrations
+
+As a chat user,
+I want the modernized app to remain compatible with existing backend protocols and stored data,
+So that I don’t lose access to conversations or experience regressions.
+
+**Acceptance Criteria:**
+
+**Given** I upgrade from an existing deployment with a known WebSocket protocol and an existing SQLite database  
+**When** I launch the modernized application and sign in  
+**Then** the app can connect using the existing WebSocket protocol and load my conversation list successfully  
+**And** the app can open an existing conversation and send/receive messages without protocol errors
+
+**Given** the existing SQLite schema requires changes for new features  
+**When** the app starts with a database that is on an older schema version  
+**Then** migrations are applied safely and incrementally  
+**And** existing data remains readable after migration
+
 ### Story 1.1: Conversation List With Unread + Preview
 
 **Implements:** FR1, FR7, FR8, FR36
@@ -690,6 +711,11 @@ So that I trust the system accepted my message.
 **When** I send the message  
 **Then** the system accepts the message and shows confirmation that it was sent successfully  
 **And** the composer clears after successful send
+
+**Given** I attempt to send a message while connected  
+**When** the send fails for a non-connectivity reason (e.g., validation error, server error)  
+**Then** the system shows a clear error message  
+**And** the unsent message content remains available for correction or retry (per defined rules)
 
 ### Story 2.3: Keyboard Message Composition (Enter-to-Send, Ctrl+Enter Line Break)
 
@@ -1013,7 +1039,8 @@ So that important chats remain easy to find.
 
 ### Story 5.5: Conversation-Level Muting (In-App Only)
 
-**Implements:** FR38
+**Implements:** (Derived)
+**Derived Requirement:** UX-driven distraction control (not explicitly listed as a PRD FR)
 
 As a chat user,
 I want to mute a conversation within the app,
@@ -1094,6 +1121,11 @@ So that I can restore connectivity when I’m ready.
 **And** on success the indicator updates to Connected  
 **And** on failure the indicator returns to Disconnected with an updated best-known reason (when available)
 
+**Given** the app is Connecting due to a prior reconnect attempt  
+**When** I attempt to trigger reconnection again  
+**Then** the app prevents duplicate attempts (e.g., disables the reconnect control)  
+**And** the UI continues to show Connecting until success or failure
+
 ### Story 6.4: Sync Pending State Changes After Reconnection
 
 **Implements:** FR46
@@ -1140,6 +1172,11 @@ So that I can understand what happened and retry intentionally.
 **And** the message remains failed until I manually retry sending it  
 **And** retry attempts are reflected in the UI (e.g., returning to sending state)
 
+**Given** a message is in a failed state due to connectivity  
+**When** I retry while the app is still disconnected  
+**Then** the message remains failed  
+**And** the UI provides clear feedback that connectivity is still required before the retry can succeed
+
 ## Epic 7: Onboarding & First-Time Experience
 
 New users can understand and successfully complete key workflows.
@@ -1159,6 +1196,11 @@ So that I can start using the app with minimal friction.
 **Then** the account creation flow completes in a minimal number of steps  
 **And** the app confirms account creation successfully
 
+**Given** I attempt to create an account with invalid or conflicting information  
+**When** the username is already taken or the password does not meet requirements  
+**Then** the app shows a clear error message explaining what to fix  
+**And** the form remains available to correct and resubmit
+
 ### Story 7.2: Login After Account Creation
 
 **Implements:** FR50
@@ -1173,6 +1215,11 @@ So that I can access my conversations.
 **When** I enter my username and password and submit  
 **Then** I am signed in successfully  
 **And** I am taken to the primary app experience
+
+**Given** I enter an incorrect username or password  
+**When** I attempt to sign in  
+**Then** the app shows a clear authentication error  
+**And** I remain on the login screen to retry
 
 ### Story 7.3: Guided Onboarding Checklist (Skippable)
 
@@ -1242,7 +1289,8 @@ Admins can manage users and view logs/health signals safely.
 
 ### Story 8.1: Admin-Only Access to Admin UI
 
-**Implements:** FR57, FR58, FR59, FR60, FR61, FR62, FR63, FR64
+**Implements:** NFR1-1e, NFR1-1f
+**Derived Requirement:** Role-based access control for administrative tooling
 
 As an administrator,
 I want a dedicated admin interface accessible only to admins,
@@ -1305,6 +1353,11 @@ So that the user can regain access securely.
 **Then** the user can log in with that temporary password  
 **And** the user is required to change their password on next login
 
+**Given** I attempt to reset a password for a user that does not exist or is deactivated  
+**When** I submit the password reset action  
+**Then** the system rejects the action with a clear error message  
+**And** no password change is applied
+
 ### Story 8.5: Deactivate (Soft-Delete) User Accounts
 
 **Implements:** FR61
@@ -1319,6 +1372,11 @@ So that I can remove access without deleting historical records.
 **When** I deactivate the account  
 **Then** the user can no longer sign in  
 **And** the account is marked as deactivated in the admin UI
+
+**Given** I attempt to deactivate an account that is already deactivated  
+**When** I perform the deactivation action  
+**Then** the system does not create inconsistent state  
+**And** the UI clearly indicates the account is already deactivated
 
 ### Story 8.6: Admin Activity Logs and Audit Trail
 
@@ -1358,7 +1416,8 @@ Support can investigate issues and guide users with actionable diagnostics.
 
 ### Story 9.1: Support-Only Access to Support UI
 
-**Implements:** FR65, FR66, FR67, FR68, FR69, FR70, FR71, FR72
+**Implements:** NFR1-1e, NFR1-1f
+**Derived Requirement:** Role-based access control for support tooling
 
 As a support staff member,
 I want a dedicated support interface accessible only to support staff,
@@ -1389,6 +1448,11 @@ So that I can quickly find the account related to an issue.
 **Then** I can find matching user accounts  
 **And** I can open a user detail view for a selected user
 
+**Given** I search for a user that does not exist  
+**When** I submit the search  
+**Then** the UI shows “no results” clearly  
+**And** suggests how to refine the search (as defined for MVP)
+
 ### Story 9.3: View User Conversation History (Including Message Bodies)
 
 **Implements:** FR66
@@ -1403,6 +1467,11 @@ So that I can investigate issues reported by users.
 **When** I open the user’s conversation history  
 **Then** I can view the user’s conversations and associated message bodies  
 **And** access is controlled by support authorization rules (as defined for MVP)
+
+**Given** privacy controls prevent me from viewing a user’s message bodies  
+**When** I attempt to access the conversation history  
+**Then** access is denied with a clear message  
+**And** the UI does not reveal restricted message content
 
 ### Story 9.4: View Delivery Status for Specific Messages
 
@@ -1490,7 +1559,8 @@ So that the app feels consistent with platform expectations and visually cohesiv
 
 ### Story 10.2: Theme Support (Manual Light/Dark)
 
-**Implements:** FR74, FR79, FR80
+**Implements:** (Derived)
+**Derived Requirement:** UX-driven preference to override OS theme (Architecture supports manual toggle; PRD FR covers OS-theme respect)
 
 As a user,
 I want to manually switch between light and dark themes,
@@ -1708,7 +1778,8 @@ So that I can notice messages when I’m not actively watching the app.
 
 ### Story 12.4: Muting Only Affects In-App Notification Signals
 
-**Implements:** FR91
+**Implements:** (Derived)
+**Derived Requirement:** Clarifies scope of conversation muting vs. OS notifications (not explicitly listed as a PRD FR)
 
 As a Windows user,
 I want conversation muting to affect only in-app notification signals,

@@ -283,17 +283,17 @@ export global Tokens {
 #### Theme Switching
 
 - App detects Windows dark/light mode on startup
-- `AppState` includes current `theme: "light" | "dark"`
+- `AppState` includes current `theme: "light" | "dark"` and a user preference (follow system vs manual override)
 - Components conditionally use tokens based on theme
-- Smooth transition when theme changes via Windows settings
-- No in-app theme toggle (post-MVP feature)
+- Smooth transition when theme changes via Windows settings (when following system)
+- In-app theme toggle supported (light/dark); when set, it overrides the system theme until reset to “follow system”
 
 **Implementation Pattern:**
 ```slint
 import { Tokens } from "design-system/tokens.slint";
 
 export component ThemedButton {
-  in property <string> theme: "light";
+  in property <string> theme: "light"; // resolved theme after applying user preference + system theme
   
   background: theme == "light" 
     ? Tokens.palette-primary-light 
@@ -2524,7 +2524,6 @@ The architecture has been comprehensively validated for coherence, requirements 
 **Next Phase:** Begin implementation using the architectural decisions and patterns documented herein, or proceed to the Epics & Stories workflow to break down requirements into specific user stories.
 
 **Document Maintenance:** Update this architecture when major technical decisions are made during implementation. The architecture will remain the single source of truth for all technical decisions throughout the project lifecycle.
-
 
 
 
