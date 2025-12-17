@@ -2,7 +2,7 @@
 
 **Quality Score**: 84/100 (A - Good)  
 **Review Date**: 2025-12-17  
-**Review Scope**: suite (23 Rust test files: unit + integration + contract)  
+**Review Scope**: suite (23 Rust test files with tests; 29 Rust files total under `tests/`)  
 **Reviewer**: Murat - Master Test Architect (TEA)
 
 ---
@@ -23,7 +23,7 @@ The suite is well-organized and aligns with a sane test pyramid: unit tests cove
 ✅ **BDD clarity** — 18/23 files include Given/When/Then structure (or equivalent)  
 ✅ **Isolation via fixtures** — integration tests consistently use `setup_test_db()` (and `create_users_and_conversation`)  
 ✅ **Protocol/schema coverage** — contract tests validate message shapes and schema rules  
-✅ **Assertions present** — no “zero assertion” test files detected (but see meta-tests below)
+✅ **Assertions present** — no “zero assertion” test files detected (but see meta-tests below); 149 total `#[test]`/`#[tokio::test]` blocks
 
 ### Key Weaknesses
 
