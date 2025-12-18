@@ -36,7 +36,7 @@ development_status:
   # WEEK 1: Design Tokens & Base Components
   week-1-design-tokens-base-components: in-progress
   us-001-design-token-constants: done
-  us-002-button-component: in-progress  # Code review fixes being applied (2025-12-18)
+  us-002-button-component: review  # Code review fixes applied (2025-12-18) - Build verified, awaiting final decision
   us-003-textfield-component: review
   us-004-icon-component: in-progress
   us-005-chip-component: in-progress
@@ -81,6 +81,6 @@ development_status:
 
   # TECHNICAL DEBT: Test Quality Improvements
   technical-debt-test-quality: backlog
-  td-001-replace-hard-sleeps: backlog
+  td-001-replace-hard-sleeps: ready-for-dev  # Comprehensive story created (2025-12-18) with migration patterns and examples
   td-002-test-documentation: backlog
   td-003-websocket-test-completion: backlog

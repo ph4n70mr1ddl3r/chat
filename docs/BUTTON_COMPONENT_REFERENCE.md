@@ -603,6 +603,271 @@ The Button component can be used in:
 
 ---
 
+## ⚠️ Error State Pattern (Downstream Component Guidance)
+
+### Overview
+
+The Button component does NOT include a built-in "error" variant. Instead, **error states should be handled** at the parent component level **using a combination of existing button states and visual feedback**. This keeps Button focused on user interaction while allowing parent components to provide context-specific error handling.
+
+**Code Review Note (Issue #6):** This section documents error state patterns for downstream components (US-010 MessageInput, US-011 ConversationHeader, US-014 MessageList) that will use Button.
+
+### Error State Design Pattern
+
+#### For Message Input (US-010) - Send Button with Error
+
+**Scenario:** User attempts to send a message, but the operation fails (network error, server error, validation error).
+
+**Recommended Pattern:**
+```slint
+export component MessageInput {
+    private property <bool> has_send_error: false;
+    private property <string> error_message: "";
+    private property <bool> is_sending: false;
+    
+    VerticalLayout {
+        // Error feedback banner (when has_send_error=true)
+        if has_send_error {
+            Rectangle {
+                background: #FFF4F4;  // Light red background
+                padding: 8px;
+                
+                Text {
+                    text: error_message;
+                    color: #A4373A;  // Danger red
+                    font-size: 12px;
+                }
+            }
+        }
+        
+        // Message input and send button
+        HorizontalLayout {
+            TextField { /* message input */ }
+            
+            Button {
+                // Button label changes on error
+                label: has_send_error ? "Retry" : "Send";
+                variant: has_send_error ? "danger" : "primary";  // Red button on error
+                is_loading: is_sending;
+                is_disabled: is_sending;
+                
+                on_clicked: () => {
+                    if (has_send_error) {
+                        // Retry send
+                        has_send_error = false;
+                        is_sending = true;
+                        retry_send_message();
+                    } else {
+                        // Normal send
+                        is_sending = true;
+                        send_message();
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+**Error Handling Flow:**
+1. **Normal:** Button label="Send", variant="primary" (blue)
+2. **Sending:** is_loading=true, spinner shows
+3. **Error occurs:** `has_send_error=true`, button label="Retry", variant="danger" (red), error banner shows
+4. **User clicks Retry:** Button sends message again, error banner disappears
+5. **Success:** Button returns to "Send" / "primary"
+
+#### For Conversation Actions (US-014) - Delete with Confirmation
+
+**Scenario:** User deletes a message, operation fails.
+
+**Recommended Pattern:**
+```slint
+export component MessageActions {
+    private property <bool> delete_failed: false;
+    
+    HorizontalLayout {
+        // Primary action button
+        Button {
+            label: "Reply";
+            variant: "secondary";  // Secondary for non-destructive action
+        }
+        
+        // Destructive action with error handling
+        Button {
+            label: delete_failed ? "Retry Delete" : "Delete";
+            variant: "danger";  // Always danger (red) for destructive actions
+            
+            on_clicked: () => {
+                if (delete_failed) {
+                    delete_failed = false;
+                    retry_delete_message();
+                } else {
+                    delete_message();
+                }
+            }
+        }
+    }
+    
+    // Error toast/notification
+    if delete_failed {
+        Toast {
+            message: "Failed to delete message";
+            type: "error";
+            action_label: "Retry";
+            on_action_clicked: () => { retry_delete_message(); }
+        }
+    }
+}
+```
+
+### Error State Visual Feedback Best Practices
+
+#### 1. **Button State Changes**
+- **Normal → Error:** Change variant from "primary" to "danger" (blue→red)
+- **Label Update:** "Send" → "Retry", "Delete" → "Retry Delete"
+- **Keep Disabled State:** Don't use is_disabled for errors (user can't retry)
+
+#### 2. **Additional Error Context**
+- **Error Banner/Toast:** Show specific error message near button
+- **Error Icon:** Add error icon (⚠️) next to button label if space allows
+- **Color Coding:** Use danger red (#A4373A) for error backgrounds
+
+#### 3. **Error Persistence and Recovery**
+```slint
+// Automatic error dismissal after retry
+Button {
+    label: has_error ? "Retry" : "Send";
+    variant: has_error ? "danger" : "primary";
+    
+    on_clicked: () => {
+        has_error = false;  // Clear error state on retry
+        attempt_operation();
+    }
+}
+```
+
+### Why No Built-In Error Variant?
+
+**Design Decision:** Button component intentionally does NOT have an "error" variant because:
+
+1. **Context-Specific:** Error handling requirements vary by parent component
+   - MessageInput needs error banner + retry button
+   - MessageList needs error toast + delete retry
+   - ConversationHeader needs inline error message
+
+2. **Separation of Concerns:**
+   - Button handles interaction (click, keyboard, loading, disabled)
+   - Parent component handles business logic (error detection, retry, user feedback)
+
+3. **Flexible Error UX:**
+   - Some errors are transient (network timeout) → show "Retry" button
+   - Some errors are permanent (auth failure) → disable action entirely
+   - Some errors require user input (validation error) → highlight TextField
+
+4. **Variant Reuse:**
+   - "danger" variant already exists for destructive actions
+   - Repurposing "danger" for errors provides visual distinction
+
+### Error State Checklist (Downstream Components)
+
+When implementing error handling with Button:
+
+- [ ] Define error state in parent component (`has_error`, `error_message`)
+- [ ] Update button label on error ("Send" → "Retry")
+- [ ] Change variant to "danger" on critical errors
+- [ ] Add error feedback (banner, toast, or inline message)
+- [ ] Clear error state when user retries action
+- [ ] Keep button interactive (don't use `is_disabled` for recoverable errors)
+- [ ] Provide clear error message (not just "Error occurred")
+- [ ] Test error recovery flow (user retries → error clears → success)
+
+### Example: Complete Error Flow (MessageInput)
+
+```slint
+import { Button } from "components/button.slint";
+
+export component MessageInput {
+    // State management
+    private property <string> message_text;
+    private property <bool> is_sending: false;
+    private property <bool> send_failed: false;
+    private property <string> error_text: "";
+    
+    callback send_message_requested(string);
+    
+    VerticalLayout {
+        spacing: 8px;
+        
+        // Error banner (only visible when send_failed=true)
+        if send_failed {
+            Rectangle {
+                background: #FFF4F4;
+                border-color: #A4373A;
+                border-width: 1px;
+                border-radius: 4px;
+                padding: 8px;
+                
+                HorizontalLayout {
+                    Text {
+                        text: "⚠️ " + error_text;
+                        color: #A4373A;
+                        font-size: 13px;
+                    }
+                }
+            }
+        }
+        
+        // Input and send button
+        HorizontalLayout {
+            spacing: 8px;
+            
+            TextField {
+                text <=> message_text;
+                placeholder-text: "Type a message...";
+            }
+            
+            Button {
+                label: send_failed ? "Retry" : "Send";
+                variant: send_failed ? "danger" : "primary";
+                is_loading: is_sending;
+                is_disabled: is_sending || message_text.is_empty();
+                
+                on_clicked: () => {
+                    send_failed = false;  // Clear error state
+                    is_sending = true;
+                    send_message_requested(message_text);
+                }
+            }
+        }
+    }
+
+    // Callback from backend
+    public function on_send_success() {
+        is_sending = false;
+        send_failed = false;
+        message_text = "";  // Clear input
+    }
+    
+    public function on_send_error(error: string) {
+        is_sending = false;
+        send_failed = true;
+        error_text = error;  // "Network error", "Message too long", etc.
+    }
+}
+```
+
+**Usage in Main App:**
+```slint
+MessageInput {
+    send_message_requested(text) => {
+        backend.send_message(text)
+            .on_success(() => { message_input.on_send_success(); })
+            .on_error((error) => { message_input.on_send_error(error); });
+    }
+}
+```
+
+---
+
 ## 📋 Definition of Done
 
 - [x] Component created at `/src/frontend/components/button.slint`

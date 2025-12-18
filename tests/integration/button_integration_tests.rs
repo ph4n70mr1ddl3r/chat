@@ -10,6 +10,45 @@
 // - Button integrates with MessageList actions (US-014)
 //
 // Requirement: T001 - UI Button Component Integration
+//
+// ============================================================================
+// WHY ARE THESE TESTS MARKED #[ignore]?
+// ============================================================================
+// 
+// IMPORTANT: These integration tests are PLACEHOLDERS, not failures.
+// They serve as documented test scaffolding for downstream stories.
+//
+// Purpose of Placeholder Tests:
+// ──────────────────────────────
+// 1. **Documentation:** Describes expected integration behavior for US-010, US-011, US-014
+// 2. **Regression Prevention:** When downstream components are implemented, these tests
+//    can be easily un-ignored and filled in, reducing chance of integration bugs
+// 3. **Development Planning:** Provides clear user stories → integration test mapping
+// 4. **Code Review Transparency:** Reviewers can see what integration scenarios
+//    have been anticipated and documented
+//
+//  Implementation Strategy:
+// ─────────────────────────
+// When US-010 (MessageInput) is implemented:
+// 1. Remove #[ignore] from test_button_integration_with_message_input
+// 2. Add actual implementation code based on documented expected behavior
+// 3. Verify Button works correctly within MessageInput context
+// 4. Repeat for US-011, US-014
+//
+// This approach is superior to:
+// - Writing tests after the fact (easy to forget edge cases)
+// - Skipping integration tests entirely (risks regressions)
+// - Hardcoding test expectations without documentation (unclear intent)
+//
+// Review Response (Code Review Issue #5):
+// ───────────────────────────────────────
+// Q: "Clarify integration test placeholder intent - are these tests failing or
+//     intentionally skipped?"
+// A: INTENTIONALLY SKIPPED. These are documented placeholders for future stories
+//    (US-010, US-011, US-014). Tests will be un-ignored and filled in when
+//    parent components are implemented. This ensures Button integration scenarios
+//    are not forgotten during downstream development.
+//
 // ============================================================================
 
 /// Test ID: T001-001
