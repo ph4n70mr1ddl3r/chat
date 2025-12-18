@@ -1,11 +1,11 @@
 # Story 1.2: Implement Button Component (Slint)
 
-**Status:** ✅ Code Review Complete - Ready for Merge (2025-12-17)  
+**Status:** 🔄 Under Code Review (2025-12-18)  
 **Priority:** P0 (MVP Critical)  
 **Week:** 1  
 **Owner:** Amelia (Developer)  
 **Designer:** Sally  
-**Reviewer:** Winston (Code Review Pending)  
+**Reviewer:** Winston (Code Review In Progress - Riddler)  
 **Created:** 2025-12-16
 
 ---
@@ -334,6 +334,32 @@ function get_background_color(variant, hovered, pressed, disabled) -> color {
    - Priority: MEDIUM (post-merge enhancement, desktop works fine)
    - Estimated Effort: 1-2 hours (requires physical mobile device testing)
 
+### Task 12: [Code Review - 2025-12-18] Address Build and Test Issues
+- [x] **CRITICAL #1:** Fix WSL filesystem build errors
+   - ✅ Created `.cargo/config.toml` with `incremental = false`
+   - ✅ Resolves: "incremental compilation: could not create session directory lock file"
+   - ✅ Allows build and test execution on WSL
+   
+- [x] **CRITICAL #2:** Fix test syntax errors in button_integration_tests.rs
+   - ✅ Added missing `#[ignore]` attributes on lines 48, 63
+   - ✅ Fixed incomplete test function definitions
+   - ✅ All integration tests now compile correctly
+
+- [x] **MEDIUM #3:** Fix story status inconsistency
+   - ✅ Updated status from "Ready for Merge" to "Under Code Review"
+   - ✅ Document version updated to 1.4
+
+- [ ] **MEDIUM #4-6:** Documentation and verification tasks
+   - Action: Verify UX designer approval evidence
+   - Action: Clarify integration test placeholder intent
+   - Action: Document AC test coverage approach
+
+- [ ] **LOW #7-8:** Code quality improvements
+   - Action: Refactor hardcoded colors to use tokens
+   - Action: Complete error state documentation (Task 10)
+
+**Code Review Summary:** 2 CRITICAL fixed, 1 MEDIUM fixed, 5 remaining (3 MEDIUM + 2 LOW)
+
 ---
 
 ## 📊 Definition of Done Checklist
@@ -356,7 +382,7 @@ function get_background_color(variant, hovered, pressed, disabled) -> color {
 - [ ] **PR Merged:** Code merged to main branch (pending)
 - [ ] **Follow-up Tasks:** Issues #6 & #7 to be addressed post-merge (non-blocking)
 
-**Status:** 🟢 **READY FOR MERGE** (4 CRITICAL fixed, 1 MEDIUM resolved (Issue #5), 2 MEDIUM non-blocking post-merge tasks)
+**Status:** 🔄 **UNDER CODE REVIEW** (Code review findings being addressed - 2025-12-18)
 
 ---
 
@@ -742,7 +768,7 @@ fn test_loading_state_shows_spinner() {
 
 ---
 
-**Document Version:** 1.3  
-**Last Updated:** 2025-12-17 (Code Review Complete - Ready for Merge)  
-**Status:** 🟢 **READY FOR MERGE** (All Critical Issues Fixed, Design Approved, Follow-up Tasks Created)
+**Document Version:** 1.4  
+**Last Updated:** 2025-12-18 (Code Review In Progress - Fixes Being Applied)  
+**Status:** 🔄 **UNDER REVIEW** (Addressing code review findings)
 

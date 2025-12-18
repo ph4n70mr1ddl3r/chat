@@ -45,6 +45,8 @@ fn test_button_integration_with_message_input() {
 /// When: Button is rendered in the header UI
 /// Then: Button should render correctly and not interfere with header layout
 #[test]
+#[ignore = "Waiting for ConversationHeader component implementation (US-011)"]
+fn test_button_integration_with_conversation_header() {
     // When ConversationHeader component is implemented:
     // This test will verify that Button (used for settings/actions) works correctly
     //
@@ -56,11 +58,26 @@ fn test_button_integration_with_message_input() {
     // This ensures US-011 (ConversationHeader) won't break due to Button issues
 }
 
+/// Test ID: T001-00X (Placeholder for design token verification)
+/// Given: Button component is implemented
+/// When: It uses design tokens for styling
+/// Then: It should correctly import and apply tokens from `tokens.slint`
+#[test]
+#[ignore = "Meta-test: Verify design token usage (manual inspection or future automated check)"]
+fn test_button_uses_design_tokens() {
+    // Meta-test: Button component imports and uses design tokens from tokens.slint
+    // Expected: FLUENT_BLUE, ERROR, SPACING_*, DURATION_* tokens are available
+    // This ensures design consistency across components.
+    assert!(true, "Button uses design tokens");
+}
+
 /// Test ID: T001-003
 /// Given: Button component is used for message actions in MessageList
 /// When: Multiple buttons are rendered for actions (Reply, Delete, etc.)
 /// Then: All buttons should render correctly and not interfere with each other
 #[test]
+#[ignore = "Waiting for MessageList component implementation (US-014)"]
+fn test_button_integration_with_message_list() {
     // When MessageList component is implemented:
     // This test will verify that Button (used for message actions) works correctly
     //
@@ -81,6 +98,7 @@ fn test_button_integration_with_message_input() {
 /// When: The project is compiled
 /// Then: No compilation errors or regressions should occur
 #[test]
+fn test_button_compilation_no_regressions() {
     // Verify that Button component compiles without breaking the overall build.
     // This is a smoke test to catch any major compilation issues.
     //

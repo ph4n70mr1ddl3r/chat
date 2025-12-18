@@ -36,7 +36,7 @@ development_status:
   # WEEK 1: Design Tokens & Base Components
   week-1-design-tokens-base-components: in-progress
   us-001-design-token-constants: done
-  us-002-button-component: review  # Code review complete - ready for merge
+  us-002-button-component: in-progress  # Code review fixes being applied (2025-12-18)
   us-003-textfield-component: review
   us-004-icon-component: in-progress
   us-005-chip-component: in-progress
