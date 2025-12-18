@@ -1,0 +1,88 @@
+import { Tokens } from "../design/tokens.slint";
+import { Icon } from "icon.slint";
+
+export component Chip {
+    // Category 1: Data Props
+    in property <string> label: "";
+
+    // Category 2: Behavior Props
+    callback clicked();
+    callback dismissed();
+
+    // Category 3: Style Props
+    in property <string> variant: "default"; // "default"|"primary"|"success"|"warning"|"error"
+    in property <bool> is_dismissible: false;
+    in property <bool> is_disabled: false;
+    in property <bool> is_clickable: false; // Explicit clickable prop for logic
+    in property <bool> reduce_motion: Tokens.prefers_reduced_motion;
+
+    // Internal State
+    private property <bool> has_focus: fs.has-focus;
+
+    // Computed styles based on variant
+    private property <color> text_color: 
+        variant == "primary" ? Tokens.fluent_blue : variant == "success" ? Tokens.success : variant == "warning" ? #C9824B : variant == "error" ? Tokens.error : Tokens.neutral_dark;
+    private property <color> base_bg_color: 
+        variant == "primary" ? Tokens.fluent_blue.transparentize(0.9) : variant == "success" ? Tokens.success.transparentize(0.9) : variant == "warning" ? Tokens.warning.transparentize(0.9) : variant == "error" ? Tokens.error.transparentize(0.9) : Tokens.neutral_light;
+    fs := FocusScope {
+        enabled: !is_disabled && (is_clickable || is_dismissible);
+        key-pressed(event) => {
+            if (is_clickable && (event.text == " " || event.text == "\n")) {
+                clicked();
+                return accept;
+            }
+            if (is_dismissible && (event.text == Key.Delete || event.text == Key.Backspace)) {
+                dismissed();
+                return accept;
+            }
+            reject
+        }
+        chip_root := Rectangle {
+            height: 28px;
+            background: ta.has-hover && is_clickable && !is_disabled ? base_bg_color.darker(10%) : base_bg_color;
+            border-radius: 14px;
+            border-width: has_focus ? 2px : 0px;
+            border-color: Tokens.fluent_blue;
+            accessible-role: is_clickable ? button : none;
+            accessible-label: label;
+            animate background { duration: reduce_motion ? 0ms : Tokens.duration_quick; }
+            HorizontalLayout {
+                padding-left: Tokens.spacing_sm;
+                padding-right: Tokens.spacing_sm;
+                spacing: Tokens.spacing_xs;
+                alignment: center;
+                Text {
+                    text: label;
+                    color: text_color;
+                    font-size: Tokens.font_size_caption;
+                    font-weight: 500;
+                    vertical-alignment: center;
+                }
+
+                if is_dismissible: Rectangle {
+                    width: 16px;
+                    height: 16px;
+                    Icon {
+                        name: "close";
+                        size: "small";
+                        color: text_color;
+                    }
+
+                    TouchArea {
+                        clicked => {
+                            dismissed();
+                        }
+                    }
+                }
+            }
+
+            ta := TouchArea {
+                enabled: !is_disabled && is_clickable;
+                mouse-cursor: self.has-hover ? pointer : default;
+                clicked => {
+                    clicked();
+                }
+            }
+        }
+    }
+}

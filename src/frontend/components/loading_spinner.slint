@@ -1,0 +1,79 @@
+import { Tokens } from "../design/tokens.slint";
+
+export component LoadingSpinner {
+    // Category 1: Data Props
+    in property <string> message: ""; // Optional message
+
+    // Category 3: Style Props
+    in property <string> size: "medium"; // "small"|"medium"|"large"
+    in property <color> color: Tokens.neutral_medium;
+    in property <bool> reduce_motion: Tokens.prefers_reduced_motion;
+
+    // Sizing Logic
+    private property <length> spinner_size: 
+        size == "small" ? 20px : size == "medium" ? 24px : size == "large" ? 32px : 24px;
+    
+    // Using 'none' since 'status' is not recognized and 'image' is more for static assets
+    accessible-role: none;
+    accessible-label: message != "" ? message : "Loading...";
+    VerticalLayout {
+        spacing: Tokens.spacing_sm;
+        alignment: center;
+        Rectangle {
+            width: spinner_size;
+            height: spinner_size;
+            
+            // Base track
+            Rectangle {
+                width: 100%;
+                height: 100%;
+                border-radius: parent.width / 2;
+                border-width: 2px;
+                border-color: color.transparentize(0.8);
+            }
+
+            // Rotating Halo
+            spinner := Rectangle {
+                width: 100%;
+                height: 100%;
+                property <angle> rot: 0deg;
+                transform-rotation: rot;
+                states [
+                    spinning when !reduce_motion: {
+                        rot: 360deg;
+                    }
+                ]
+                animate rot {
+                    duration: Tokens.duration_slow;
+                    easing: linear;
+                    iteration-count: -1;
+                }
+
+                // Halo (quarter circle)
+                Rectangle {
+                    width: parent.width / 2;
+                    height: parent.height / 2;
+                    x: parent.width / 2;
+                    y: 0;
+                    clip: true;
+                    Rectangle {
+                        width: spinner_size;
+                        height: spinner_size;
+                        x: -spinner_size / 2;
+                        y: 0;
+                        border-radius: spinner_size / 2;
+                        border-width: 2px;
+                        border-color: color;
+                    }
+                }
+            }
+        }
+
+        if message != "": Text {
+            text: message;
+            color: Tokens.neutral_medium;
+            font-size: Tokens.font_size_caption;
+            horizontal-alignment: center;
+        }
+    }
+}

@@ -37,24 +37,24 @@ development_status:
   week-1-design-tokens-base-components: in-progress
   us-001-design-token-constants: done
   us-002-button-component: review  # Code review complete - ready for merge
-  us-003-textfield-component: backlog
-  us-004-icon-component: backlog
-  us-005-chip-component: backlog
-  us-006-loadingspinner-component: backlog
+  us-003-textfield-component: review
+  us-004-icon-component: in-progress
+  us-005-chip-component: in-progress
+  us-006-loadingspinner-component: in-progress
   week-1-retrospective: optional
 
   # WEEK 2: Conversation & Message Components
-  week-2-conversation-message: backlog
-  us-007-messagebubble-component: backlog
-  us-008-conversationitem-component: backlog
-  us-009-presence-indicator-component: backlog
-  us-010-messageinput-container: backlog
-  us-011-conversationheader-container: backlog
+  week-2-conversation-message: in-progress
+  us-007-messagebubble-component: review
+  us-008-conversationitem-component: review
+  us-009-presence-indicator-component: ready-for-dev
+  us-010-messageinput-container: ready-for-dev
+  us-011-conversationheader-container: ready-for-dev
   week-2-retrospective: optional
 
   # WEEK 3: Real-Time & Message List
-  week-3-realtime-message-list: backlog
-  us-012-presence-sync-realtime: backlog
+  week-3-realtime-message-list: in-progress
+  us-012-presence-sync-realtime: ready-for-dev
   us-013-delivery-status-sync-realtime: backlog
   week-3-retrospective: optional
 
@@ -78,3 +78,9 @@ development_status:
   us-021-wcag-accessibility-testing: backlog
   us-022-motion-preferences: backlog
   week-6-retrospective: optional
+
+  # TECHNICAL DEBT: Test Quality Improvements
+  technical-debt-test-quality: backlog
+  td-001-replace-hard-sleeps: backlog
+  td-002-test-documentation: backlog
+  td-003-websocket-test-completion: backlog

@@ -1,55 +1,124 @@
-import { VerticalBox, HorizontalBox } from "std-widgets.slint";
+import { Tokens } from "../design/tokens.slint";
+import { Icon } from "icon.slint";
 
 export component MessageBubble {
-    in property <string> sender_username;
-    in property <string> content;
-    in property <string> timestamp;
-    in property <string> status; // pending, sent, delivered, failed
-    in property <bool> is_own;
+    // Category 1: Data Props
+    in property <string> content: "";
+    in property <string> sender_username: "";
+    in property <string> timestamp: "";
+    in property <bool> is_own: false;
+    in property <string> status: "sent"; // "pending"|"sent"|"delivered"|"failed"
 
-    HorizontalBox {
-        alignment: root.is_own ? end : start;
-        
-        Rectangle {
-            background: root.is_own ? #DCF8C6 : #FFFFFF;
-            border-radius: 8px;
-            border-width: 1px;
-            border-color: #E0E0E0;
-            
-            VerticalBox {
-                padding: 8px;
-                spacing: 4px;
-                
-                HorizontalBox {
-                    spacing: 8px;
-                    
-                    Text {
-                        text: root.sender_username;
-                        font-size: 12px;
-                        font-weight: 700;
-                        color: root.is_own ? #075E54 : #333;
+    // Category 2: Behavior Props
+    callback clicked();
+    callback long_pressed();
+    callback reply();
+    callback delete();
+
+    // Category 3: Style Props
+    in property <bool> reduce_motion: Tokens.prefers_reduced_motion;
+
+    // Internal State
+    private property <bool> is_hovered: ma.has-hover;
+
+    accessible-role: list-item;
+    accessible-label: sender_username + ": " + content + " at " + timestamp;
+
+    HorizontalLayout {
+        width: 100%;
+        alignment: is_own ? end : start;
+        padding-left: Tokens.spacing_sm;
+        padding-right: Tokens.spacing_sm;
+        spacing: Tokens.spacing_sm;
+
+        ma := TouchArea {
+            // Invisible touch area covering the whole row for hover
+        }
+
+        VerticalLayout {
+            alignment: is_own ? end : start;
+            spacing: 2px;
+            if !is_own: Text {
+                text: sender_username;
+                font-size: Tokens.font_size_caption;
+                color: Tokens.neutral_medium;
+                horizontal-alignment: left;
+            }
+
+            HorizontalLayout {
+                alignment: is_own ? end : start;
+                spacing: Tokens.spacing_sm;
+
+                // Action Menu (Reply/Delete)
+                if ma.has-hover: HorizontalLayout {
+                    spacing: Tokens.spacing_xs;
+                    alignment: center;
+                    Rectangle {
+                        width: 24px;
+                        height: 24px;
+                        border-radius: 12px;
+                        background: Tokens.neutral_light;
+                        Icon {
+                            name: "search";
+                            size: "small";
+                            color: Tokens.neutral_medium;
+                        } // Using search as placeholder for Reply
+                        TouchArea {
+                            clicked => {
+                                reply();
+                            }
+                        }
                     }
-                    
-                    Text {
-                        text: root.timestamp;
-                        font-size: 10px;
-                        color: #999;
+
+                    if is_own: Rectangle {
+                        width: 24px;
+                        height: 24px;
+                        border-radius: 12px;
+                        background: Tokens.error.transparentize(0.9);
+                        Icon {
+                            name: "close";
+                            size: "small";
+                            color: Tokens.error;
+                        } // X for delete
+                        TouchArea {
+                            clicked => {
+                                delete();
+                            }
+                        }
                     }
                 }
-                
-                Text {
-                    text: root.content;
-                    font-size: 14px;
-                    color: #000;
-                    wrap: word-wrap;
+
+                bubble := Rectangle {
+                    background: is_own ? Tokens.fluent_blue : Tokens.neutral_light;
+                    border-radius: 12px;
+                    padding-left: Tokens.spacing_md;
+                    padding-right: Tokens.spacing_md;
+                    padding-top: Tokens.spacing_sm;
+                    padding-bottom: Tokens.spacing_sm;
                     max-width: 300px;
+
+                    Text {
+                        text: content;
+                        color: is_own ? white : Tokens.neutral_dark;
+                        font-size: Tokens.font_size_body;
+                        wrap: word-wrap;
+                    }
                 }
-                
-                if root.is_own: Text {
-                    text: root.status; // pending, sent, delivered
-                    font-size: 10px;
-                    color: #999;
-                    horizontal-alignment: right;
+            }
+
+            HorizontalLayout {
+                alignment: is_own ? end : start;
+                spacing: Tokens.spacing_xs;
+                Text {
+                    text: timestamp;
+                    font-size: Tokens.font_size_caption;
+                    color: Tokens.neutral_medium;
+                }
+
+                if is_own: Icon {
+                    name: status == "pending" ? "spinner" : status == "sent" ? "checkmark" : status == "delivered" ? "checkmark-double" : "close";
+                    size: "small";
+                    color: status == "failed" ? Tokens.error : Tokens.neutral_medium;
                 }
             }
         }

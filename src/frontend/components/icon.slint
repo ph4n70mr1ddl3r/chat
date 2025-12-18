@@ -1,0 +1,42 @@
+import { Tokens } from "../design/tokens.slint";
+
+export component Icon {
+    // Category 1: Data Props
+    in property <string> name;
+    in property <string> alt_text: "";
+
+    // Category 3: Style Props
+    in property <string> size: "medium"; // "small" | "medium" | "large" | "xlarge"
+    in property <brush> color: Tokens.neutral_medium;
+    in property <bool> reduce_motion: Tokens.prefers_reduced_motion;
+
+    // Sizing Logic
+    private property <length> icon_size: 
+        size == "small" ? 16px : size == "medium" ? 24px : size == "large" ? 32px : size == "xlarge" ? 48px : 24px;
+    accessible-role: alt_text != "" ? image : none;
+    accessible-label: alt_text;
+    width: icon_size;
+    height: icon_size;
+    container := Rectangle {
+        width: 100%;
+        height: 100%;
+        img := Image {
+            width: 100%;
+            height: 100%;
+            colorize: color;
+            source: name == "checkmark" ? @image-url("../../assets/icons/checkmark.svg") : name == "checkmark-double" ? @image-url("../../assets/icons/checkmark-double.svg") : name == "spinner" ? @image-url("../../assets/icons/spinner.svg") : name == "close" ? @image-url("../../assets/icons/close.svg") : name == "send" ? @image-url("../../assets/icons/send.svg") : name == "settings" ? @image-url("../../assets/icons/settings.svg") : name == "search" ? @image-url("../../assets/icons/search.svg") : name == "user-profile" ? @image-url("../../assets/icons/user-profile.svg") : name == "online-dot" ? @image-url("../../assets/icons/online-dot.svg") : name == "offline-dot" ? @image-url("../../assets/icons/offline-dot.svg") : @image-url("../../assets/icons/search.svg");
+            property <angle> rot: 0deg;
+            transform-rotation: rot;
+            states [
+                spinning when name == "spinner" && !reduce_motion: {
+                    rot: 360deg;
+                }
+            ]
+            animate rot {
+                duration: Tokens.duration_slow;
+                easing: linear;
+                iteration-count: -1;
+            }
+        }
+    }
+}

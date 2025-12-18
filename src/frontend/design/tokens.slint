@@ -1,158 +1,39 @@
 // ============================================================================
 // Design Token Constants
 // ============================================================================
-// Centralized design tokens for the chat application UI
-// Implements UX Specification Section 7 (Visual System)
-// Supports Fluent Design System principles with accessibility compliance
-// ============================================================================
 
-// ============================================================================
-// COLORS - Fluent Design System Palette
-// ============================================================================
+export global Tokens {
+    // Colors
+    in property <color> fluent_blue: #0078D4;
+    in property <color> teal: #00A4EF;
+    in property <color> neutral_dark: #333333;
+    in property <color> neutral_medium: #666666;
+    in property <color> neutral_light: #F5F5F5;
+    in property <color> success: #107C10;
+    in property <color> warning: #FFB900;
+    in property <color> error: #E81123;
 
-// Primary Colors
-export const FLUENT_BLUE: color = #0078D4;
-export const TEAL: color = #00A4EF;
+    // Typography Sizes
+    in property <length> font_size_display: 48px;
+    in property <length> font_size_headline: 28px;
+    in property <length> font_size_subheading: 18px;
+    in property <length> font_size_body: 14px;
+    in property <length> font_size_caption: 12px;
 
-// Neutral Colors (Grayscale)
-export const NEUTRAL_DARK: color = #333333;
-export const NEUTRAL_MEDIUM: color = #666666;
-export const NEUTRAL_LIGHT: color = #F5F5F5;
+    // Spacing
+    in property <length> spacing_xs: 4px;
+    in property <length> spacing_sm: 8px;
+    in property <length> spacing_md: 12px;
+    in property <length> spacing_lg: 16px;
+    in property <length> spacing_xl: 20px;
+    in property <length> spacing_xxl: 24px;
 
-// Semantic Colors
-export const SUCCESS: color = #107C10;
-export const WARNING: color = #FFB900;
-export const ERROR: color = #E81123;
-
-// ============================================================================
-// TYPOGRAPHY - Font Sizes (in pixels)
-// ============================================================================
-
-// Font Sizes (following fluent scale: 48, 28, 18, 14, 12)
-export const FONT_SIZE_DISPLAY: length = 48px;
-export const FONT_SIZE_HEADLINE: length = 28px;
-export const FONT_SIZE_SUBHEADING: length = 18px;
-export const FONT_SIZE_BODY: length = 14px;
-export const FONT_SIZE_CAPTION: length = 12px;
-
-// ============================================================================
-// TYPOGRAPHY - Font Weights
-// ============================================================================
-
-export const FONT_WEIGHT_REGULAR: int = 400;
-export const FONT_WEIGHT_MEDIUM: int = 500;
-export const FONT_WEIGHT_SEMIBOLD: int = 600;
-export const FONT_WEIGHT_BOLD: int = 700;
-
-// ============================================================================
-// TYPOGRAPHY - Line Heights
-// ============================================================================
-
-export const LINE_HEIGHT_TIGHT: float = 1.2;
-export const LINE_HEIGHT_NORMAL: float = 1.4;
-export const LINE_HEIGHT_LOOSE: float = 1.6;
-
-// ============================================================================
-// SPACING - 8px Grid System
-// ============================================================================
-
-export const SPACING_XS: length = 4px;
-export const SPACING_SM: length = 8px;
-export const SPACING_MD: length = 12px;
-export const SPACING_LG: length = 16px;
-export const SPACING_XL: length = 20px;
-export const SPACING_XXL: length = 24px;
-
-// ============================================================================
-// MOTION - Animation Durations
-// ============================================================================
-
-export const DURATION_QUICK: duration = 200ms;
-export const DURATION_STANDARD: duration = 300ms;
-export const DURATION_SLOW: duration = 400ms;
-export const DURATION_VERY_SLOW: duration = 800ms;
-
-// ============================================================================
-// MOTION - Easing Functions
-// ============================================================================
-
-export const EASE_OUT: easing = ease_out;
-export const EASE_IN_OUT: easing = ease_in_out;
-export const EASE_LINEAR: easing = linear;
-
-// ============================================================================
-// MOTION PREFERENCES - Accessibility (WCAG 2.3.3)
-// ============================================================================
-
-// Global flag: Set from system preference or user settings
-// When true: All animations become instant (duration = 0)
-// Components should check this flag to respect user's motion preference
-// 
-// NOTE: This value is synchronized with system preferences:
-// - Windows: Reads from HKEY_CURRENT_USER\Control Panel\Accessibility\DisableAnimations
-// - Mac: Respects system "Reduce motion" setting
-// - Linux: Can be set via environment variable PREFERS_REDUCED_MOTION
-//
-// Set via backend SystemPreferences module or user settings in app
-export const PREFERS_REDUCED_MOTION: bool = false;
-
-// Conditional durations that respect user preference
-// 
-// USAGE (CORRECT):
-//   animate opacity {
-//       duration: MOTION_DURATION_REDUCED(DURATION_STANDARD);  // ✅ Respects preference
-//       easing: EASE_OUT;
-//   }
-//
-// WRONG (Do NOT do this):
-//   animate opacity {
-//       duration: DURATION_STANDARD;  // ❌ Ignores motion preference
-//       easing: EASE_OUT;
-//   }
-export const MOTION_DURATION_REDUCED(duration) -> duration {
-    return PREFERS_REDUCED_MOTION ? 0ms : duration;
+    // Durations
+    in property <duration> duration_quick: 200ms;
+    in property <duration> duration_standard: 300ms;
+    in property <duration> duration_slow: 400ms;
+    in property <duration> duration_very_slow: 800ms;
+    
+    // Preferences
+    in property <bool> prefers_reduced_motion: false;
 }
-
-// ============================================================================
-// Convenience exports for component usage
-// ============================================================================
-
-// Color palette for quick reference
-export const Colors := {
-    primary: FLUENT_BLUE,
-    secondary: TEAL,
-    success: SUCCESS,
-    warning: WARNING,
-    error: ERROR,
-    neutral_dark: NEUTRAL_DARK,
-    neutral_medium: NEUTRAL_MEDIUM,
-    neutral_light: NEUTRAL_LIGHT,
-};
-
-// Typography palette
-export const Typography := {
-    display: { size: FONT_SIZE_DISPLAY, weight: FONT_WEIGHT_BOLD, line_height: LINE_HEIGHT_NORMAL },
-    headline: { size: FONT_SIZE_HEADLINE, weight: FONT_WEIGHT_SEMIBOLD, line_height: LINE_HEIGHT_NORMAL },
-    subheading: { size: FONT_SIZE_SUBHEADING, weight: FONT_WEIGHT_SEMIBOLD, line_height: LINE_HEIGHT_NORMAL },
-    body: { size: FONT_SIZE_BODY, weight: FONT_WEIGHT_REGULAR, line_height: LINE_HEIGHT_NORMAL },
-    body_loose: { size: FONT_SIZE_BODY, weight: FONT_WEIGHT_REGULAR, line_height: LINE_HEIGHT_LOOSE },
-    caption: { size: FONT_SIZE_CAPTION, weight: FONT_WEIGHT_REGULAR, line_height: LINE_HEIGHT_NORMAL },
-};
-
-// Spacing helpers
-export const Spacing := {
-    xs: SPACING_XS,
-    sm: SPACING_SM,
-    md: SPACING_MD,
-    lg: SPACING_LG,
-    xl: SPACING_XL,
-    xxl: SPACING_XXL,
-};
-
-// Motion helpers
-export const Motion := {
-    quick: DURATION_QUICK,
-    standard: DURATION_STANDARD,
-    slow: DURATION_SLOW,
-    very_slow: DURATION_VERY_SLOW,
-};

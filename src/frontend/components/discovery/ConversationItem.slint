@@ -1,0 +1,82 @@
+import { Tokens } from "../../design/tokens.slint";
+import { OnlineIndicator } from "../online_indicator.slint";
+
+export component ConversationItem inherits Rectangle {
+    in property <string> name;
+    in property <string> last_message;
+    in property <string> timestamp;
+    in property <int> unread_count;
+    in property <bool> is_selected;
+    in property <bool> presence_online; // Mapping PresenceStatus to bool for now
+
+    callback clicked();
+    height: 64px;
+    background: is_selected ? Tokens.fluent_blue.with_alpha(0.1) : (i_touch.has_hover ? Tokens.neutral_light : transparent);
+    border-radius: 4px;
+    i_touch := TouchArea {
+        clicked => {
+            root.clicked();
+        }
+    }
+
+    HorizontalLayout {
+        padding: Tokens.spacing_md;
+        spacing: Tokens.spacing_md;
+        alignment: center;
+
+        // Avatar / Presence Placeholder
+        Rectangle {
+            width: 40px;
+            height: 40px;
+            background: Tokens.neutral_medium.with_alpha(0.2);
+            border-radius: 20px;
+            OnlineIndicator {
+                is_online: root.presence_online;
+                x: parent.width - self.width;
+                y: parent.height - self.height;
+            }
+        }
+
+        // Text Content
+        VerticalLayout {
+            spacing: 2px;
+            alignment: center;
+            HorizontalLayout {
+                Text {
+                    text: root.name;
+                    font-size: Tokens.font_size_body;
+                    font-weight: 600;
+                    color: Tokens.neutral_dark;
+                }
+
+                Rectangle { } // Spacing
+                Text {
+                    text: root.timestamp;
+                    font-size: Tokens.font_size_caption;
+                    color: Tokens.neutral_medium;
+                }
+            }
+
+            Text {
+                text: root.last_message;
+                font-size: Tokens.font_size_caption;
+                color: Tokens.neutral_medium;
+                overflow: elide;
+            }
+        }
+
+        // Unread Badge
+        if (root.unread_count > 0): Rectangle {
+            width: 20px;
+            height: 20px;
+            background: Tokens.fluent_blue;
+            border-radius: 10px;
+            Text {
+                text: root.unread_count;
+                font-size: 10px;
+                color: white;
+                font-weight: 700;
+            }
+        }
+    }
+}
