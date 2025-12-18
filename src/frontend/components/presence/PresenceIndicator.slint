@@ -1,0 +1,70 @@
+// ============================================================================
+// PresenceIndicator Component
+// ============================================================================
+// Displays user presence status with visual indicator and accessibility support
+// Supports: online (green), offline (gray), away (amber)
+
+import { Tokens } from "../../design/tokens.slint";
+
+export component PresenceIndicator {
+    in property <string> status: "offline";  // "online" | "offline" | "away"
+    in property <length> dot-size: 8px;
+    in property <bool> show-tooltip: false;
+    in property <string> user-name: "";
+    
+    // Calculate color based on status
+    property <color> indicator-color: 
+        status == "online" ? Tokens.success :
+        status == "away" ? Tokens.warning :
+        Tokens.neutral-medium;
+    
+    // Calculate accessible label
+    property <string> accessible-text:
+        status == "online" ? ("User " + user-name + " is online") :
+        status == "away" ? ("User " + user-name + " is away") :
+        ("User " + user-name + " is offline");
+    
+    width: dot-size + 4px;
+    height: dot-size + 4px;
+    accessible-role: image;
+    accessible-label: accessible-text;
+    
+    Rectangle {
+        width: parent.dot-size;
+        height: parent.dot-size;
+        border-radius: parent.dot-size / 2;
+        background: parent.indicator-color;
+        
+        animate background {
+            duration: Tokens.duration-quick;
+            easing: Tokens.easing-in-out;
+        }
+        
+        // Border for contrast on various backgrounds
+        border-width: 1px;
+        border-color: 
+            parent.status == "offline" ? Tokens.neutral-light :
+            parent.status == "online" ? rgba(16, 124, 16, 0.3) :
+            rgba(255, 185, 0, 0.3);
+    }
+    
+    // Tooltip shown on hover
+    if show-tooltip {
+        Rectangle {
+            x: parent.dot-size + 4px;
+            y: -16px;
+            width: 60px;
+            height: 20px;
+            background: Tokens.neutral-dark;
+            border-radius: 2px;
+            
+            Text {
+                text: parent.status;
+                color: white;
+                font-size: Tokens.font-size-caption;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
+}

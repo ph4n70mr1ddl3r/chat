@@ -1,12 +1,14 @@
 # Story 1.1: Implement Design Token Constants (Slint)
 
-**Status:** done  
+**Status:** in-progress  
 **Priority:** P0 (MVP Critical)  
 **Week:** 1  
 **Owner:** Amelia (Developer)  
 **Designer:** Sally  
 **Reviewer:** Winston  
-**Created:** 2025-12-16
+**Created:** 2025-12-16  
+**Last Code Review:** 2025-12-18 (Second adversarial review by Amelia - found CRITICAL issues)
+
 
 ---
 
@@ -625,7 +627,106 @@ test test_naming_conventions ... ok
 
 ---
 
-## 👨‍💻 Senior Developer Review (AI)
+## 🔥 SECOND ADVERSARIAL CODE REVIEW (2025-12-18)
+
+**Review Date:** 2025-12-18  
+**Reviewer:** Amelia (Dev Agent - Code Review Mode)  
+**Review Type:** Fresh context adversarial review  
+**Git Status:** All files committed (clean working directory)
+
+### Review Outcome: ❌ CRITICAL ISSUES FOUND - STORY NOT DONE
+
+**Summary:** Story claimed "done" status but was missing 10 critical tokens (7 typography + 3 easing). Three CRITICAL issues prevented acceptance criteria fromm being met.
+
+###Issues Found:** 8 total
+- 🔴 **CRITICAL:** 3 (prevented "done" status)
+- 🔴 **HIGH:** 2 (quality issues)
+- 🟡 **MEDIUM:** 2 (technical debt)
+- 🟢 **LOW:** 1 (documentation)
+
+---
+
+### CRITICAL Issues Found and Fixed
+
+#### 1. AC2 VIOLATED: Missing Typography Tokens (7 of 15 missing) [CRITICAL]
+**Problem:** Tasks marked [x] complete but tokens didn't exist  
+**Missing:** 
+- Font weights: FONT_WEIGHT_REGULAR (400), FONT_WEIGHT_MEDIUM (500), FONT_WEIGHT_SEMIBOLD (600), FONT_WEIGHT_BOLD (700)
+- Line heights: LINE_HEIGHT_TIGHT (1.2), LINE_HEIGHT_NORMAL (1.4), LINE_HEIGHT_LOOSE (1.6)
+
+**Fix Applied:** ✅ Added all 7 missing typography tokens to `tokens.slint`
+
+#### 2. AC4 VIOLATED: Missing Easing Tokens (3 of 7 missing) [CRITICAL]
+**Problem:** Motion tokens incomplete - only durations defined, no easing functions  
+**Missing:** EASE_OUT, EASE_IN_OUT, EASE_LINEAR
+
+**Fix Applied:** ✅ Added all 3 easing tokens (renamed to `easing_out`, `easing_in_out`, `easing_linear` to avoid Slint binding loop)
+
+#### 3. Typography Test Component Used Hardcoded Values [CRITICAL]
+**Problem:** Test component existed but didn't use tokens (defeated its purpose)  
+**Example:** `font-size: 48px;` instead of `font-size: Tokens.font_size_display;`
+
+**Fix Applied:** ✅ Rewrote entire typography_test.slint component to import and use Tokens global
+
+---
+
+### HIGH Priority Issues Found
+
+#### 4. Token Property Declaration Wrong (caused compilation errors) [HIGH]
+**Problem:** Tokens defined as `in property` instead of `out property`, causing "must be a constant expression" errors  
+
+**Fix Applied:** ✅ Changed all token properties from `in property` to `out property` (read-only constants)
+
+#### 5. Token Count Inflated in Story Claims [HIGH]
+**Claim:** "Created tokens.slint with all 38 tokens"  
+**Reality:** Only 20 tokens existed (18 missing)
+
+**Fix Applied:** ✅ Now 31 tokens defined (8 colors + 15 typography + 6 spacing + 7 motion + 1 preference)
+
+---
+
+### Fixes Summary
+
+**Files Modified (2025-12-18 20:45 UTC):**
+1. `src/frontend/design/tokens.slint` - Added 10 missing tokens, fixed property declarations
+2. `src/frontend/components/typography_test.slint` - Replaced hardcoded values with Tokens global imports
+3. `docs/sprint-artifacts/us-001-design-token-constants.md` - Updated status to "in-progress", added this review section
+
+**Token Count:**  
+- **Before Fix:** 20 tokens  
+- **After Fix:** 31 tokens  
+- **Still Missing:** 4 tokens (MOTION_DURATION_REDUCED helper function, Typography/Colors/Spacing/Motion convenience objects documented but not in code)
+
+**Compilation Status:**  
+- ✅ Token syntax errors: **FIXED**
+- ✅ Binding loop errors: **FIXED** (easing renamed)
+- ⚠️ Build still fails due to pre-existing errors in `icon.slint` and `message_bubble.slint` (NOT token-related)
+
+---
+
+### Remaining MEDIUM/LOW Issues (Not Blocking)
+
+**MEDIUM:**
+- System preferences module exists but not wired to Slint `prefers_reduced_motion` property
+- Documentation references convenience objects (Typography, Colors,Colors, etc.) that don't exist in code
+
+**LOW:**
+- Documentation examples reference old token names (EASE_OUT vs easing_out)
+
+---
+
+### Next Steps to Complete This Story
+
+1. ✅ **COMPLETED:** Add missing tokens
+2. ✅ **COMPLETED:** Fix typography test component
+3. ❌ **TODO:** Fix pre-existing build errors in `icon.slint` and `message_bubble.slint` (outside scope of this story)
+4. ❌ **TODO:** Verify full compilation passes
+5. ❌ **TODO:** Update documentation token names (easing_out vs EASE_OUT)
+6. ❌ **TODO:** Mark story as "done" after build passes
+
+---
+
+##: 👨‍💻 Senior Developer Review (AI)
 
 **Review Date:** 2025-12-16  
 **Reviewer:** Amelia (Code Review Agent)  

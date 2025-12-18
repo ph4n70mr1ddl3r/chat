@@ -1,0 +1,261 @@
+// ============================================================================
+// Conversation Header Component
+// ============================================================================
+// Displays the conversation header with contact name, presence status, and menu.
+// Features:
+// - Fixed 56px height, sticky positioning
+// - Real-time presence updates (<200ms)
+// - Responsive text truncation
+// - Accessibility support
+
+import { Tokens } from "../../design/tokens.slint";
+import { PresenceIndicator } from "./PresenceIndicator.slint";
+import { Icon } from "../shared/icon.slint";
+
+export struct ConversationParticipant {
+    id: string,
+    name: string,
+}
+
+export struct PresenceData {
+    status: string,  // "online" | "away" | "offline"
+    last_seen_seconds: int,  // Unix timestamp for offline users
+}
+
+export component ConversationHeader {
+    // Input properties
+    in property <ConversationParticipant> participant: {
+        id: "default-id",
+        name: "Loading...",
+    };
+    in property <PresenceData> presence: {
+        status: "offline",
+        last_seen_seconds: 0,
+    };
+    in property <bool> connection-online: true;
+    in property <bool> prefers-reduced-motion: false;  // AC3: Respect motion preferences
+    
+    // Output callbacks
+    callback menu_clicked();
+    callback tooltip_hover(bool);
+    
+    // AC1: Fixed height and layout
+    width: 100%;
+    height: 56px;
+    background: Tokens.neutral_light;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    
+    // Computed properties for status display (AC2)
+    property <string> status-label:
+        presence.status == "online" ? "Online" :
+        presence.status == "away" ? "Away" :
+        "Offline";
+    
+    property <string> last-seen-display: get_last_seen_text();
+    
+    // Accessibility label (AC6)
+    property <string> accessible-label:
+        "Conversation with " + participant.name + 
+        ". Status: " + status-label + ".";
+    
+    // Responsive width thresholds (AC4)
+    property <bool> is-narrow: width < 640px;
+    property <length> text-max-width: is-narrow ? 180px : 300px;
+    
+    Rectangle {
+        // Main container - sticky effect at top
+        width: 100%;
+        height: 56px;
+        background: parent.background;
+        border-bottom: parent.border_bottom;
+        
+        HorizontalLayout {
+            padding: Tokens.spacing_md;
+            spacing: Tokens.spacing_md;
+            alignment: start;
+            
+            // Left: Presence Avatar (AC1)
+            Rectangle {
+                width: 40px;
+                height: 40px;
+                
+                // Simple avatar background with initials
+                Rectangle {
+                    width: 100%;
+                    height: 100%;
+                    background: Tokens.fluent_blue;
+                    border-radius: 4px;
+                    
+                    Text {
+                        width: 100%;
+                        height: 100%;
+                        text: get_initials(root.participant.name);
+                        font-size: Tokens.font_size_body;
+                        font-weight: Tokens.font_weight_semibold;
+                        color: white;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+                
+                // Presence indicator dot overlaid (bottom-right) (AC2, AC3)
+                Rectangle {
+                    width: 10px;
+                    height: 10px;
+                    x: 30px;
+                    y: 30px;
+                    background:
+                        root.presence.status == "online" ? Tokens.success :
+                        root.presence.status == "away" ? Tokens.warning :
+                        Tokens.neutral_medium;
+                    border-radius: 5px;
+                    border: 2px solid white;
+                    
+                    // Smooth animation respecting motion preferences (AC3)
+                    animate background {
+                        duration: root.prefers_reduced_motion ? 0ms : Tokens.duration_quick;
+                        easing: root.prefers_reduced_motion ? linear : Tokens.easing_in_out;
+                    }
+                }
+            }
+            
+            // Center: Contact name and status (AC1, AC2)
+            VerticalLayout {
+                alignment: center;
+                
+                // Contact name - truncates on narrow screens (AC4, AC3)
+                Text {
+                    text: root.participant.name;
+                    font-size: Tokens.font_size_subheading;  // 18px / Heading 2
+                    font-weight: Tokens.font_weight_semibold;
+                    color: Tokens.neutral_dark;
+                    overflow: ellipsis;
+                    max-width: root.text_max_width;
+                    accessible-role: heading;
+                    
+                    // Smooth color transition on status change (AC3)
+                    animate color {
+                        duration: root.prefers_reduced_motion ? 0ms : Tokens.duration_quick;
+                        easing: Tokens.easing_in_out;
+                    }
+                }
+                
+                // Status line: Shows "Online", "Away", or "Last seen X ago" (AC2, AC4)
+                Text {
+                    text:
+                        root.presence.status == "offline" && root.last_seen_display != "" ?
+                            "Last seen " + root.last_seen_display :
+                            root.status_label;
+                    font-size: Tokens.font_size_caption;
+                    color: Tokens.neutral_medium;
+                    overflow: ellipsis;
+                    max-width: root.text_max_width;
+                    
+                    // Smooth transition for status label changes (AC3)
+                    animate color {
+                        duration: root.prefers_reduced_motion ? 0ms : Tokens.duration_quick;
+                        easing: Tokens.easing_in_out;
+                    }
+                }
+            }
+            
+            // Spacer to push menu to the right
+            Rectangle { }
+            
+            // Right: Menu button (AC3)
+            Rectangle {
+                width: 36px;
+                height: 36px;
+                background: transparent;
+                
+                button := TouchArea {
+                    width: 100%;
+                    height: 100%;
+                    
+                    Rectangle {
+                        width: 100%;
+                        height: 100%;
+                        background: button.pressed ? rgba(0, 0, 0, 0.05) : transparent;
+                        border-radius: 4px;
+                        
+                        Text {
+                            text: "⋯";
+                            font-size: 20px;
+                            color: Tokens.neutral_dark;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+                
+                // Accessibility for menu button
+                accessible-role: button;
+                accessible-label: "Menu for " + root.participant.name;
+            }
+        }
+    }
+    
+    // Hover tooltip on presence section (AC2)
+    states [
+        hover-presence when touch-area.has-hover: {
+            tooltip.visible: true;
+        }
+    ]
+    
+    touch-area := TouchArea {
+        x: 8px;
+        y: 8px;
+        width: 60px;
+        height: 40px;
+        mouse-cursor: pointer;
+        
+        Rectangle {
+            visible: false;
+            x: 70px;
+            y: -5px;
+            width: 100px;
+            height: 24px;
+            background: Tokens.neutral_dark;
+            border-radius: 4px;
+            
+            Text {
+                text:
+                    root.presence.status == "offline" ?
+                        ("Last seen: " + root.last_seen_display) :
+                        ("Status: " + root.status_label);
+                color: white;
+                font-size: Tokens.font_size_caption;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                width: 100%;
+                height: 100%;
+                overflow: ellipsis;
+            }
+        }
+    }
+}
+
+// Helper function to get initials from name
+pure function get_initials(name: string) -> string {
+    let words = name.split(" ");
+    if words.length > 0 {
+        let first = words[0];
+        let second = words.length > 1 ? words[1] : "";
+        
+        if first.length > 0 && second.length > 0 {
+            return first.substring(0, 1).to_uppercase() + 
+                   second.substring(0, 1).to_uppercase();
+        } else if first.length > 0 {
+            return first.substring(0, 1).to_uppercase();
+        }
+    }
+    return "?";
+}
+
+// Helper function to format last seen time (AC2)
+pure function get_last_seen_text() -> string {
+    // This is a placeholder - actual implementation would calculate
+    // time difference from last_seen_seconds
+    // For now, returns empty string - Slint doesn't have good date formatting built-in
+    return "";
+}

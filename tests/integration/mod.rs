@@ -19,4 +19,6 @@ mod icon_test;
 mod chip_test;
 mod loading_spinner_test;
 mod message_bubble_test;
+mod message_composer_test;
 mod conversation_item_test;
+mod conversation_header_test;

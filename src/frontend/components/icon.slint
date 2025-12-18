@@ -13,7 +13,7 @@ export component Icon {
     // Sizing Logic
     private property <length> icon_size: 
         size == "small" ? 16px : size == "medium" ? 24px : size == "large" ? 32px : size == "xlarge" ? 48px : 24px;
-    accessible-role: alt_text != "" ? image : none;
+    accessible-role: image;
     accessible-label: alt_text;
     width: icon_size;
     height: icon_size;

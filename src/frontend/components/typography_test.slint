@@ -6,94 +6,96 @@
 // Shows each size/weight/line-height combination in action
 // ============================================================================
 
+import { Tokens } from "../design/tokens.slint";
+
 export component TypographyTestComponent {
-    background: #F5F5F5;
-    padding: 16px;
-    
-    VerticalLayout {
-        spacing: 12px;
-        
-        // Display Size (48px)
-        Text {
-            text: "Display Size (48px, Bold, 1.4)";
-            font-size: 48px;
-            font-weight: 700;
-            color: #333333;
-        }
-        
-        // Headline Size (28px)
-        Text {
-            text: "Headline Size (28px, Semibold, 1.4)";
-            font-size: 28px;
-            font-weight: 600;
-            color: #333333;
-        }
-        
-        // Subheading Size (18px)
-        Text {
-            text: "Subheading Size (18px, Semibold, 1.4)";
-            font-size: 18px;
-            font-weight: 600;
-            color: #333333;
-        }
-        
-        // Body Regular (14px)
-        Text {
-            text: "Body Regular (14px, Regular/400, 1.4) - This is standard content text that should be readable at normal viewing distance. Lorem ipsum dolor sit amet.";
-            font-size: 14px;
-            font-weight: 400;
-            color: #333333;
-            wrap: word-wrap;
-        }
-        
-        // Body Medium (14px, 500)
-        Text {
-            text: "Body Medium (14px, Medium/500, 1.4) - Slightly bolder for emphasis within body text.";
-            font-size: 14px;
-            font-weight: 500;
-            color: #333333;
-        }
-        
-        // Body with Loose Line Height
-        Text {
-            text: "Body with Loose Line Height (14px, Regular, 1.6) - Extra spacing between lines for better readability in dense content areas or accessibility scenarios.";
-            font-size: 14px;
-            font-weight: 400;
-            color: #333333;
-            wrap: word-wrap;
-        }
-        
-        // Caption Size (12px)
-        Text {
-            text: "Caption Size (12px, Regular, 1.4)";
-            font-size: 12px;
-            font-weight: 400;
-            color: #333333;
-        }
-        
-        // Caption with Metadata styling
-        Text {
-            text: "Metadata/Timestamp (12px, Medium, 1.4)";
-            font-size: 12px;
-            font-weight: 500;
-            color: #0078D4;
-        }
-        
-        // Heading Hierarchy Demo
-        Text {
-            text: "Hierarchy Test - Heading";
-            font-size: 28px;
-            font-weight: 700;
-            color: #0078D4;
-        }
-        
-        Text {
-            text: "Hierarchy Test - Body text follows heading with clear visual distinction through size and weight reduction.";
-            font-size: 14px;
-            font-weight: 400;
-            color: #333333;
-            wrap: word-wrap;
+    Rectangle {
+        background: Tokens.neutral_light;
+        VerticalLayout {
+            padding: Tokens.spacing_lg;
+            spacing: Tokens.spacing_md;
+            
+            // Display Size (48px)
+            Text {
+                text: "Display Size (48px, Bold, 1.4)";
+                font-size: Tokens.font_size_display;
+                font-weight: Tokens.font_weight_bold;
+                color: Tokens.neutral_dark;
+            }
+            
+            // Headline Size (28px)
+            Text {
+                text: "Headline Size (28px, Semibold, 1.4)";
+                font-size: Tokens.font_size_headline;
+                font-weight: Tokens.font_weight_semibold;
+                color: Tokens.neutral_dark;
+            }
+            
+            // Subheading Size (18px)
+            Text {
+                text: "Subheading Size (18px, Semibold, 1.4)";
+                font-size: Tokens.font_size_subheading;
+                font-weight: Tokens.font_weight_semibold;
+                color: Tokens.neutral_dark;
+            }
+            
+            // Body Regular (14px)
+            Text {
+                text: "Body Regular (14px, Regular/400, 1.4) - This is standard content text that should be readable at normal viewing distance. Lorem ipsum dolor sit amet.";
+                font-size: Tokens.font_size_body;
+                font-weight: Tokens.font_weight_regular;
+                color: Tokens.neutral_dark;
+                wrap: word-wrap;
+            }
+            
+            // Body Medium (14px, 500)
+            Text {
+                text: "Body Medium (14px, Medium/500, 1.4) - Slightly bolder for emphasis within body text.";
+                font-size: Tokens.font_size_body;
+                font-weight: Tokens.font_weight_medium;
+                color: Tokens.neutral_dark;
+            }
+            
+            // Body with Loose Line Height
+            Text {
+                text: "Body with Loose Line Height (14px, Regular, 1.6) - Extra spacing between lines for better readability in dense content areas or accessibility scenarios.";
+                font-size: Tokens.font_size_body;
+                font-weight: Tokens.font_weight_regular;
+                color: Tokens.neutral_dark;
+                wrap: word-wrap;
+            }
+            
+            // Caption Size (12px)
+            Text {
+                text: "Caption Size (12px, Regular, 1.4)";
+                font-size: Tokens.font_size_caption;
+                font-weight: Tokens.font_weight_regular;
+                color: Tokens.neutral_dark;
+            }
+            
+            // Caption with Metadata styling
+            Text {
+                text: "Metadata/Timestamp (12px, Medium, 1.4)";
+                font-size: Tokens.font_size_caption;
+                font-weight: Tokens.font_weight_medium;
+                color: Tokens.fluent_blue;
+            }
+            
+            // Heading Hierarchy Demo
+            Text {
+                text: "Hierarchy Test - Heading";
+                font-size: Tokens.font_size_headline;
+                font-weight: Tokens.font_weight_bold;
+                color: Tokens.fluent_blue;
+            }
+
+            Text {
+                text: "Hierarchy Test - Body text follows heading with clear visual distinction through size and weight reduction.";
+                font-size: Tokens.font_size_body;
+                font-weight: Tokens.font_weight_regular;
+                color: Tokens.neutral_dark;
+                wrap: word-wrap;
+            }
         }
     }
 }
-

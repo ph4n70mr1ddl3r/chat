@@ -91,17 +91,20 @@ export component MessageBubble {
                 bubble := Rectangle {
                     background: is_own ? Tokens.fluent_blue : Tokens.neutral_light;
                     border-radius: 12px;
-                    padding-left: Tokens.spacing_md;
-                    padding-right: Tokens.spacing_md;
-                    padding-top: Tokens.spacing_sm;
-                    padding-bottom: Tokens.spacing_sm;
                     max-width: 300px;
 
-                    Text {
-                        text: content;
-                        color: is_own ? white : Tokens.neutral_dark;
-                        font-size: Tokens.font_size_body;
-                        wrap: word-wrap;
+                    VerticalLayout {
+                        padding-left: Tokens.spacing_md;
+                        padding-right: Tokens.spacing_md;
+                        padding-top: Tokens.spacing_sm;
+                        padding-bottom: Tokens.spacing_sm;
+
+                        Text {
+                            text: content;
+                            color: is_own ? white : Tokens.neutral_dark;
+                            font-size: Tokens.font_size_body;
+                            wrap: word-wrap;
+                        }
                     }
                 }
             }
@@ -116,9 +119,14 @@ export component MessageBubble {
                 }
 
                 if is_own: Icon {
-                    name: status == "pending" ? "spinner" : status == "sent" ? "checkmark" : status == "delivered" ? "checkmark-double" : "close";
+                    name: status == "pending" ? "spinner" : status == "sent" ? "checkmark" : status == "delivered" ? "checkmark-double" : status == "read" ? "checkmark-double" : "close";
                     size: "small";
-                    color: status == "failed" ? Tokens.error : Tokens.neutral_medium;
+                    color: 
+                        status == "pending" ? Tokens.neutral_medium :
+                        status == "sent" ? Tokens.neutral_medium :
+                        status == "delivered" ? Tokens.fluent_blue :
+                        status == "read" ? Tokens.fluent_blue :
+                        Tokens.error;
                 }
             }
         }

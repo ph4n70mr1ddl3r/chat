@@ -1,0 +1,162 @@
+// ============================================================================
+// MessageComposer Component
+// ============================================================================
+// Implements a multi-line message input with send button, keyboard handling,
+// and typing notifications per AC1-6.
+//
+// Features:
+// - Multi-line text input (expanding up to 4 lines)
+// - Send readiness feedback (disabled when empty)
+// - Keyboard interaction (Enter to send, Ctrl+Enter for line break)
+// - Sending state with spinner
+// - Error handling with message preservation
+// - Typing notifications (debounced)
+
+import { VerticalBox, HorizontalBox, TextEdit, Button } from "std-widgets.slint";
+import { Tokens } from "../../design/tokens.slint";
+import { LoadingSpinner } from "../loading_spinner.slint";
+
+export component MessageComposer {
+    // ========================================================================
+    // Properties
+    // ========================================================================
+    
+    /// Whether a message is currently being sent
+    in property <bool> is_sending: false;
+    
+    /// Error message to display below the input
+    in property <string> error_text: "";
+    
+    /// Placeholder text for the input
+    in property <string> placeholder: "Type a message...";
+    
+    /// Current draft message text
+    in-out property <string> draft_text: "";
+    
+    /// Maximum number of characters allowed
+    in property <int> max_chars: 4000;
+    
+    // ========================================================================
+    // Callbacks
+    // ========================================================================
+    
+    /// Triggered when user requests to send the message
+    /// Passes the message text to be sent
+    callback send(string);
+    
+    /// Triggered when user starts/stops typing
+    /// Emits true when typing begins, false after inactivity
+    callback typing(bool);
+    
+    // ========================================================================
+    // Internal State
+    // ========================================================================
+    
+    property <length> input_height: Tokens.spacing_lg * 5;  // Approximately 4 lines
+    property <int> line_count: 1;
+    property <bool> has_focus: false;
+    
+    // ========================================================================
+    // Layout
+    // ========================================================================
+    
+    VerticalBox {
+        spacing: Tokens.spacing_sm;
+        
+        // Input container with expanding height
+        VerticalBox {
+            spacing: Tokens.spacing_xs;
+            
+            // TextEdit for multi-line input
+            TextEdit {
+                placeholder-text: root.placeholder;
+                text <=> root.draft_text;
+                enabled: !root.is_sending;
+                horizontal-stretch: 1;
+                vertical-stretch: 1;
+                
+                // Limit visible height to ~4 lines (roughly 80px)
+                height: min(Tokens.spacing_lg * 5, self.preferred-height);
+                
+                // Focus tracking
+                focus => {
+                    root.has_focus = true;
+                }
+                
+                focus-lost => {
+                    root.has_focus = false;
+                }
+                
+                // Text change - emit typing notification
+                edited => {
+                    // Emit typing true when text is being entered
+                    if (root.draft_text.length > 0) {
+                        root.typing(true);
+                    } else {
+                        root.typing(false);
+                    }
+                }
+                
+                // Key handling: Enter to send, Ctrl+Enter for line break
+                key-pressed(event) => {
+                    // Standard Enter = Send
+                    if (event.text == "\n" && !event.modifiers.control) {
+                        if (root.draft_text.trim().length > 0) {
+                            root.send(root.draft_text);
+                            root.draft_text = "";
+                            root.typing(false);
+                            return accept;
+                        }
+                    }
+                    // Ctrl+Enter or Shift+Enter = Line break (default behavior)
+                    // Return reject to allow default newline behavior
+                    return reject;
+                }
+            }
+        }
+        
+        // Send button row
+        HorizontalBox {
+            spacing: Tokens.spacing_sm;
+            
+            Button {
+                text: root.is_sending ? "Sending..." : "Send";
+                enabled: root.draft_text.trim().length > 0 && !root.is_sending;
+                horizontal-stretch: 0;
+                
+                clicked => {
+                    if (root.draft_text.trim().length > 0) {
+                        root.send(root.draft_text);
+                        root.draft_text = "";
+                        root.typing(false);
+                    }
+                }
+            }
+            
+            // Spacer
+            Rectangle {
+                horizontal-stretch: 1;
+                background: transparent;
+            }
+            
+            // Loading indicator during send
+            if root.is_sending: LoadingSpinner {
+                width: 20px;
+                height: 20px;
+            }
+        }
+        
+        // Error message display
+        if root.error_text != "": HorizontalBox {
+            spacing: Tokens.spacing_xs;
+            
+            Text {
+                text: root.error_text;
+                font-size: Tokens.font_size_caption;
+                color: Tokens.error;
+                horizontal-stretch: 1;
+                wrap: word-wrap;
+            }
+        }
+    }
+}

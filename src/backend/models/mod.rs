@@ -92,6 +92,7 @@ pub struct Message {
     pub content: String,
     pub created_at: i64,
     pub delivered_at: Option<i64>,
+    pub read_at: Option<i64>,
     pub status: String,
     pub is_anonymized: bool,
 }
@@ -112,6 +113,7 @@ impl Message {
             content,
             created_at: now,
             delivered_at: None,
+            read_at: None,
             status: "pending".to_string(),
             is_anonymized: false,
         }
@@ -140,6 +142,11 @@ impl Message {
     /// Check if message is delivered
     pub fn is_delivered(&self) -> bool {
         self.status == "delivered"
+    }
+
+    /// Check if message is read
+    pub fn is_read(&self) -> bool {
+        self.status == "read"
     }
 
     /// Check if message failed

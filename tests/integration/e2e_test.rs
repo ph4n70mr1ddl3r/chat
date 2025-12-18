@@ -63,7 +63,7 @@ mod e2e_test {
             Ok((token, user_id))
         }
 
-        async fn login(&mut self, username: &str, password: &str) -> Result<(String, String), String> {
+        async fn login(&self, username: &str, password: &str) -> Result<(String, String), String> {
             let client = reqwest::Client::new();
             let response = client
                 .post(&format!("{}/auth/login", self.server_url))
@@ -197,23 +197,41 @@ mod e2e_test {
         context.bob_user_id = Some(bob_user_id.clone());
         println!("✓ Bob signed up successfully: {}", bob_user_id);
 
-        // Wait for accounts to be fully created (deterministic retry instead of sleep)
-        // Try to login up to 3 times with exponential backoff
-        let mut login_attempt = 0;
-        let new_alice_token = loop {
-            login_attempt += 1;
-            match context.login("alice_e2e", "TestPass123").await {
-                Ok((token, _)) => break token,
-                Err(_) if login_attempt < 3 => {
-                    // Account not yet created, retry with backoff (50ms, 100ms, 200ms)
-                    tokio::time::sleep(Duration::from_millis(50 * login_attempt as u64)).await;
-                    continue;
+        // Step 3: Wait for account to be ready using deterministic polling
+        // MIGRATION: Replaced exponential backoff sleep (50ms * attempt) with poll_with_diagnostics
+        // Old pattern: sleep(Duration::from_millis(50 * login_attempt as u64)) inside retry loop
+        // New pattern: poll_with_diagnostics with 5-second timeout for cleaner async synchronization
+        use crate::helpers::polling::poll_with_diagnostics;
+        
+        let mut new_alice_token = String::new();
+        let server_url = context.server_url.clone();
+        poll_with_diagnostics(
+            Duration::from_secs(5),
+            "alice_login_retry",
+            || async {
+                let client = reqwest::Client::new();
+                match client
+                    .post(&format!("{}/auth/login", server_url))
+                    .json(&json!({"username": "alice_e2e", "password": "TestPass123"}))
+                    .send()
+                    .await
+                {
+                    Ok(response) if response.status().is_success() => {
+                        if let Ok(body) = response.json::<serde_json::Value>().await {
+                            if let Some(token) = body["token"].as_str() {
+                                new_alice_token = token.to_string();
+                                return true;
+                            }
+                        }
+                        false
+                    }
+                    _ => false
                 }
-                Err(e) => panic!("Alice login failed after retries: {}", e),
             }
-        };
+        )
+        .await
+        .expect("Alice login never succeeded within 5 seconds");
 
-        // Step 3: Alice logs in (already succeeded above)
         println!("Step 3: Alice logging in...");
         println!("✓ Alice logged in successfully");
         context.alice_token = Some(new_alice_token.clone());
@@ -266,6 +284,7 @@ mod e2e_test {
     /// When: Attempting signup with password validation failures and duplicate usernames
     /// Then: All signup attempts should fail with appropriate validation errors
     #[tokio::test]
+    async fn test_signup_validation() {
         let mut context = E2ETestContext::new();
 
         // Test invalid password (too short)
@@ -293,6 +312,7 @@ mod e2e_test {
     /// When: Attempting login with wrong password or non-existent accounts
     /// Then: Authentication should fail and no token should be issued
     #[tokio::test]
+    async fn test_authentication_failures() {
         let mut context = E2ETestContext::new();
 
         // Create a valid account
@@ -317,6 +337,7 @@ mod e2e_test {
     /// When: Alice tries to access a conversation that bob has not joined
     /// Then: The operation should be denied (authorization failure)
     #[tokio::test]
+    async fn test_conversation_authorization() {
         let mut context = E2ETestContext::new();
 
         // Create Alice and Bob

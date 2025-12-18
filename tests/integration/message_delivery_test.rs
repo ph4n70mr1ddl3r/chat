@@ -134,9 +134,9 @@ async fn loads_message_history_with_pagination() {
     let service = MessageService::new(pool.clone());
     let (sender, recipient, conversation) = create_users_and_conversation(&pool).await;
 
-    // GIVEN: Send 3 messages with deterministic ordering (use timestamps)
+    // GIVEN: Send 3 messages with deterministic ordering (poll for persistence instead of sleep)
     for i in 0..3 {
-        service
+        let msg = service
             .send_message(
                 conversation.id.clone(),
                 if i % 2 == 0 { sender.id.clone() } else { recipient.id.clone() },
@@ -146,9 +146,23 @@ async fn loads_message_history_with_pagination() {
             .await
             .unwrap();
         
-        // Wait for message to be persisted before sending next one
-        // This ensures timestamp ordering without hardcoded sleeps
-        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        // Wait for message to be persisted before sending next one (deterministic polling replaces 10ms sleep)
+        // This ensures correct timestamp ordering while adapting to system speed
+        let msg_id = msg.id.clone();
+        let pool_clone = pool.clone();
+        poll_until(Duration::from_millis(500), || {
+            let id = msg_id.clone();
+            let p = pool_clone.clone();
+            async move {
+                db::queries::find_message_by_id(&p, &id)
+                    .await
+                    .ok()
+                    .flatten()
+                    .is_some()
+            }
+        })
+        .await
+        .expect(&format!("message {} never persisted", i));
     }
 
     // WHEN: Request first page with limit of 2
@@ -168,7 +182,7 @@ async fn prevents_duplicate_message_ids() {
     /// Test ID: T096-004
     /// Given: A message is sent with a specific ID
     /// When: The same message ID is sent again with different content
-    /// Then: The system should return the original message (idempotent), not create a duplicate
+    /// Then: The system should be returned the original message (idempotent), not create a duplicate
     let pool = setup_test_db().await;
     let service = MessageService::new(pool.clone());
     let (sender, recipient, conversation) = create_users_and_conversation(&pool).await;

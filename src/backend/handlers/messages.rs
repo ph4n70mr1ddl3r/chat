@@ -194,7 +194,7 @@ impl MessageHandler {
         }
     }
 
-    /// Build acknowledgement envelope
+     /// Build acknowledgement envelope
     fn build_ack_envelope(
         &self,
         original_message_id: &str,
@@ -214,6 +214,131 @@ impl MessageHandler {
                 "serverTimestamp": chrono::Utc::now().timestamp_millis(),
             }),
         }
+    }
+
+    /// Sync delivery status updates from client
+    ///
+    /// Handles batch delivery status updates from a reconnected client.
+    /// Implements idempotent status updates to prevent duplicate state changes.
+    ///
+    /// Status hierarchy: pending < sent < delivered < read
+    /// Only upgrades to higher status, never downgrades.
+    pub async fn handle_sync_delivery_status(
+        &self,
+        user_id: &str,
+        updates: Vec<chat_shared::protocol::DeliveryStatusUpdate>,
+    ) -> Result<Vec<WsMessage>, String> {
+        if updates.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let mut responses = Vec::new();
+        let mut synced_count = 0u32;
+
+        // Define status hierarchy for idempotent updates
+        let status_order = |s: &str| -> u32 {
+            match s {
+                "pending" => 0,
+                "sent" => 1,
+                "delivered" => 2,
+                "read" => 3,
+                "failed" => 99, // Failed doesn't follow order
+                _ => 0,
+            }
+        };
+
+        for update in updates {
+            // Load current message
+            let current = match queries::find_message_by_id(&self.pool, &update.message_id).await {
+                Ok(Some(msg)) => msg,
+                _ => continue, // Skip messages that don't exist
+            };
+
+            // Verify authorization: user must be sender or recipient
+            if current.sender_id != user_id && current.recipient_id != user_id {
+                continue; // Skip unauthorized updates
+            }
+
+            // Check if update is valid (don't downgrade status)
+            let current_weight = status_order(&current.status);
+            let new_weight = status_order(&update.status);
+
+            if new_weight >= current_weight {
+                // Update is valid - apply idempotent upgrade
+                let now = chrono::Utc::now().timestamp_millis();
+                match update.status.as_str() {
+                    "read" => {
+                        sqlx::query(
+                            "UPDATE messages SET status = ?, read_at = ? WHERE id = ?"
+                        )
+                        .bind("read")
+                        .bind(now)
+                        .bind(&update.message_id)
+                        .execute(&self.pool)
+                        .await
+                        .ok();
+                    }
+                    "delivered" => {
+                        sqlx::query(
+                            "UPDATE messages SET status = ?, delivered_at = ? WHERE id = ?"
+                        )
+                        .bind("delivered")
+                        .bind(now)
+                        .bind(&update.message_id)
+                        .execute(&self.pool)
+                        .await
+                        .ok();
+                    }
+                    _ => {
+                        sqlx::query("UPDATE messages SET status = ? WHERE id = ?")
+                            .bind(&update.status)
+                            .bind(&update.message_id)
+                            .execute(&self.pool)
+                            .await
+                            .ok();
+                    }
+                }
+
+                synced_count += 1;
+
+                // Broadcast updated status to conversation participants
+                let conv_id = current.conversation_id.clone();
+                let event = MessageEnvelope {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    msg_type: "deliveryStatusUpdated".to_string(),
+                    timestamp: chrono::Utc::now().timestamp_millis() as u64,
+                    data: json!({
+                        "messageId": update.message_id,
+                        "status": update.status,
+                        "timestamp": chrono::Utc::now().timestamp_millis(),
+                        "conversationId": conv_id,
+                    }),
+                };
+
+                // Send to both sender and recipient
+                let event_json = serde_json::to_string(&event).unwrap();
+                self.connection_manager
+                    .send_to_user(&current.sender_id, WsMessage::text(event_json.clone()))
+                    .await;
+                self.connection_manager
+                    .send_to_user(&current.recipient_id, WsMessage::text(event_json))
+                    .await;
+            }
+        }
+
+        // Send completion event back to sender
+        let completion = MessageEnvelope {
+            id: uuid::Uuid::new_v4().to_string(),
+            msg_type: "syncDeliveryStatusCompleted".to_string(),
+            timestamp: chrono::Utc::now().timestamp_millis() as u64,
+            data: json!({
+                "syncedCount": synced_count,
+                "timestamp": chrono::Utc::now().timestamp_millis(),
+            }),
+        };
+        responses.push(WsMessage::text(serde_json::to_string(&completion).unwrap()));
+
+        Ok(responses)
     }
 }
 

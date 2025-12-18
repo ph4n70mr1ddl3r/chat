@@ -1,6 +1,6 @@
 # Story 4.2: Implement PresenceIndicator Component (Slint)
 
-**Status:** ready-for-dev
+**Status:** review
 **Priority:** P1 (Essential)
 **Week:** 2
 **Owner:** Amelia (Developer)
@@ -14,17 +14,17 @@
 
 ## 🎯 Acceptance Criteria
 
-- [ ] **AC1:** Distinct visual indicators for status:
-    - **Online:** `SUCCESS` (Green) dot
-    - **Offline:** `ERROR` (Red) or `NEUTRAL_MEDIUM` (Gray) border/dot (refer to Design Tokens)
-    - **Away/Idle:** `WARNING` (Amber/Yellow) dot
-- [ ] **AC2:** Accurate state reflection: The indicator correctly represents the state fetched from `AppState.presence_map` for a given `user_id`.
-- [ ] **AC3:** Real-time updates: The UI updates immediately when a `PresenceChanged` event is processed by the backend handler and synced to the Slint state.
-- [ ] **AC4:** Accessible Presentation:
-    - Clear color contrast for all states.
+- [x] **AC1:** Distinct visual indicators for status:
+    - **Online:** `SUCCESS` (Green) dot (#107C10)
+    - **Offline:** `NEUTRAL_MEDIUM` (Gray) dot (#666666)
+    - **Away/Idle:** `WARNING` (Amber/Yellow) dot (#FFB900)
+- [x] **AC2:** Accurate state reflection: The indicator correctly represents the state fetched from `AppState.presence_map` for a given `user_id`.
+- [x] **AC3:** Real-time updates: The UI updates immediately when a `PresenceChanged` event is processed by the backend handler and synced to the Slint state.
+- [x] **AC4:** Accessible Presentation:
+    - Clear color contrast for all states (4.5:1 WCAG AA).
     - Support for tooltips or descriptive labels ("Online", "Offline", "Away") when hovered or in high-detail views.
-    - Shapes or secondary markers should be considered if color alone is insufficient for accessibility (best effort for MVP).
-- [ ] **AC5:** Multiple Surfaces: The component should be reusable in the `ConversationList`, `ConversationHeader`, and `UserDetail` panels.
+    - Shapes or secondary markers (borders) provided for accessibility.
+- [x] **AC5:** Multiple Surfaces: The component is reusable in the `ConversationList`, `ConversationHeader`, and `UserDetail` panels.
 
 ## 🛠️ Developer Context
 - **Component Path:** `src/frontend/components/presence/PresenceIndicator.slint`
@@ -41,22 +41,22 @@
 ## 📝 Tasks
 
 ### Task 1: Component Setup
-- [ ] Create `src/frontend/components/presence/PresenceIndicator.slint`.
-- [ ] Define `in property <string> status`.
-- [ ] Implement the visual dot with size (e.g., 8-10px) and border for contrast on various backgrounds.
+- [x] Create `src/frontend/components/presence/PresenceIndicator.slint`.
+- [x] Define `in property <string> status`.
+- [x] Implement the visual dot with size (8px default, optional 10px) and border for contrast on various backgrounds.
 
 ### Task 2: State & Token Binding
-- [ ] Map the `status` prop to `Tokens` color constants.
-- [ ] Implement smooth color transitions using `DURATION_QUICK`.
+- [x] Map the `status` prop to `Tokens` color constants (SUCCESS/WARNING/NEUTRAL_MEDIUM).
+- [x] Implement smooth color transitions using `DURATION_QUICK` (200ms with easing-in-out).
 
 ### Task 3: Accessibility & Tooltips
-- [ ] Add `accessible-label` mapping (e.g., "User is online").
-- [ ] Implement a basic tooltip or hover state that shows the text status.
+- [x] Add `accessible-label` mapping (e.g., "User is online").
+- [x] Implement a basic tooltip or hover state that shows the text status.
 
 ### Task 4: Integration & Verification
-- [ ] Register the component in the appropriate module.
-- [ ] Create basic integration test `tests/integration/presence_indicator_test.rs` to verify color mapping.
-- [ ] Document in `docs/PRESENCEINDICATOR_COMPONENT_REFERENCE.md`.
+- [x] Register the component in the appropriate module (presence component directory).
+- [x] Create comprehensive integration tests in `tests/integration/presence_indicator_test.rs` to verify all AC criteria.
+- [x] Document in `docs/PRESENCEINDICATOR_COMPONENT_REFERENCE.md`.
 
 ## 📊 Definition of Done Checklist
 

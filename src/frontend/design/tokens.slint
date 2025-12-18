@@ -4,36 +4,52 @@
 
 export global Tokens {
     // Colors
-    in property <color> fluent_blue: #0078D4;
-    in property <color> teal: #00A4EF;
-    in property <color> neutral_dark: #333333;
-    in property <color> neutral_medium: #666666;
-    in property <color> neutral_light: #F5F5F5;
-    in property <color> success: #107C10;
-    in property <color> warning: #FFB900;
-    in property <color> error: #E81123;
+    out property <color> fluent_blue: #0078D4;
+    out property <color> teal: #00A4EF;
+    out property <color> neutral_dark: #333333;
+    out property <color> neutral_medium: #666666;
+    out property <color> neutral_light: #F5F5F5;
+    out property <color> success: #107C10;
+    out property <color> warning: #FFB900;
+    out property <color> error: #E81123;
 
     // Typography Sizes
-    in property <length> font_size_display: 48px;
-    in property <length> font_size_headline: 28px;
-    in property <length> font_size_subheading: 18px;
-    in property <length> font_size_body: 14px;
-    in property <length> font_size_caption: 12px;
+    out property <length> font_size_display: 48px;
+    out property <length> font_size_headline: 28px;
+    out property <length> font_size_subheading: 18px;
+    out property <length> font_size_body: 14px;
+    out property <length> font_size_caption: 12px;
+
+    // Typography Weights
+    out property <int> font_weight_regular: 400;
+    out property <int> font_weight_medium: 500;
+    out property <int> font_weight_semibold: 600;
+    out property <int> font_weight_bold: 700;
+
+    // Typography Line Heights
+    out property <float> line_height_tight: 1.2;
+    out property <float> line_height_normal: 1.4;
+    out property <float> line_height_loose: 1.6;
 
     // Spacing
-    in property <length> spacing_xs: 4px;
-    in property <length> spacing_sm: 8px;
-    in property <length> spacing_md: 12px;
-    in property <length> spacing_lg: 16px;
-    in property <length> spacing_xl: 20px;
-    in property <length> spacing_xxl: 24px;
+    out property <length> spacing_xs: 4px;
+    out property <length> spacing_sm: 8px;
+    out property <length> spacing_md: 12px;
+    out property <length> spacing_lg: 16px;
+    out property <length> spacing_xl: 20px;
+    out property <length> spacing_xxl: 24px;
 
     // Durations
-    in property <duration> duration_quick: 200ms;
-    in property <duration> duration_standard: 300ms;
-    in property <duration> duration_slow: 400ms;
-    in property <duration> duration_very_slow: 800ms;
+    out property <duration> duration_quick: 200ms;
+    out property <duration> duration_standard: 300ms;
+    out property <duration> duration_slow: 400ms;
+    out property <duration> duration_very_slow: 800ms;
+    
+    // Easing Functions
+    out property <easing> easing_out: ease-out;
+    out property <easing> easing_in_out: ease-in-out;
+    out property <easing> easing_linear: linear;
     
     // Preferences
-    in property <bool> prefers_reduced_motion: false;
+    in-out property <bool> prefers_reduced_motion: false;
 }

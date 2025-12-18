@@ -12,6 +12,8 @@ pub enum MessageStatus {
     Sent,
     /// Message received and acknowledged by recipient
     Delivered,
+    /// Message read by recipient
+    Read,
     /// Message failed to deliver (recipient deleted, etc.)
     Failed,
 }
@@ -22,6 +24,7 @@ impl std::fmt::Display for MessageStatus {
             MessageStatus::Pending => write!(f, "pending"),
             MessageStatus::Sent => write!(f, "sent"),
             MessageStatus::Delivered => write!(f, "delivered"),
+            MessageStatus::Read => write!(f, "read"),
             MessageStatus::Failed => write!(f, "failed"),
         }
     }
@@ -35,6 +38,7 @@ impl std::str::FromStr for MessageStatus {
             "pending" => Ok(MessageStatus::Pending),
             "sent" => Ok(MessageStatus::Sent),
             "delivered" => Ok(MessageStatus::Delivered),
+            "read" => Ok(MessageStatus::Read),
             "failed" => Ok(MessageStatus::Failed),
             _ => Err(format!("Unknown status: {}", s)),
         }
@@ -169,3 +173,53 @@ pub struct MessageDto {
     pub delivered_at: Option<u64>,
     pub status: String,
 }
+
+/// Delivery status update from client
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeliveryStatusUpdate {
+    pub message_id: String,
+    pub status: String,
+}
+
+/// Sync delivery status command from client
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncDeliveryStatusCommand {
+    pub delivery_updates: Vec<DeliveryStatusUpdate>,
+}
+
+/// Delivery status updated event from backend
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeliveryStatusUpdatedEvent {
+    pub message_id: String,
+    pub status: String,
+    pub timestamp: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conversation_id: Option<String>,
+}
+
+/// Batch delivery status update event from backend
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeliveryStatusBatchUpdatedEvent {
+    pub updates: Vec<DeliveryStatusUpdatedEvent>,
+}
+
+/// Sync delivery status completed event
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncDeliveryStatusCompletedEvent {
+    pub synced_count: u32,
+    pub timestamp: i64,
+}
+
+/// Sync delivery status failed event
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeliveryStatusSyncFailedEvent {
+    pub reason: String,
+    pub retriable: bool,
+}
+

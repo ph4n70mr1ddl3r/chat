@@ -1,86 +1,44 @@
-# Sprint Status Tracking File
-# generated: 2025-12-16
-# project: chat
-# project_key: chat-mvp
-# tracking_system: file-system
-# story_location: /home/riddler/chat/docs/sprint-artifacts
-
-# STATUS DEFINITIONS:
-# ==================
-# Epic Status:
-#   - backlog: Epic not yet started
-#   - in-progress: Epic actively being worked on
-#   - done: All stories in epic completed
-#
-# Story Status:
-#   - backlog: Story only exists in epic file
-#   - drafted: Story file created in stories folder
-#   - ready-for-dev: Draft approved, ready for development
-#   - in-progress: Developer actively working on implementation
-#   - review: Implementation complete, ready for review
-#   - done: Story completed
-#
-# WORKFLOW NOTES:
-# ===============
-# - Mark epic as 'in-progress' when starting work on its first story
-# - SM typically drafts next story ONLY after previous one is 'done' to incorporate learnings
-# - Dev moves story to 'review', then Dev runs code-review (fresh context, ideally different LLM)
-
 generated: 2025-12-16
 project: chat
 project_key: chat-mvp
 tracking_system: file-system
 story_location: /home/riddler/chat/docs/sprint-artifacts
-
 development_status:
-  # WEEK 1: Design Tokens & Base Components
   week-1-design-tokens-base-components: in-progress
-  us-001-design-token-constants: done
-  us-002-button-component: review  # Code review fixes applied (2025-12-18) - Build verified, awaiting final decision
+  us-001-design-token-constants: in-progress
+  us-002-button-component: review
   us-003-textfield-component: review
   us-004-icon-component: in-progress
   us-005-chip-component: in-progress
   us-006-loadingspinner-component: in-progress
   week-1-retrospective: optional
-
-  # WEEK 2: Conversation & Message Components
   week-2-conversation-message: in-progress
   us-007-messagebubble-component: review
   us-008-conversationitem-component: review
-  us-009-presence-indicator-component: ready-for-dev
-  us-010-messageinput-container: ready-for-dev
-  us-011-conversationheader-container: ready-for-dev
+  us-009-presence-indicator-component: in-progress
+  us-010-messageinput-container: review
+  us-011-conversationheader-container: review
   week-2-retrospective: optional
-
-  # WEEK 3: Real-Time & Message List
   week-3-realtime-message-list: in-progress
-  us-012-presence-sync-realtime: ready-for-dev
-  us-013-delivery-status-sync-realtime: backlog
+  us-012-presence-sync-realtime: in-progress
+  us-013-delivery-status-sync-realtime: in-progress
   week-3-retrospective: optional
-
-  # WEEK 4: Message List & Integration
   week-4-message-list-integration: backlog
   us-014-messagelist-container: backlog
   us-015-realtime-message-arrival: backlog
   week-4-retrospective: optional
-
-  # WEEK 5: Search & Animations
   week-5-search-animations: backlog
   us-016-conversation-list-container: backlog
   us-017-search-conversations: backlog
   us-018-message-search: backlog
   week-5-retrospective: optional
-
-  # WEEK 6: Animations & Accessibility
   week-6-animations-accessibility: backlog
   us-019-message-animations: backlog
   us-020-conversation-switching-animation: backlog
   us-021-wcag-accessibility-testing: backlog
   us-022-motion-preferences: backlog
   week-6-retrospective: optional
-
-  # TECHNICAL DEBT: Test Quality Improvements
   technical-debt-test-quality: backlog
-  td-001-replace-hard-sleeps: ready-for-dev  # Comprehensive story created (2025-12-18) with migration patterns and examples
+  td-001-replace-hard-sleeps: in-progress
   td-002-test-documentation: backlog
   td-003-websocket-test-completion: backlog

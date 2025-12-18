@@ -278,6 +278,101 @@ impl MessageService {
         result
     }
 
+    /// Sync delivery status updates (idempotent)
+    ///
+    /// Batch updates delivery status for multiple messages with idempotent logic.
+    /// Only upgrades status (pending < sent < delivered < read), never downgrades.
+    /// 
+    /// Returns list of updated messages for confirmation back to client.
+    pub async fn sync_delivery_status(
+        &self,
+        user_id: &str,
+        updates: Vec<(String, String)>, // (message_id, new_status)
+    ) -> Result<Vec<Message>, String> {
+        let mut updated_messages = Vec::new();
+
+        // Status hierarchy for idempotent updates
+        let status_weight = |s: &str| -> u32 {
+            match s {
+                "pending" => 0,
+                "sent" => 1,
+                "delivered" => 2,
+                "read" => 3,
+                "failed" => 99, // Failed is separate
+                _ => 0,
+            }
+        };
+
+        for (message_id, new_status) in updates {
+            // Load current message
+            let current = match queries::find_message_by_id(&self.pool, &message_id).await {
+                Ok(Some(msg)) => msg,
+                _ => continue, // Skip if not found
+            };
+
+            // Verify authorization
+            if current.sender_id != user_id && current.recipient_id != user_id {
+                continue; // Skip unauthorized updates
+            }
+
+            // Check if update is valid (idempotent - only upgrade)
+            let current_weight = status_weight(&current.status);
+            let new_weight = status_weight(&new_status);
+
+            if new_weight >= current_weight {
+                // Apply idempotent update
+                let now = chrono::Utc::now().timestamp_millis();
+                
+                match new_status.as_str() {
+                    "read" => {
+                        sqlx::query("UPDATE messages SET status = ?, read_at = ? WHERE id = ?")
+                            .bind("read")
+                            .bind(now)
+                            .bind(&message_id)
+                            .execute(&self.pool)
+                            .await
+                            .map_err(|e| format!("Failed to update message: {}", e))?;
+                    }
+                    "delivered" => {
+                        sqlx::query("UPDATE messages SET status = ?, delivered_at = ? WHERE id = ?")
+                            .bind("delivered")
+                            .bind(now)
+                            .bind(&message_id)
+                            .execute(&self.pool)
+                            .await
+                            .map_err(|e| format!("Failed to update message: {}", e))?;
+                    }
+                    _ => {
+                        sqlx::query("UPDATE messages SET status = ? WHERE id = ?")
+                            .bind(&new_status)
+                            .bind(&message_id)
+                            .execute(&self.pool)
+                            .await
+                            .map_err(|e| format!("Failed to update message: {}", e))?;
+                    }
+                }
+
+                // Fetch updated message and add to response
+                if let Ok(Some(updated)) = queries::find_message_by_id(&self.pool, &message_id).await {
+                    updated_messages.push(updated);
+                    
+                    info!(
+                        target: "message",
+                        event = "delivery_status.synced",
+                        message_id = %message_id,
+                        status = %new_status,
+                        "Synced delivery status"
+                    );
+                }
+            } else {
+                // Status would downgrade - skip idempotently
+                updated_messages.push(current);
+            }
+        }
+
+        Ok(updated_messages)
+    }
+
     /// Validate message content
     ///
     /// Returns true if content is valid, false otherwise

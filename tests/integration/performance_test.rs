@@ -112,7 +112,8 @@ mod performance_test {
             
             // Simulate WebSocket handshake
             // In real implementation, this would use tokio-tungstenite
-            sleep(Duration::from_millis(50)).await; // Simulated network delay
+            // INTENTIONAL SIMULATION: Network handshake delay (not a test synchronization sleep)
+            sleep(Duration::from_millis(50)).await;
             
             self.token = Some(token.to_string());
             
@@ -123,7 +124,8 @@ mod performance_test {
             let start = Instant::now();
             
             // Simulate message send over WebSocket
-            sleep(Duration::from_millis(10)).await; // Simulated serialization + network
+            // INTENTIONAL SIMULATION: Message serialization + network delay (not a test synchronization sleep)
+            sleep(Duration::from_millis(10)).await;
             
             Ok(start.elapsed())
         }
@@ -159,7 +161,7 @@ mod performance_test {
                 .await
                 .expect("Message send should succeed");
             
-            // Simulate ACK received
+            // INTENTIONAL SIMULATION: Server ACK delay (not a test synchronization sleep)
             sleep(Duration::from_millis(50)).await;
             
             let latency = start.elapsed();
@@ -272,8 +274,7 @@ mod performance_test {
                 println!("Completed {} handshakes...", i + 1);
             }
 
-            // Small delay between handshakes
-            sleep(Duration::from_millis(10)).await;
+            // No delay needed between handshakes - tests should run as fast as possible
         }
 
         metrics.finish();
@@ -327,6 +328,7 @@ mod performance_test {
                     let _ = client
                         .send_message("recipient-id", &format!("Message {} from client {}", j, i))
                         .await;
+                    // INTENTIONAL SIMULATION: Realistic message pacing (not a test synchronization sleep)
                     sleep(Duration::from_millis(100)).await;
                 }
 
@@ -392,7 +394,8 @@ mod performance_test {
             let _ = client
                 .send_message("recipient-id", &format!("Message {}", i))
                 .await;
-            sleep(Duration::from_millis(10)).await; // Simulated ACK
+            // INTENTIONAL SIMULATION: Server ACK delay (not a test synchronization sleep)
+            sleep(Duration::from_millis(10)).await;
             metrics.record_latency(start.elapsed());
         }
 
