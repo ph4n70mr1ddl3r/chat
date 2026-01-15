@@ -194,7 +194,7 @@ impl MessageHandler {
         }
     }
 
-     /// Build acknowledgement envelope
+    /// Build acknowledgement envelope
     fn build_ack_envelope(
         &self,
         original_message_id: &str,
@@ -268,19 +268,17 @@ impl MessageHandler {
                 let now = chrono::Utc::now().timestamp_millis();
                 match update.status.as_str() {
                     "read" => {
-                        sqlx::query(
-                            "UPDATE messages SET status = ?, read_at = ? WHERE id = ?"
-                        )
-                        .bind("read")
-                        .bind(now)
-                        .bind(&update.message_id)
-                        .execute(&self.pool)
-                        .await
-                        .ok();
+                        sqlx::query("UPDATE messages SET status = ?, read_at = ? WHERE id = ?")
+                            .bind("read")
+                            .bind(now)
+                            .bind(&update.message_id)
+                            .execute(&self.pool)
+                            .await
+                            .ok();
                     }
                     "delivered" => {
                         sqlx::query(
-                            "UPDATE messages SET status = ?, delivered_at = ? WHERE id = ?"
+                            "UPDATE messages SET status = ?, delivered_at = ? WHERE id = ?",
                         )
                         .bind("delivered")
                         .bind(now)

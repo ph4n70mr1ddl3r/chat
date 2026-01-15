@@ -101,7 +101,10 @@ fn test_typography_font_sizes_valid() {
     }
 
     // Verify descending order for visual hierarchy
-    assert!(48 > 28 && 28 > 18 && 18 > 14 && 14 > 12, "Font sizes not in descending order");
+    assert!(
+        48 > 28 && 28 > 18 && 18 > 14 && 14 > 12,
+        "Font sizes not in descending order"
+    );
 }
 
 /// Test that all font weights are valid CSS values
@@ -125,7 +128,10 @@ fn test_typography_font_weights_valid() {
     }
 
     // Verify weights in ascending order
-    assert!(400 < 500 && 500 < 600 && 600 < 700, "Font weights not in ascending order");
+    assert!(
+        400 < 500 && 500 < 600 && 600 < 700,
+        "Font weights not in ascending order"
+    );
 }
 
 /// Test that all line heights are reasonable for typography
@@ -148,7 +154,10 @@ fn test_typography_line_heights_valid() {
     }
 
     // Verify heights in ascending order
-    assert!(1.2 < 1.4 && 1.4 < 1.6, "Line heights not in ascending order");
+    assert!(
+        1.2 < 1.4 && 1.4 < 1.6,
+        "Line heights not in ascending order"
+    );
 }
 
 /// Test that all motion durations are positive and reasonable
@@ -163,7 +172,12 @@ fn test_motion_durations_valid() {
 
     for (ms, name) in durations {
         // Duration should be positive
-        assert!(ms > 0, "Motion duration {} ({} ms) is not positive", name, ms);
+        assert!(
+            ms > 0,
+            "Motion duration {} ({} ms) is not positive",
+            name,
+            ms
+        );
         // Duration should be within reasonable animation range (100-1000ms)
         assert!(
             ms >= 100 && ms <= 1000,
@@ -174,7 +188,10 @@ fn test_motion_durations_valid() {
     }
 
     // Verify durations in ascending order
-    assert!(200 < 300 && 300 < 400 && 400 < 800, "Durations not in ascending order");
+    assert!(
+        200 < 300 && 300 < 400 && 400 < 800,
+        "Durations not in ascending order"
+    );
 }
 
 /// Test that MOTION_DURATION_REDUCED helper works correctly
@@ -202,15 +219,31 @@ fn test_motion_duration_reduced_logic() {
     let prefs_enabled = MockMotionPreference {
         prefers_reduced: false,
     };
-    assert_eq!(prefs_enabled.motion_duration_reduced(300), 300, "Should return original duration when animations enabled");
-    assert_eq!(prefs_enabled.motion_duration_reduced(0), 0, "Should handle 0ms correctly");
+    assert_eq!(
+        prefs_enabled.motion_duration_reduced(300),
+        300,
+        "Should return original duration when animations enabled"
+    );
+    assert_eq!(
+        prefs_enabled.motion_duration_reduced(0),
+        0,
+        "Should handle 0ms correctly"
+    );
 
     // Test with reduced motion enabled
     let prefs_reduced = MockMotionPreference {
         prefers_reduced: true,
     };
-    assert_eq!(prefs_reduced.motion_duration_reduced(300), 0, "Should return 0ms when reduced motion enabled");
-    assert_eq!(prefs_reduced.motion_duration_reduced(200), 0, "Should return 0ms for all durations when reduced motion");
+    assert_eq!(
+        prefs_reduced.motion_duration_reduced(300),
+        0,
+        "Should return 0ms when reduced motion enabled"
+    );
+    assert_eq!(
+        prefs_reduced.motion_duration_reduced(200),
+        0,
+        "Should return 0ms for all durations when reduced motion"
+    );
 }
 
 /// Test that we have all required token types
@@ -234,7 +267,10 @@ fn test_token_completeness() {
 
     // Total: 33 + 1 PREFERS_REDUCED_MOTION + 1 helper = 35 exports
     let total_expected = 35;
-    assert!(total_expected > 0, "Should have sufficient tokens for full UI");
+    assert!(
+        total_expected > 0,
+        "Should have sufficient tokens for full UI"
+    );
 }
 
 /// Test accessibility compliance
@@ -299,7 +335,8 @@ fn test_naming_conventions() {
 
     for name in valid_names {
         assert!(
-            name.chars().all(|c| c.is_uppercase() || c == '_' || c.is_numeric()),
+            name.chars()
+                .all(|c| c.is_uppercase() || c == '_' || c.is_numeric()),
             "Token name {} should be UPPER_CASE_WITH_UNDERSCORES",
             name
         );

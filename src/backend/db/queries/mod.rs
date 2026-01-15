@@ -341,8 +341,8 @@ pub async fn get_user_conversations(
 /// Insert a new message
 pub async fn insert_message(pool: &SqlitePool, message: &Message) -> Result<Message, String> {
     sqlx::query(
-        "INSERT INTO messages (id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, status, is_anonymized)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO messages (id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, read_at, status, is_anonymized)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(&message.id)
     .bind(&message.conversation_id)
@@ -351,6 +351,7 @@ pub async fn insert_message(pool: &SqlitePool, message: &Message) -> Result<Mess
     .bind(&message.content)
     .bind(message.created_at)
     .bind(message.delivered_at)
+    .bind(message.read_at)
     .bind(&message.status)
     .bind(message.is_anonymized)
     .execute(pool)
@@ -366,7 +367,7 @@ pub async fn find_message_by_id(
     message_id: &str,
 ) -> Result<Option<Message>, String> {
     sqlx::query_as::<_, Message>(
-        "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, status, is_anonymized
+        "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, read_at, status, is_anonymized
          FROM messages
          WHERE id = ?"
     )
@@ -384,7 +385,7 @@ pub async fn get_messages_by_conversation(
     offset: u32,
 ) -> Result<Vec<Message>, String> {
     sqlx::query_as::<_, Message>(
-        "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, status, is_anonymized
+        "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, read_at, status, is_anonymized
          FROM messages
          WHERE conversation_id = ?
          ORDER BY created_at DESC
@@ -404,7 +405,7 @@ pub async fn get_pending_messages(
     recipient_id: &str,
 ) -> Result<Vec<Message>, String> {
     sqlx::query_as::<_, Message>(
-        "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, status, is_anonymized
+        "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, read_at, status, is_anonymized
          FROM messages
          WHERE recipient_id = ? AND (status = 'pending' OR status = 'failed')
          ORDER BY created_at ASC"
@@ -418,7 +419,7 @@ pub async fn get_pending_messages(
 /// Get all pending messages (status = 'pending' or 'failed') for queue initialization
 pub async fn get_all_pending_messages(pool: &SqlitePool) -> Result<Vec<Message>, String> {
     sqlx::query_as::<_, Message>(
-        "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, status, is_anonymized
+        "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, read_at, status, is_anonymized
          FROM messages
          WHERE status = 'pending' OR status = 'failed'
          ORDER BY created_at ASC"
@@ -479,7 +480,7 @@ pub async fn search_messages_in_conversation(
     let search_pattern = format!("%{}%", search_query);
 
     sqlx::query_as::<_, Message>(
-        "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, status, is_anonymized
+        "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, read_at, status, is_anonymized
          FROM messages
          WHERE conversation_id = ? AND content LIKE ?
          ORDER BY created_at DESC

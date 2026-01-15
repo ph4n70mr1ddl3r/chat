@@ -282,7 +282,7 @@ impl MessageService {
     ///
     /// Batch updates delivery status for multiple messages with idempotent logic.
     /// Only upgrades status (pending < sent < delivered < read), never downgrades.
-    /// 
+    ///
     /// Returns list of updated messages for confirmation back to client.
     pub async fn sync_delivery_status(
         &self,
@@ -322,7 +322,7 @@ impl MessageService {
             if new_weight >= current_weight {
                 // Apply idempotent update
                 let now = chrono::Utc::now().timestamp_millis();
-                
+
                 match new_status.as_str() {
                     "read" => {
                         sqlx::query("UPDATE messages SET status = ?, read_at = ? WHERE id = ?")
@@ -334,13 +334,15 @@ impl MessageService {
                             .map_err(|e| format!("Failed to update message: {}", e))?;
                     }
                     "delivered" => {
-                        sqlx::query("UPDATE messages SET status = ?, delivered_at = ? WHERE id = ?")
-                            .bind("delivered")
-                            .bind(now)
-                            .bind(&message_id)
-                            .execute(&self.pool)
-                            .await
-                            .map_err(|e| format!("Failed to update message: {}", e))?;
+                        sqlx::query(
+                            "UPDATE messages SET status = ?, delivered_at = ? WHERE id = ?",
+                        )
+                        .bind("delivered")
+                        .bind(now)
+                        .bind(&message_id)
+                        .execute(&self.pool)
+                        .await
+                        .map_err(|e| format!("Failed to update message: {}", e))?;
                     }
                     _ => {
                         sqlx::query("UPDATE messages SET status = ? WHERE id = ?")
@@ -353,9 +355,11 @@ impl MessageService {
                 }
 
                 // Fetch updated message and add to response
-                if let Ok(Some(updated)) = queries::find_message_by_id(&self.pool, &message_id).await {
+                if let Ok(Some(updated)) =
+                    queries::find_message_by_id(&self.pool, &message_id).await
+                {
                     updated_messages.push(updated);
-                    
+
                     info!(
                         target: "message",
                         event = "delivery_status.synced",

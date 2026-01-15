@@ -222,4 +222,3 @@ pub struct DeliveryStatusSyncFailedEvent {
     pub reason: String,
     pub retriable: bool,
 }
-

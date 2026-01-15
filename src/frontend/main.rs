@@ -39,7 +39,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let base_url =
         std::env::var("SERVER_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
-    
+
     // Use the global session manager singleton
     let session_manager = services::session::get_session_manager();
 
@@ -120,7 +120,7 @@ fn show_chat(user_id: String, base_url: String) {
             tracing::info!("Chat screen created successfully, showing window");
             // Show the new window BEFORE hiding the old ones
             chat.show();
-            
+
             tracing::info!("Cleaning up old screens");
             // Now we can safely clean up old screens
             APP_STATE.with(|state| {

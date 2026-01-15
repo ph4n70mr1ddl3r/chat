@@ -36,12 +36,16 @@ impl SignupScreen {
                 None => {
                     eprintln!("DEBUG: UI weak reference failed to upgrade");
                     return;
-                },
+                }
             };
             let username = ui_handle.get_username().to_string();
             let password = ui_handle.get_password().to_string();
             let confirm_password = ui_handle.get_confirm_password().to_string();
-            eprintln!("DEBUG: Got form values - username: {}, password len: {}", username, password.len());
+            eprintln!(
+                "DEBUG: Got form values - username: {}, password len: {}",
+                username,
+                password.len()
+            );
 
             // Validate inputs
             if password != confirm_password {
@@ -78,7 +82,7 @@ impl SignupScreen {
                 match runtime.block_on(http_client.signup(username.clone(), password.clone())) {
                     Ok(response) => {
                         tracing::info!("Signup successful for user: {}", response.username);
-                        
+
                         // Save session to disk
                         if let Err(e) = session_manager.save_session_sync(
                             &response.user_id,
