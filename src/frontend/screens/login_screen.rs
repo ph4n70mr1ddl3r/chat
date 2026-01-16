@@ -69,7 +69,7 @@ impl LoginScreen {
                             &response.username,
                             response.expires_in as i64,
                         ) {
-                            eprintln!("Failed to save session: {}", e);
+                            tracing::error!("Failed to save session: {}", e);
                         }
 
                         let user_id = response.user_id.clone();
@@ -95,7 +95,6 @@ impl LoginScreen {
         });
 
         ui.on_navigate_to_signup(move || {
-            eprintln!("DEBUG: Navigate to signup clicked");
             signup_callback();
             // Note: Don't hide login window here - show_signup will clean up
         });

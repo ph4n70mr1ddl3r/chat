@@ -75,7 +75,6 @@ impl SessionManager {
     }
 
     /// Save session to disk
-    #[allow(dead_code)]
     pub async fn save_session(&self, session: SessionData) -> Result<(), String> {
         // Ensure parent directory exists
         if let Some(parent) = self.session_file.parent() {
@@ -92,6 +91,15 @@ impl SessionManager {
         fs::write(&self.session_file, json)
             .await
             .map_err(|e| format!("Failed to write session file: {}", e))?;
+
+        // Set restrictive file permissions (owner read/write only)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            tokio::fs::set_permissions(&self.session_file, std::fs::Permissions::from_mode(0o600))
+                .await
+                .map_err(|e| format!("Failed to set secure file permissions: {}", e))?;
+        }
 
         // Update in-memory session
         *self.current_session.lock().unwrap() = Some(session);
@@ -127,6 +135,14 @@ impl SessionManager {
         // Write to file
         std::fs::write(&self.session_file, json)
             .map_err(|e| format!("Failed to write session file: {}", e))?;
+
+        // Set restrictive file permissions (owner read/write only)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&self.session_file, std::fs::Permissions::from_mode(0o600))
+                .map_err(|e| format!("Failed to set secure file permissions: {}", e))?;
+        }
 
         // Update in-memory session
         *self.current_session.lock().unwrap() = Some(session);
@@ -202,7 +218,6 @@ impl SessionManager {
     }
 
     /// Check if token is expired or will expire soon (within 5 minutes)
-    #[allow(dead_code)]
     pub fn should_refresh_token(&self) -> bool {
         if let Some(session) = self.get_current_session() {
             let now = chrono::Utc::now().timestamp();
@@ -216,7 +231,6 @@ impl SessionManager {
     }
 
     /// Check if user is logged in with valid token
-    #[allow(dead_code)]
     pub fn is_logged_in(&self) -> bool {
         if let Some(session) = self.get_current_session() {
             let now = chrono::Utc::now().timestamp();

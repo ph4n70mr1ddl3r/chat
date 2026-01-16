@@ -51,10 +51,13 @@ impl Default for ServerConfig {
                     .collect::<Vec<_>>()
             })
             .filter(|list| !list.is_empty())
-            .unwrap_or_else(|| vec!["*".to_string()]);
+            .unwrap_or_else(|| vec!["http://localhost:3000".to_string()]);
 
         Self {
-            jwt_secret: std::env::var("JWT_SECRET").unwrap_or_else(|_| "secret".to_string()),
+            jwt_secret: std::env::var("JWT_SECRET").unwrap_or_else(|_| {
+                tracing::warn!("JWT_SECRET not set, using generated secret. Set JWT_SECRET environment variable for production!");
+                uuid::Uuid::new_v4().to_string()
+            }),
             max_message_size: 10 * 1024, // 10 KB
             allowed_origins: origins,
         }
@@ -330,6 +333,7 @@ fn build_cors(config: &ServerConfig) -> Cors {
     let allow_any = config.allowed_origins.iter().any(|o| o == "*");
 
     if allow_any {
+        tracing::warn!("CORS configured to allow any origin. This is insecure for production!");
         cors = cors.allow_any_origin();
     } else {
         for origin in &config.allowed_origins {
@@ -347,7 +351,6 @@ async fn handle_websocket_upgrade(
     state: ServerState,
 ) -> Result<impl Reply, Rejection> {
     info!("WebSocket connection request, query: {}", query);
-    eprintln!("Calling validator with query: '{}'", query);
 
     // Validate JWT token using handshake validator
     let validator = HandshakeValidator::new(state.config.jwt_secret.clone());
@@ -361,7 +364,6 @@ async fn handle_websocket_upgrade(
         }
         Err((status, message)) => {
             warn!("WebSocket authentication failed: {} - {}", status, message);
-            eprintln!("DEBUG: creating custom rejection with status {}", status);
             // Reject the WebSocket upgrade with appropriate HTTP status
             Err(warp::reject::custom(WebSocketAuthError { status, message }))
         }
@@ -612,7 +614,6 @@ fn enforce_frame_size(
 /// Handle rejections (errors) and convert to JSON responses
 async fn handle_rejection(err: Rejection) -> Result<impl Reply, Rejection> {
     warn!("Request rejected: {:?}", err);
-    eprintln!("DEBUG: Rejection details: {:?}", err);
 
     if let Some(api_err) = err.find::<handlers::ApiError>() {
         let body = handlers::ErrorBody {
@@ -629,7 +630,6 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Rejection> {
 
     // Convert to JSON error response
     let (code, message) = if let Some(auth_err) = err.find::<WebSocketAuthError>() {
-        eprintln!("DEBUG: Found WebSocketAuthError: {:?}", auth_err);
         (auth_err.status, auth_err.message.clone())
     } else if err.find::<auth_middleware::Unauthorized>().is_some() {
         (
@@ -898,7 +898,9 @@ mod tests {
     #[tokio::test]
     async fn test_cors_headers_present_on_options() {
         let pool = init_test_pool().await;
-        let state = ServerState::new(pool, ServerConfig::default());
+        let mut config = ServerConfig::default();
+        config.allowed_origins = vec!["https://example.com".to_string()];
+        let state = ServerState::new(pool, config);
         let routes = create_routes(state);
 
         let resp = request()

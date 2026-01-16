@@ -133,7 +133,6 @@ fn show_chat(user_id: String, base_url: String) {
         }
         Err(e) => {
             tracing::error!("Failed to initialize chat screen: {}", e);
-            eprintln!("ERROR: Chat screen initialization failed: {}", e);
             // Don't create a new login window - the old one is still there
             // The error will be visible in the console for now
             // TODO: Show error dialog on existing window
