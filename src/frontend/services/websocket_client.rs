@@ -13,6 +13,8 @@ use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 use uuid::Uuid;
 
+const MAX_RECONNECT_ATTEMPTS: usize = 10;
+
 /// Events emitted by the WebSocket client.
 #[derive(Debug, Clone)]
 pub enum WebSocketEvent {
@@ -179,6 +181,17 @@ impl WebSocketClient {
 
                 // Exponential backoff on reconnect attempts.
                 attempt += 1;
+                if attempt >= MAX_RECONNECT_ATTEMPTS {
+                    let _ = event_tx.send(WebSocketEvent::Error(
+                        "Max reconnect attempts reached".to_string(),
+                    ));
+                    let _ = event_tx.send(WebSocketEvent::ConnectionState(
+                        ConnectionStatus::Disconnected {
+                            reason: "Max reconnect attempts exceeded".to_string(),
+                        },
+                    ));
+                    return;
+                }
                 let backoff = calculate_backoff(attempt);
                 let _ = event_tx.send(WebSocketEvent::ConnectionState(
                     ConnectionStatus::Reconnecting {
@@ -243,15 +256,23 @@ where
                 conversation_id,
                 recipient_id,
                 content,
-            } => match serde_json::to_string(&build_message_envelope(
+            } => match build_message_envelope(
                 message_id.clone(),
                 conversation_id.clone(),
                 recipient_id.clone(),
                 content.clone(),
-            )) {
-                Ok(p) => p,
+            ) {
+                Ok(envelope) => match serde_json::to_string(&envelope) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        let _ =
+                            event_tx.send(WebSocketEvent::Error(format!("Serialize error: {}", e)));
+                        pending.pop_front();
+                        continue;
+                    }
+                },
                 Err(e) => {
-                    let _ = event_tx.send(WebSocketEvent::Error(format!("Serialize error: {}", e)));
+                    let _ = event_tx.send(WebSocketEvent::Error(e));
                     pending.pop_front();
                     continue;
                 }
@@ -259,13 +280,18 @@ where
             WebSocketCommand::SendTyping {
                 recipient_id,
                 is_typing,
-            } => match serde_json::to_string(&build_typing_envelope(
-                recipient_id.clone(),
-                *is_typing,
-            )) {
-                Ok(p) => p,
+            } => match build_typing_envelope(recipient_id.clone(), *is_typing) {
+                Ok(envelope) => match serde_json::to_string(&envelope) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        let _ =
+                            event_tx.send(WebSocketEvent::Error(format!("Serialize error: {}", e)));
+                        pending.pop_front();
+                        continue;
+                    }
+                },
                 Err(e) => {
-                    let _ = event_tx.send(WebSocketEvent::Error(format!("Serialize error: {}", e)));
+                    let _ = event_tx.send(WebSocketEvent::Error(e));
                     pending.pop_front();
                     continue;
                 }
@@ -318,7 +344,7 @@ fn build_message_envelope(
     conversation_id: String,
     recipient_id: String,
     content: String,
-) -> MessageEnvelope {
+) -> Result<MessageEnvelope, String> {
     let data = TextMessageData {
         sender_id: None,
         sender_username: None,
@@ -328,15 +354,18 @@ fn build_message_envelope(
         status: None,
     };
 
-    MessageEnvelope {
+    let data_value =
+        serde_json::to_value(data).map_err(|e| format!("Serialize message data: {}", e))?;
+
+    Ok(MessageEnvelope {
         id: message_id,
         msg_type: "message".to_string(),
         timestamp: current_timestamp_ms(),
-        data: serde_json::to_value(data).unwrap_or_default(),
-    }
+        data: data_value,
+    })
 }
 
-fn build_typing_envelope(recipient_id: String, is_typing: bool) -> MessageEnvelope {
+fn build_typing_envelope(recipient_id: String, is_typing: bool) -> Result<MessageEnvelope, String> {
     let data = TypingData {
         sender_id: None,
         sender_username: None,
@@ -344,12 +373,15 @@ fn build_typing_envelope(recipient_id: String, is_typing: bool) -> MessageEnvelo
         is_typing,
     };
 
-    MessageEnvelope {
+    let data_value =
+        serde_json::to_value(data).map_err(|e| format!("Serialize typing data: {}", e))?;
+
+    Ok(MessageEnvelope {
         id: Uuid::new_v4().to_string(),
         msg_type: "typing".to_string(),
         timestamp: current_timestamp_ms(),
-        data: serde_json::to_value(data).unwrap_or_default(),
-    }
+        data: data_value,
+    })
 }
 
 fn current_timestamp_ms() -> u64 {
@@ -363,8 +395,11 @@ fn handle_incoming_text(text: &str, event_tx: &mpsc::UnboundedSender<WebSocketEv
     let envelope: Result<MessageEnvelopeWire, _> = serde_json::from_str(text);
     let envelope = match envelope {
         Ok(v) => v,
-        Err(_) => {
-            let _ = event_tx.send(WebSocketEvent::Error("Invalid message payload".into()));
+        Err(e) => {
+            let _ = event_tx.send(WebSocketEvent::Error(format!(
+                "Invalid message payload: {}",
+                e
+            )));
             return;
         }
     };
@@ -372,54 +407,90 @@ fn handle_incoming_text(text: &str, event_tx: &mpsc::UnboundedSender<WebSocketEv
     match envelope.msg_type.as_str() {
         "ack" => {
             let ack: Result<AckData, _> = serde_json::from_value(envelope.data.clone());
-            if let Ok(ack) = ack {
-                let _ = event_tx.send(WebSocketEvent::Ack {
-                    message_id: ack.message_id,
-                    status: ack.status,
-                    conversation_id: ack.conversation_id,
-                });
+            match ack {
+                Ok(ack) => {
+                    let _ = event_tx.send(WebSocketEvent::Ack {
+                        message_id: ack.message_id,
+                        status: ack.status,
+                        conversation_id: ack.conversation_id,
+                    });
+                }
+                Err(e) => {
+                    let _ =
+                        event_tx.send(WebSocketEvent::Error(format!("Failed to parse ack: {}", e)));
+                }
             }
         }
         "message" => {
-            // Deserialize into TextMessageData; fall back to minimal fields if unknown.
             let msg: Result<TextMessageData, _> = serde_json::from_value(envelope.data.clone());
-            if let Ok(msg) = msg {
-                let _ = event_tx.send(WebSocketEvent::Message {
-                    conversation_id: msg.conversation_id.unwrap_or_else(|| "unknown".to_string()),
-                    message_id: envelope.id,
-                    sender_username: msg.sender_username.unwrap_or_else(|| "Unknown".to_string()),
-                    content: msg.content,
-                    status: msg.status.unwrap_or_else(|| "sent".to_string()),
-                    timestamp: envelope.timestamp,
-                });
+            match msg {
+                Ok(msg) => {
+                    let _ = event_tx.send(WebSocketEvent::Message {
+                        conversation_id: msg
+                            .conversation_id
+                            .unwrap_or_else(|| "unknown".to_string()),
+                        message_id: envelope.id,
+                        sender_username: msg
+                            .sender_username
+                            .unwrap_or_else(|| "Unknown".to_string()),
+                        content: msg.content,
+                        status: msg.status.unwrap_or_else(|| "sent".to_string()),
+                        timestamp: envelope.timestamp,
+                    });
+                }
+                Err(e) => {
+                    let _ = event_tx.send(WebSocketEvent::Error(format!(
+                        "Failed to parse message: {}",
+                        e
+                    )));
+                }
             }
         }
         "typing" => {
             let typing: Result<TypingData, _> = serde_json::from_value(envelope.data.clone());
-            if let Ok(typing) = typing {
-                let _ = event_tx.send(WebSocketEvent::Typing {
-                    sender_id: typing.sender_id,
-                    sender_username: typing
-                        .sender_username
-                        .unwrap_or_else(|| "Unknown".to_string()),
-                    recipient_id: typing.recipient_id,
-                    is_typing: typing.is_typing,
-                });
+            match typing {
+                Ok(typing) => {
+                    let _ = event_tx.send(WebSocketEvent::Typing {
+                        sender_id: typing.sender_id,
+                        sender_username: typing
+                            .sender_username
+                            .unwrap_or_else(|| "Unknown".to_string()),
+                        recipient_id: typing.recipient_id,
+                        is_typing: typing.is_typing,
+                    });
+                }
+                Err(e) => {
+                    let _ = event_tx.send(WebSocketEvent::Error(format!(
+                        "Failed to parse typing: {}",
+                        e
+                    )));
+                }
             }
         }
         "presence" => {
             let presence: Result<PresenceData, _> = serde_json::from_value(envelope.data.clone());
-            if let Ok(presence) = presence {
-                let _ = event_tx.send(WebSocketEvent::Presence {
-                    user_id: presence.user_id,
-                    username: presence.username,
-                    is_online: presence.is_online,
-                    last_seen_at: presence.last_seen_at,
-                });
+            match presence {
+                Ok(presence) => {
+                    let _ = event_tx.send(WebSocketEvent::Presence {
+                        user_id: presence.user_id,
+                        username: presence.username,
+                        is_online: presence.is_online,
+                        last_seen_at: presence.last_seen_at,
+                    });
+                }
+                Err(e) => {
+                    let _ = event_tx.send(WebSocketEvent::Error(format!(
+                        "Failed to parse presence: {}",
+                        e
+                    )));
+                }
             }
         }
         _ => {
-            // Ignore unknown types for now
+            let _ = event_tx.send(WebSocketEvent::Error(format!(
+                "Unknown message type: {}",
+                envelope.msg_type
+            )));
         }
     }
 }
