@@ -205,36 +205,50 @@ pub async fn get_conversations(
         }
     };
 
-    // Enrich with participant info
-    let mut responses = Vec::new();
-    for conv in conversations {
-        // Determine participant (the other user)
-        let participant_id = if conv.user1_id == user_id {
-            &conv.user2_id
-        } else {
-            &conv.user1_id
-        };
-
-        // Fetch participant info
-        let participant = match queries::find_user_by_id(&pool, participant_id).await {
-            Ok(Some(user)) => user,
-            Ok(None) => continue, // Skip if participant not found
-            Err(e) => {
-                warn!("Failed to fetch participant info: {}", e);
-                continue;
+    // Collect all participant IDs for batch lookup
+    let participant_ids: Vec<String> = conversations
+        .iter()
+        .map(|conv| {
+            if conv.user1_id == user_id {
+                conv.user2_id.clone()
+            } else {
+                conv.user1_id.clone()
             }
-        };
+        })
+        .collect();
 
-        responses.push(ConversationResponse {
-            conversation_id: conv.id,
-            participant_id: participant.id,
-            participant_username: participant.username,
-            participant_is_online: participant.is_online,
-            created_at: conv.created_at,
-            last_message_at: conv.last_message_at,
-            message_count: conv.message_count,
-        });
-    }
+    // Batch fetch all participant info
+    let users_map = match queries::find_users_by_ids(&pool, &participant_ids).await {
+        Ok(users) => users,
+        Err(e) => {
+            warn!("Failed to fetch participants: {}", e);
+            std::collections::HashMap::new()
+        }
+    };
+
+    // Build responses using the cached user info
+    let responses: Vec<ConversationResponse> = conversations
+        .into_iter()
+        .filter_map(|conv| {
+            let participant_id = if conv.user1_id == user_id {
+                conv.user2_id.clone()
+            } else {
+                conv.user1_id.clone()
+            };
+
+            users_map
+                .get(&participant_id)
+                .map(|participant| ConversationResponse {
+                    conversation_id: conv.id,
+                    participant_id: participant.id.clone(),
+                    participant_username: participant.username.clone(),
+                    participant_is_online: participant.is_online,
+                    created_at: conv.created_at,
+                    last_message_at: conv.last_message_at,
+                    message_count: conv.message_count,
+                })
+        })
+        .collect();
 
     Ok(reply::with_status(
         reply::json(&responses),
@@ -308,30 +322,34 @@ pub async fn get_conversation_messages(
         }
     };
 
-    // Enrich with sender username
-    let mut responses = Vec::new();
-    for msg in messages {
-        // Fetch sender info
-        let sender = match queries::find_user_by_id(&pool, &msg.sender_id).await {
-            Ok(Some(user)) => user,
-            Ok(None) => continue, // Skip if sender not found
-            Err(e) => {
-                warn!("Failed to fetch sender info: {}", e);
-                continue;
-            }
-        };
+    // Collect all sender IDs for batch lookup
+    let sender_ids: Vec<String> = messages.iter().map(|msg| msg.sender_id.clone()).collect();
 
-        responses.push(MessageResponse {
-            id: msg.id,
-            sender_id: msg.sender_id,
-            sender_username: sender.username,
-            recipient_id: msg.recipient_id,
-            content: msg.content,
-            created_at: msg.created_at,
-            delivered_at: msg.delivered_at,
-            status: msg.status,
-        });
-    }
+    // Batch fetch all sender info
+    let users_map = match queries::find_users_by_ids(&pool, &sender_ids).await {
+        Ok(users) => users,
+        Err(e) => {
+            warn!("Failed to fetch senders: {}", e);
+            std::collections::HashMap::new()
+        }
+    };
+
+    // Build responses using the cached user info
+    let responses: Vec<MessageResponse> = messages
+        .into_iter()
+        .filter_map(|msg| {
+            users_map.get(&msg.sender_id).map(|sender| MessageResponse {
+                id: msg.id,
+                sender_id: msg.sender_id,
+                sender_username: sender.username.clone(),
+                recipient_id: msg.recipient_id,
+                content: msg.content,
+                created_at: msg.created_at,
+                delivered_at: msg.delivered_at,
+                status: msg.status,
+            })
+        })
+        .collect();
 
     Ok(reply::with_status(
         reply::json(&responses),

@@ -282,6 +282,20 @@ impl ErrorResponse {
 
         WsMessage::text(error.to_string())
     }
+
+    pub fn authorization_failure() -> WsMessage {
+        let error = json!({
+            "id": uuid::Uuid::new_v4().to_string(),
+            "type": "error",
+            "timestamp": chrono::Utc::now().timestamp_millis() as u64,
+            "data": {
+                "code": "AUTHORIZATION_FAILURE",
+                "message": "You are not authorized to access this conversation",
+            }
+        });
+
+        WsMessage::text(error.to_string())
+    }
 }
 
 #[cfg(test)]

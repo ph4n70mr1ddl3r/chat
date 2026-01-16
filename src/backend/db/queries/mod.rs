@@ -135,6 +135,44 @@ pub async fn find_user_by_id(pool: &SqlitePool, user_id: &str) -> Result<Option<
     .map_err(|e| format!("Failed to find user by id: {}", e))
 }
 
+/// Find multiple users by their IDs
+///
+/// Returns a HashMap of user_id to User for all found users
+pub async fn find_users_by_ids(
+    pool: &SqlitePool,
+    user_ids: &[String],
+) -> Result<std::collections::HashMap<String, User>, String> {
+    if user_ids.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+
+    let placeholders: String = user_ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let query = format!(
+        "SELECT id, username, password_hash, password_salt, created_at, updated_at, deleted_at, is_online, last_seen_at
+         FROM users
+         WHERE id IN ({})",
+        placeholders
+    );
+
+    let mut users = std::collections::HashMap::new();
+    let mut query = sqlx::query_as::<_, User>(&query);
+
+    for user_id in user_ids {
+        query = query.bind(user_id);
+    }
+
+    let results = query
+        .fetch_all(pool)
+        .await
+        .map_err(|e| format!("Failed to find users by ids: {}", e))?;
+
+    for user in results {
+        users.insert(user.id.clone(), user);
+    }
+
+    Ok(users)
+}
+
 /// Update user online status
 pub async fn update_online_status(
     pool: &SqlitePool,
@@ -216,12 +254,13 @@ pub async fn search_users_by_prefix(
     query: &str,
     limit: u32,
 ) -> Result<Vec<User>, String> {
-    let search_pattern = format!("{}%", query);
+    let escaped_query = query.replace('%', "\\%").replace('_', "\\_");
+    let search_pattern = format!("{}%", escaped_query);
 
     sqlx::query_as::<_, User>(
         "SELECT id, username, password_hash, password_salt, created_at, updated_at, deleted_at, is_online, last_seen_at
          FROM users
-         WHERE username LIKE ? AND deleted_at IS NULL
+         WHERE username LIKE ? ESCAPE '\\' AND deleted_at IS NULL
          LIMIT ?"
     )
     .bind(search_pattern)
@@ -238,12 +277,13 @@ pub async fn search_users_excluding_self(
     current_user_id: &str,
     limit: u32,
 ) -> Result<Vec<User>, String> {
-    let search_pattern = format!("{}%", query);
+    let escaped_query = query.replace('%', "\\%").replace('_', "\\_");
+    let search_pattern = format!("{}%", escaped_query);
 
     sqlx::query_as::<_, User>(
         "SELECT id, username, password_hash, password_salt, created_at, updated_at, deleted_at, is_online, last_seen_at
          FROM users
-         WHERE username LIKE ? AND id != ? AND deleted_at IS NULL
+         WHERE username LIKE ? ESCAPE '\\' AND id != ? AND deleted_at IS NULL
          LIMIT ?"
     )
     .bind(search_pattern)

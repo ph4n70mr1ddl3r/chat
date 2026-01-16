@@ -66,20 +66,6 @@ impl MessageService {
             return Err("Message content must be between 1 and 5000 characters".to_string());
         }
 
-        // Validate UTF-8 (Rust strings are already UTF-8, but check for validity)
-        if !content.is_ascii() && content.chars().any(|c| !c.is_valid()) {
-            warn!(
-                target: "message",
-                event = "message.send",
-                conversation_id = %conversation_id,
-                sender_id = %sender_id,
-                recipient_id = %recipient_id,
-                outcome = "failed",
-                reason = "invalid_utf8"
-            );
-            return Err("Message content contains invalid UTF-8 characters".to_string());
-        }
-
         // Verify recipient exists and is not deleted
         let recipient = queries::find_user_by_id(&self.pool, &recipient_id)
             .await?

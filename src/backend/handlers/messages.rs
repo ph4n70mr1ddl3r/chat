@@ -8,6 +8,7 @@ use crate::db::queries;
 use crate::handlers::websocket::{ClientConnection, ConnectionManager, ErrorResponse};
 use crate::services::{message_queue::MessageQueueService, message_service::MessageService};
 use chat_shared::protocol::{MessageEnvelope, TextMessageData};
+use log::warn;
 use serde_json::json;
 use sqlx::SqlitePool;
 use std::sync::Arc;
@@ -66,7 +67,17 @@ impl MessageHandler {
 
         // Get or create conversation
         let conversation_id = if let Some(conv_id) = &data.conversation_id {
-            conv_id.clone()
+            let conversation_id = conv_id.clone();
+            // Verify sender is a participant in the conversation
+            let conversation = queries::get_conversation_by_id(&self.pool, &conversation_id)
+                .await
+                .map_err(|e| format!("Database error: {}", e))?
+                .ok_or_else(|| "Conversation not found".to_string())?;
+
+            if conversation.user1_id != sender.user_id && conversation.user2_id != sender.user_id {
+                return Ok(vec![ErrorResponse::authorization_failure()]);
+            }
+            conversation_id
         } else {
             // Look up or create conversation between sender and recipient
             let (conversation, _) = self
@@ -266,7 +277,7 @@ impl MessageHandler {
             if new_weight >= current_weight {
                 // Update is valid - apply idempotent upgrade
                 let now = chrono::Utc::now().timestamp_millis();
-                match update.status.as_str() {
+                let update_result = match update.status.as_str() {
                     "read" => {
                         sqlx::query("UPDATE messages SET status = ?, read_at = ? WHERE id = ?")
                             .bind("read")
@@ -274,18 +285,14 @@ impl MessageHandler {
                             .bind(&update.message_id)
                             .execute(&self.pool)
                             .await
-                            .ok();
                     }
                     "delivered" => {
-                        sqlx::query(
-                            "UPDATE messages SET status = ?, delivered_at = ? WHERE id = ?",
-                        )
-                        .bind("delivered")
-                        .bind(now)
-                        .bind(&update.message_id)
-                        .execute(&self.pool)
-                        .await
-                        .ok();
+                        sqlx::query("UPDATE messages SET status = ?, delivered_at = ? WHERE id = ?")
+                            .bind("delivered")
+                            .bind(now)
+                            .bind(&update.message_id)
+                            .execute(&self.pool)
+                            .await
                     }
                     _ => {
                         sqlx::query("UPDATE messages SET status = ? WHERE id = ?")
@@ -293,8 +300,12 @@ impl MessageHandler {
                             .bind(&update.message_id)
                             .execute(&self.pool)
                             .await
-                            .ok();
                     }
+                };
+
+                if let Err(e) = update_result {
+                    warn!("Failed to update message status: {}", e);
+                    continue;
                 }
 
                 synced_count += 1;

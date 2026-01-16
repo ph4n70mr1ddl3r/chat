@@ -5,6 +5,7 @@
 
 use crate::db::queries;
 use crate::models::User;
+use log::info;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -47,6 +48,7 @@ pub struct UserService {
     pool: SqlitePool,
     cache: Arc<RwLock<HashMap<SearchKey, CacheEntry>>>,
     ttl: Duration,
+    last_prune: Arc<RwLock<Instant>>,
 }
 
 impl UserService {
@@ -61,7 +63,34 @@ impl UserService {
             pool,
             cache: Arc::new(RwLock::new(HashMap::new())),
             ttl,
+            last_prune: Arc::new(RwLock::new(Instant::now())),
         }
+    }
+
+    /// Prune expired entries if enough time has passed since last prune
+    async fn try_prune_cache(&self, now: Instant) {
+        let last_prune = *self.last_prune.read().await;
+        // Only prune if 30 seconds have passed since last prune
+        if now.duration_since(last_prune) < Duration::from_secs(30) {
+            return;
+        }
+
+        let mut cache = self.cache.write().await;
+        // Double-check after acquiring write lock
+        let last_prune = *self.last_prune.read().await;
+        if now.duration_since(last_prune) < Duration::from_secs(30) {
+            return;
+        }
+
+        let initial_size = cache.len();
+        cache.retain(|_, entry| entry.expires_at > now);
+        let pruned_count = initial_size.saturating_sub(cache.len());
+
+        if pruned_count > 0 {
+            info!(target: "user_service", "Pruned {} expired cache entries", pruned_count);
+        }
+
+        *self.last_prune.write().await = now;
     }
 
     /// Search users with cached results (per requester + query + limit)
@@ -93,10 +122,11 @@ impl UserService {
         let users =
             queries::search_users_excluding_self(&self.pool, query, requester_id, limit).await?;
 
-        // Insert into cache and prune expired entries opportunistically
+        // Insert into cache and periodically prune expired entries
         {
+            self.try_prune_cache(now).await;
+
             let mut cache = self.cache.write().await;
-            cache.retain(|_, entry| entry.expires_at > now);
             cache.insert(
                 key,
                 CacheEntry {
