@@ -898,8 +898,10 @@ mod tests {
     #[tokio::test]
     async fn test_cors_headers_present_on_options() {
         let pool = init_test_pool().await;
-        let mut config = ServerConfig::default();
-        config.allowed_origins = vec!["https://example.com".to_string()];
+        let config = ServerConfig {
+            allowed_origins: vec!["https://example.com".to_string()],
+            ..Default::default()
+        };
         let state = ServerState::new(pool, config);
         let routes = create_routes(state);
 
