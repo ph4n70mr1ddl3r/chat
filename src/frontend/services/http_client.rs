@@ -20,6 +20,13 @@ pub struct AuthResponse {
     pub expires_in: u64,
 }
 
+/// Login request payload
+#[derive(Debug, Serialize)]
+pub struct LoginRequest {
+    pub username: String,
+    pub password: String,
+}
+
 /// Error response from server
 #[derive(Debug, Deserialize)]
 pub struct ErrorResponse {
@@ -74,7 +81,7 @@ impl HttpClient {
     /// Log in an existing user
     pub async fn login(&self, username: String, password: String) -> Result<AuthResponse, String> {
         let url = format!("{}/auth/login", self.base_url);
-        let request = SignupRequest { username, password };
+        let request = LoginRequest { username, password };
 
         let response = self
             .client

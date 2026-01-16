@@ -367,18 +367,17 @@ impl MessageService {
     ///
     /// Returns true if content is valid, false otherwise
     pub fn validate_content(content: &str) -> bool {
-        !content.is_empty() && content.len() <= 5000 && content.chars().all(|c| c.is_valid())
+        !content.is_empty() && content.len() <= 5000 && content.chars().all(|c| c.is_allowed())
     }
 }
 
-trait CharValidator {
-    fn is_valid(&self) -> bool;
+trait IsAllowedChar {
+    fn is_allowed(&self) -> bool;
 }
 
-impl CharValidator for char {
-    fn is_valid(&self) -> bool {
-        // Check if character is valid UTF-8 and not a control character (except newline/tab)
-        !self.is_control() || *self == '\n' || *self == '\t'
+impl IsAllowedChar for char {
+    fn is_allowed(&self) -> bool {
+        !self.is_control() || *self == '\n' || *self == '\r' || *self == '\t'
     }
 }
 

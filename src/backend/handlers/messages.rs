@@ -122,7 +122,10 @@ impl MessageHandler {
                 self.connection_manager
                     .send_to_user(
                         &data.recipient_id,
-                        WsMessage::text(serde_json::to_string(&delivery_message).unwrap()),
+                        WsMessage::text(
+                            serde_json::to_string(&delivery_message)
+                                .map_err(|e| format!("Failed to serialize message: {}", e))?,
+                        ),
                     )
                     .await;
 
@@ -148,7 +151,9 @@ impl MessageHandler {
             "sent"
         };
         let ack = self.build_ack_envelope(&envelope.id, &conversation_id, &message.id, ack_status);
-        responses.push(WsMessage::text(serde_json::to_string(&ack).unwrap()));
+        responses.push(WsMessage::text(
+            serde_json::to_string(&ack).map_err(|e| format!("Failed to serialize ack: {}", e))?,
+        ));
 
         Ok(responses)
     }
@@ -325,7 +330,8 @@ impl MessageHandler {
                 };
 
                 // Send to both sender and recipient
-                let event_json = serde_json::to_string(&event).unwrap();
+                let event_json = serde_json::to_string(&event)
+                    .map_err(|e| format!("Failed to serialize event: {}", e))?;
                 self.connection_manager
                     .send_to_user(&current.sender_id, WsMessage::text(event_json.clone()))
                     .await;
@@ -345,7 +351,10 @@ impl MessageHandler {
                 "timestamp": chrono::Utc::now().timestamp_millis(),
             }),
         };
-        responses.push(WsMessage::text(serde_json::to_string(&completion).unwrap()));
+        responses.push(WsMessage::text(
+            serde_json::to_string(&completion)
+                .map_err(|e| format!("Failed to serialize completion: {}", e))?,
+        ));
 
         Ok(responses)
     }
