@@ -74,39 +74,6 @@ impl SessionManager {
         }
     }
 
-    /// Save session to disk
-    pub async fn save_session(&self, session: SessionData) -> Result<(), String> {
-        // Ensure parent directory exists
-        if let Some(parent) = self.session_file.parent() {
-            fs::create_dir_all(parent)
-                .await
-                .map_err(|e| format!("Failed to create session directory: {}", e))?;
-        }
-
-        // Serialize session
-        let json = serde_json::to_string_pretty(&session)
-            .map_err(|e| format!("Failed to serialize session: {}", e))?;
-
-        // Write to file
-        fs::write(&self.session_file, json)
-            .await
-            .map_err(|e| format!("Failed to write session file: {}", e))?;
-
-        // Set restrictive file permissions (owner read/write only)
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            tokio::fs::set_permissions(&self.session_file, std::fs::Permissions::from_mode(0o600))
-                .await
-                .map_err(|e| format!("Failed to set secure file permissions: {}", e))?;
-        }
-
-        // Update in-memory session
-        *self.current_session.lock().unwrap() = Some(session);
-
-        Ok(())
-    }
-
     /// Save session with individual parameters (synchronous helper)
     pub fn save_session_sync(
         &self,
@@ -217,19 +184,6 @@ impl SessionManager {
         Ok(Some(session))
     }
 
-    /// Check if token is expired or will expire soon (within 5 minutes)
-    pub fn should_refresh_token(&self) -> bool {
-        if let Some(session) = self.get_current_session() {
-            let now = chrono::Utc::now().timestamp();
-            let expires_in = session.expires_at - now;
-
-            // Refresh if expires in less than 5 minutes
-            expires_in < 300
-        } else {
-            false
-        }
-    }
-
     /// Check if user is logged in with valid token
     pub fn is_logged_in(&self) -> bool {
         if let Some(session) = self.get_current_session() {
@@ -304,7 +258,14 @@ mod tests {
         };
 
         // Save
-        manager.save_session(session.clone()).await.unwrap();
+        manager
+            .save_session_sync(
+                &session.user_id,
+                &session.token,
+                &session.username,
+                session.expires_at,
+            )
+            .unwrap();
 
         // Load
         let loaded = manager.load_session().await.unwrap();

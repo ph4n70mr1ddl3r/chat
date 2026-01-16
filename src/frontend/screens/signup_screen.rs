@@ -9,8 +9,6 @@ use std::sync::Arc;
 /// Signup screen controller
 pub struct SignupScreen {
     ui: SignupScreenComponent,
-    http_client: Arc<HttpClient>,
-    session_manager: Arc<SessionManager>,
 }
 
 impl SignupScreen {
@@ -121,11 +119,7 @@ impl SignupScreen {
             // Note: Don't hide signup window here - show_login will clean up
         });
 
-        Self {
-            ui,
-            http_client,
-            session_manager,
-        }
+        Self { ui }
     }
 
     pub fn show(&self) {
