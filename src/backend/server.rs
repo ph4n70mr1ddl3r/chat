@@ -39,6 +39,18 @@ pub struct ServerConfig {
     pub allowed_origins: Vec<String>,
 }
 
+impl ServerConfig {
+    /// Create a test configuration with a generated JWT secret
+    #[cfg(test)]
+    pub fn test_config() -> Self {
+        Self {
+            jwt_secret: uuid::Uuid::new_v4().to_string(),
+            max_message_size: 10 * 1024, // 10 KB
+            allowed_origins: vec!["http://localhost:3000".to_string()],
+        }
+    }
+}
+
 impl Default for ServerConfig {
     fn default() -> Self {
         let origins = std::env::var("CORS_ALLOWED_ORIGINS")
@@ -54,10 +66,7 @@ impl Default for ServerConfig {
             .unwrap_or_else(|| vec!["http://localhost:3000".to_string()]);
 
         Self {
-            jwt_secret: std::env::var("JWT_SECRET").unwrap_or_else(|_| {
-                tracing::warn!("JWT_SECRET not set, using generated secret. Set JWT_SECRET environment variable for production!");
-                uuid::Uuid::new_v4().to_string()
-            }),
+            jwt_secret: std::env::var("JWT_SECRET").expect("JWT_SECRET environment variable must be set for security"),
             max_message_size: 10 * 1024, // 10 KB
             allowed_origins: origins,
         }
@@ -725,7 +734,7 @@ mod tests {
     #[tokio::test]
     async fn test_health_endpoint() {
         let pool = init_test_pool().await;
-        let state = ServerState::new(pool, ServerConfig::default());
+        let state = ServerState::new(pool, ServerConfig::test_config());
         let routes = create_routes(state);
 
         let resp = request().method("GET").path("/health").reply(&routes).await;
@@ -737,7 +746,7 @@ mod tests {
     #[tokio::test]
     async fn test_websocket_upgrade_without_token() {
         let pool = init_test_pool().await;
-        let state = ServerState::new(pool, ServerConfig::default());
+        let state = ServerState::new(pool, ServerConfig::test_config());
         let routes = create_routes(state);
 
         let resp = request()
@@ -762,7 +771,7 @@ mod tests {
     #[tokio::test]
     async fn test_websocket_upgrade_with_invalid_token() {
         let pool = init_test_pool().await;
-        let state = ServerState::new(pool, ServerConfig::default());
+        let state = ServerState::new(pool, ServerConfig::test_config());
         let routes = create_routes(state);
 
         let resp = request()
@@ -782,7 +791,7 @@ mod tests {
     #[tokio::test]
     async fn test_not_found() {
         let pool = init_test_pool().await;
-        let state = ServerState::new(pool, ServerConfig::default());
+        let state = ServerState::new(pool, ServerConfig::test_config());
         let routes = create_routes(state);
 
         let resp = request()
@@ -797,7 +806,7 @@ mod tests {
     #[tokio::test]
     async fn test_status_endpoint() {
         let pool = init_test_pool().await;
-        let state = ServerState::new(pool, ServerConfig::default());
+        let state = ServerState::new(pool, ServerConfig::test_config());
         let routes = create_routes(state);
 
         let resp = request().method("GET").path("/status").reply(&routes).await;
@@ -810,7 +819,7 @@ mod tests {
     #[tokio::test]
     async fn test_global_rate_limit_blocks_requests() {
         let pool = init_test_pool().await;
-        let mut state = ServerState::new(pool, ServerConfig::default());
+        let mut state = ServerState::new(pool, ServerConfig::test_config());
         state.global_rate_limiter = Arc::new(rate_limit::RateLimiter::new(1, 60));
         let routes = create_routes(state);
 
@@ -829,7 +838,7 @@ mod tests {
     #[tokio::test]
     async fn test_auth_rate_limit_blocks_after_failures() {
         let pool = init_test_pool().await;
-        let mut state = ServerState::new(pool, ServerConfig::default());
+        let mut state = ServerState::new(pool, ServerConfig::test_config());
         state.global_rate_limiter = Arc::new(rate_limit::RateLimiter::new(10, 60));
         // Allow 1 attempt (block when attempts >= 1, so block on 2nd)
         state.auth_rate_limiter = Arc::new(rate_limit::RateLimiter::new(1, 60));
@@ -863,7 +872,7 @@ mod tests {
     #[tokio::test]
     async fn test_security_headers_present() {
         let pool = init_test_pool().await;
-        let state = ServerState::new(pool, ServerConfig::default());
+        let state = ServerState::new(pool, ServerConfig::test_config());
         let routes = create_routes(state);
 
         let resp = request().method("GET").path("/health").reply(&routes).await;
@@ -900,7 +909,8 @@ mod tests {
         let pool = init_test_pool().await;
         let config = ServerConfig {
             allowed_origins: vec!["https://example.com".to_string()],
-            ..Default::default()
+            jwt_secret: uuid::Uuid::new_v4().to_string(), // Test secret
+            max_message_size: 10 * 1024,
         };
         let state = ServerState::new(pool, config);
         let routes = create_routes(state);

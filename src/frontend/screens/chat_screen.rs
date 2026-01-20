@@ -973,7 +973,7 @@ async fn load_conversations() -> Result<Vec<ConversationData>, Box<dyn std::erro
             participant_id: c.participant_id,
             participant_username: c.participant_username,
             participant_is_online: c.participant_is_online,
-            last_message: "".to_string(), // TODO: Get from messages
+            last_message: "".to_string(), // TODO: Fetch last message content from backend API (requires backend changes)
             last_message_time: format_timestamp(c.last_message_at),
             message_count: c.message_count,
         })
