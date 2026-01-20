@@ -296,6 +296,20 @@ impl ErrorResponse {
 
         WsMessage::text(error.to_string())
     }
+
+    pub fn invalid_message(reason: &str) -> WsMessage {
+        let error = json!({
+            "id": uuid::Uuid::new_v4().to_string(),
+            "type": "error",
+            "timestamp": chrono::Utc::now().timestamp_millis() as u64,
+            "data": {
+                "code": "INVALID_MESSAGE",
+                "message": reason,
+            }
+        });
+
+        WsMessage::text(error.to_string())
+    }
 }
 
 #[cfg(test)]

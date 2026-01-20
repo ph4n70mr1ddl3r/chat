@@ -76,8 +76,7 @@ impl UserService {
         }
 
         let mut cache = self.cache.write().await;
-        // Double-check after acquiring write lock
-        let last_prune = *self.last_prune.read().await;
+        // Double-check after acquiring write lock (but use the same last_prune value)
         if now.duration_since(last_prune) < Duration::from_secs(30) {
             return;
         }

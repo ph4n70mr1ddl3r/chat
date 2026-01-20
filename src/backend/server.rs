@@ -66,7 +66,13 @@ impl Default for ServerConfig {
             .unwrap_or_else(|| vec!["http://localhost:3000".to_string()]);
 
         Self {
-            jwt_secret: std::env::var("JWT_SECRET").expect("JWT_SECRET environment variable must be set for security"),
+            jwt_secret: std::env::var("JWT_SECRET")
+                .unwrap_or_else(|_| {
+                    tracing::warn!("JWT_SECRET not set, generating random secret for development. Set JWT_SECRET environment variable for production!");
+                    use rand::{Rng, thread_rng};
+                    let mut rng = thread_rng();
+                    (0..32).map(|_| rng.sample(rand::distributions::Alphanumeric) as char).collect()
+                }),
             max_message_size: 10 * 1024, // 10 KB
             allowed_origins: origins,
         }

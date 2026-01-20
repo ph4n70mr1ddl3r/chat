@@ -8,7 +8,7 @@ use crate::db::queries;
 use crate::handlers::websocket::{ClientConnection, ConnectionManager, ErrorResponse};
 use crate::services::{message_queue::MessageQueueService, message_service::MessageService};
 use chat_shared::protocol::{MessageEnvelope, TextMessageData};
-use log::warn;
+use tracing::warn;
 use serde_json::json;
 use sqlx::SqlitePool;
 use std::sync::Arc;
@@ -54,6 +54,19 @@ impl MessageHandler {
         // Extract message data
         let data: TextMessageData = serde_json::from_value(envelope.data.clone())
             .map_err(|e| format!("Invalid message data: {}", e))?;
+
+        // Validate message content
+        if data.content.trim().is_empty() {
+            return Ok(vec![ErrorResponse::invalid_message("Message content cannot be empty")]);
+        }
+        if data.content.len() > 5000 {
+            return Ok(vec![ErrorResponse::invalid_message("Message content exceeds 5000 character limit")]);
+        }
+
+        // Prevent self-messaging
+        if data.recipient_id == sender.user_id {
+            return Ok(vec![ErrorResponse::invalid_message("Cannot send message to yourself")]);
+        }
 
         // Validate recipient exists
         let recipient = queries::find_user_by_id(&self.pool, &data.recipient_id)
