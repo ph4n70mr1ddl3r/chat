@@ -517,7 +517,8 @@ pub async fn search_messages_in_conversation(
     search_query: &str,
     limit: u32,
 ) -> Result<Vec<Message>, String> {
-    let search_pattern = format!("%{}%", search_query);
+    let escaped_query = search_query.replace('%', "\\%").replace('_', "\\_");
+    let search_pattern = format!("%{}%", escaped_query);
 
     sqlx::query_as::<_, Message>(
         "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, read_at, status, is_anonymized

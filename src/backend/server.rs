@@ -359,7 +359,7 @@ async fn handle_websocket_upgrade(
     query: String,
     state: ServerState,
 ) -> Result<impl Reply, Rejection> {
-    info!("WebSocket connection request, query: {}", query);
+    info!("WebSocket connection request received");
 
     // Validate JWT token using handshake validator
     let validator = HandshakeValidator::new(state.config.jwt_secret.clone());
