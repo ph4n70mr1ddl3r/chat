@@ -7,13 +7,18 @@ use chat_shared::protocol::{AckData, MessageEnvelope, PresenceData, TextMessageD
 use futures::{SinkExt, StreamExt};
 use serde::Deserialize;
 use std::collections::VecDeque;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::http::Request;
 use tokio_tungstenite::tungstenite::Message;
 use uuid::Uuid;
 
-const MAX_RECONNECT_ATTEMPTS: usize = 10;
+fn max_reconnect_attempts() -> usize {
+    std::env::var("MAX_RECONNECT_ATTEMPTS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(10)
+}
 
 /// Events emitted by the WebSocket client.
 #[derive(Debug, Clone)]
@@ -193,7 +198,7 @@ impl WebSocketClient {
 
                 // Exponential backoff on reconnect attempts.
                 attempt += 1;
-                if attempt >= MAX_RECONNECT_ATTEMPTS {
+                if attempt >= max_reconnect_attempts() {
                     let _ = event_tx.send(WebSocketEvent::Error(
                         "Max reconnect attempts reached".to_string(),
                     ));
@@ -342,11 +347,8 @@ fn calculate_backoff(attempt: usize) -> Duration {
 
 fn jitter_delay(min_secs: f64, max_secs: f64) -> Duration {
     let span = max_secs - min_secs;
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .subsec_nanos() as f64;
-    let ratio = (nanos / 1_000_000_000_f64).clamp(0.0, 1.0);
+    let mut rng = rand::thread_rng();
+    let ratio = rand::Rng::gen_range(&mut rng, 0.0..1.0);
     let millis = (min_secs + span * ratio) * 1000.0;
     Duration::from_millis(millis.round() as u64)
 }

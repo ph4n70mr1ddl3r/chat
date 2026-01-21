@@ -15,20 +15,12 @@ pub mod user;
 pub mod websocket;
 
 use serde_json::Value;
+use thiserror::Error;
 use warp::http::StatusCode;
 use warp::reject::Reject;
 
-/// Standard API error payload returned to clients.
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct ErrorBody {
-    pub code: String,
-    pub message: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub details: Option<Value>,
-}
-
-/// Unified application error with HTTP status mapping.
-#[derive(Debug, Clone)]
+#[derive(Error, Debug, Clone)]
+#[error("{message}")]
 pub struct ApiError {
     pub status: StatusCode,
     pub code: &'static str,
@@ -90,6 +82,15 @@ impl ApiError {
 }
 
 impl Reject for ApiError {}
+
+/// Standard API error payload returned to clients.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ErrorBody {
+    pub code: String,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<Value>,
+}
 
 /// Create a Warp rejection carrying an ApiError.
 pub fn rejection(error: ApiError) -> warp::reject::Rejection {
