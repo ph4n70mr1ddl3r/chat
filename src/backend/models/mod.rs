@@ -33,9 +33,14 @@ impl User {
         }
     }
 
-    /// Check if user is deleted (soft delete)
+    /// Check if user is deleted (soft delete with timestamp in the past)
     pub fn is_deleted(&self) -> bool {
-        self.deleted_at.is_some()
+        if let Some(deleted_at) = self.deleted_at {
+            let now = chrono::Utc::now().timestamp_millis();
+            deleted_at < now
+        } else {
+            false
+        }
     }
 
     /// Check if user is active

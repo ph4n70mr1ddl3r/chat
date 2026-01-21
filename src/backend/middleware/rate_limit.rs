@@ -40,19 +40,9 @@ impl RateLimiter {
         }
     }
 
-    /// Convenience constructor for auth endpoints (5 attempts / 15 minutes)
-    pub fn auth() -> Self {
-        Self::new(5, 900)
-    }
-
     /// Convenience constructor for global requests (1000 req/min)
     pub fn global() -> Self {
         Self::new(1000, 60)
-    }
-
-    /// Create default rate limiter (5 attempts per 15 minutes)
-    pub fn default_auth() -> Self {
-        Self::new(5, 900)
     }
 
     /// Check if an IP address is rate limited

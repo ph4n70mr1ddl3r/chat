@@ -156,58 +156,61 @@ mod tests {
 
     #[test]
     fn test_validate_password_valid() {
-        assert!(AuthService::validate_password("TestPass123").is_ok());
-        assert!(AuthService::validate_password("AnotherPassword456").is_ok());
+        assert!(AuthService::validate_password("TestPass123!").is_ok());
+        assert!(AuthService::validate_password("AnotherPassword456@").is_ok());
     }
 
     #[test]
     fn test_validate_password_too_short() {
-        assert!(AuthService::validate_password("Test1").is_err());
+        assert!(AuthService::validate_password("Test1!").is_err());
     }
 
     #[test]
     fn test_validate_password_no_uppercase() {
-        assert!(AuthService::validate_password("testpass123").is_err());
+        assert!(AuthService::validate_password("testpass123!").is_err());
     }
 
     #[test]
     fn test_validate_password_no_lowercase() {
-        assert!(AuthService::validate_password("TESTPASS123").is_err());
+        assert!(AuthService::validate_password("TESTPASS123!").is_err());
     }
 
     #[test]
     fn test_validate_password_no_digit() {
-        assert!(AuthService::validate_password("TestPass").is_err());
+        assert!(AuthService::validate_password("TestPass!!").is_err());
+    }
+
+    #[test]
+    fn test_validate_password_no_special_char() {
+        assert!(AuthService::validate_password("TestPass123").is_err());
     }
 
     #[test]
     fn test_hash_password() {
-        let (hash, salt) = AuthService::hash_password("TestPass123").unwrap();
+        let (hash, salt) = AuthService::hash_password("TestPass123!").unwrap();
 
-        // Hash should not be the password itself
-        assert_ne!(hash, "TestPass123");
+        assert_ne!(hash, "TestPass123!");
 
-        // Hash and salt should be the same (bcrypt includes salt in hash)
         assert_eq!(hash, salt);
     }
 
     #[test]
     fn test_verify_password_correct() {
-        let (hash, _) = AuthService::hash_password("TestPass123").unwrap();
-        assert!(AuthService::verify_password("TestPass123", &hash).unwrap());
+        let (hash, _) = AuthService::hash_password("TestPass123!").unwrap();
+        assert!(AuthService::verify_password("TestPass123!", &hash).unwrap());
     }
 
     #[test]
     fn test_verify_password_incorrect() {
-        let (hash, _) = AuthService::hash_password("TestPass123").unwrap();
-        assert!(!AuthService::verify_password("WrongPassword123", &hash).unwrap());
+        let (hash, _) = AuthService::hash_password("TestPass123!").unwrap();
+        assert!(!AuthService::verify_password("WrongPassword123!", &hash).unwrap());
     }
 
     #[tokio::test]
     async fn test_create_user() {
         let auth = AuthService::new("test_secret".to_string());
         let user = auth
-            .create_user("testuser".to_string(), "TestPass123".to_string())
+            .create_user("testuser".to_string(), "TestPass123!".to_string())
             .await;
 
         assert!(user.is_ok());

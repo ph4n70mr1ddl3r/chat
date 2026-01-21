@@ -71,11 +71,12 @@ impl Default for ServerConfig {
                 tracing::error!("JWT_SECRET must be set in production environment. Using a generated secret - connections will not persist across restarts!");
                 tracing::error!("Set the JWT_SECRET environment variable for production use.");
             } else {
-                tracing::warn!("JWT_SECRET not set, generating random secret for development. Set JWT_SECRET environment variable for production!");
+                tracing::warn!("JWT_SECRET not set, generating cryptographically secure secret for development. Set JWT_SECRET environment variable for production!");
             }
-            use rand::{Rng, thread_rng};
-            let mut rng = thread_rng();
-            (0..32).map(|_| rng.sample(rand::distributions::Alphanumeric) as char).collect()
+            use rand::RngCore;
+            let mut secret = [0u8; 64];
+            rand::rngs::OsRng.fill_bytes(&mut secret);
+            hex::encode(secret)
         });
 
         Self {
@@ -105,7 +106,7 @@ impl ServerState {
         let connection_manager = Arc::new(websocket::ConnectionManager::new());
         let pool_for_services = pool.clone();
         let global_rate_limiter = Arc::new(rate_limit::RateLimiter::global());
-        let auth_rate_limiter = Arc::new(rate_limit::RateLimiter::auth());
+        let auth_rate_limiter = Arc::new(rate_limit::RateLimiter::new(5, 900));
         let user_service = Arc::new(crate::services::UserService::new(pool.clone()));
 
         let cleanup_handles = vec![

@@ -25,13 +25,20 @@ pub fn validate_username(username: &str) -> Result<(), String> {
 /// Validate password strength (spec requirement)
 ///
 /// Rules:
-/// - Minimum 8 characters
+/// - 8-128 characters
 /// - At least 1 uppercase letter
 /// - At least 1 lowercase letter
 /// - At least 1 digit
+/// - At least 1 special character
 pub fn validate_password(password: &str) -> Result<(), String> {
-    if password.len() < 8 {
+    let len = password.len();
+
+    if len < 8 {
         return Err("Password must be at least 8 characters".to_string());
+    }
+
+    if len > 128 {
+        return Err("Password must be at most 128 characters".to_string());
     }
 
     if !password.chars().any(|c| c.is_uppercase()) {
@@ -44,6 +51,10 @@ pub fn validate_password(password: &str) -> Result<(), String> {
 
     if !password.chars().any(|c| c.is_numeric()) {
         return Err("Password must contain at least one digit".to_string());
+    }
+
+    if !password.chars().any(|c| !c.is_alphanumeric()) {
+        return Err("Password must contain at least one special character".to_string());
     }
 
     Ok(())
@@ -102,8 +113,8 @@ mod tests {
 
     #[test]
     fn test_validate_password_valid() {
-        assert!(validate_password("TestPass123").is_ok());
-        assert!(validate_password("AnotherPassword456").is_ok());
+        assert!(validate_password("TestPass123!").is_ok());
+        assert!(validate_password("AnotherPassword456@").is_ok());
     }
 
     #[test]
@@ -112,18 +123,29 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_password_too_long() {
+        let long_password = "TestPass123!".repeat(20);
+        assert!(validate_password(&long_password).is_err());
+    }
+
+    #[test]
     fn test_validate_password_no_uppercase() {
-        assert!(validate_password("testpass123").is_err());
+        assert!(validate_password("testpass123!").is_err());
     }
 
     #[test]
     fn test_validate_password_no_lowercase() {
-        assert!(validate_password("TESTPASS123").is_err());
+        assert!(validate_password("TESTPASS123!").is_err());
     }
 
     #[test]
     fn test_validate_password_no_digit() {
-        assert!(validate_password("TestPass").is_err());
+        assert!(validate_password("TestPass!!").is_err());
+    }
+
+    #[test]
+    fn test_validate_password_no_special_char() {
+        assert!(validate_password("TestPass123").is_err());
     }
 
     #[test]

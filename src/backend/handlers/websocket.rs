@@ -206,109 +206,69 @@ impl MessageValidator {
 pub struct ErrorResponse;
 
 impl ErrorResponse {
-    pub fn invalid_message_length(sent_length: usize, max_length: usize) -> WsMessage {
+    fn create_error_response(code: &str, message: &str, details: Option<serde_json::Value>) -> WsMessage {
+        let mut data = serde_json::json!({
+            "code": code,
+            "message": message,
+        });
+
+        if let Some(d) = details {
+            data["details"] = d;
+        }
+
         let error = json!({
             "id": uuid::Uuid::new_v4().to_string(),
             "type": "error",
             "timestamp": chrono::Utc::now().timestamp_millis() as u64,
-            "data": {
-                "code": "INVALID_MESSAGE_LENGTH",
-                "message": format!("Message content exceeds {} character limit", max_length),
-                "details": {
-                    "sentLength": sent_length,
-                    "maxLength": max_length
-                }
-            }
+            "data": data,
         });
 
         WsMessage::text(error.to_string())
+    }
+
+    pub fn invalid_message_length(sent_length: usize, max_length: usize) -> WsMessage {
+        Self::create_error_response(
+            "INVALID_MESSAGE_LENGTH",
+            &format!("Message content exceeds {} character limit", max_length),
+            Some(serde_json::json!({
+                "sentLength": sent_length,
+                "maxLength": max_length
+            })),
+        )
     }
 
     pub fn recipient_not_found(recipient_id: &str) -> WsMessage {
-        let error = json!({
-            "id": uuid::Uuid::new_v4().to_string(),
-            "type": "error",
-            "timestamp": chrono::Utc::now().timestamp_millis() as u64,
-            "data": {
-                "code": "RECIPIENT_NOT_FOUND",
-                "message": "Recipient user not found",
-                "details": {
-                    "recipientId": recipient_id
-                }
-            }
-        });
-
-        WsMessage::text(error.to_string())
+        Self::create_error_response(
+            "RECIPIENT_NOT_FOUND",
+            "Recipient user not found",
+            Some(serde_json::json!({
+                "recipientId": recipient_id
+            })),
+        )
     }
 
     pub fn unauthorized(reason: &str) -> WsMessage {
-        let error = json!({
-            "id": uuid::Uuid::new_v4().to_string(),
-            "type": "error",
-            "timestamp": chrono::Utc::now().timestamp_millis() as u64,
-            "data": {
-                "code": "UNAUTHORIZED",
-                "message": reason,
-            }
-        });
-
-        WsMessage::text(error.to_string())
+        Self::create_error_response("UNAUTHORIZED", reason, None)
     }
 
     pub fn invalid_json() -> WsMessage {
-        let error = json!({
-            "id": uuid::Uuid::new_v4().to_string(),
-            "type": "error",
-            "timestamp": chrono::Utc::now().timestamp_millis() as u64,
-            "data": {
-                "code": "INVALID_JSON",
-                "message": "Message is not valid JSON",
-            }
-        });
-
-        WsMessage::text(error.to_string())
+        Self::create_error_response("INVALID_JSON", "Message is not valid JSON", None)
     }
 
     pub fn server_error(reason: &str) -> WsMessage {
-        let error = json!({
-            "id": uuid::Uuid::new_v4().to_string(),
-            "type": "error",
-            "timestamp": chrono::Utc::now().timestamp_millis() as u64,
-            "data": {
-                "code": "SERVER_ERROR",
-                "message": reason,
-            }
-        });
-
-        WsMessage::text(error.to_string())
+        Self::create_error_response("SERVER_ERROR", reason, None)
     }
 
     pub fn authorization_failure() -> WsMessage {
-        let error = json!({
-            "id": uuid::Uuid::new_v4().to_string(),
-            "type": "error",
-            "timestamp": chrono::Utc::now().timestamp_millis() as u64,
-            "data": {
-                "code": "AUTHORIZATION_FAILURE",
-                "message": "You are not authorized to access this conversation",
-            }
-        });
-
-        WsMessage::text(error.to_string())
+        Self::create_error_response(
+            "AUTHORIZATION_FAILURE",
+            "You are not authorized to access this conversation",
+            None,
+        )
     }
 
     pub fn invalid_message(reason: &str) -> WsMessage {
-        let error = json!({
-            "id": uuid::Uuid::new_v4().to_string(),
-            "type": "error",
-            "timestamp": chrono::Utc::now().timestamp_millis() as u64,
-            "data": {
-                "code": "INVALID_MESSAGE",
-                "message": reason,
-            }
-        });
-
-        WsMessage::text(error.to_string())
+        Self::create_error_response("INVALID_MESSAGE", reason, None)
     }
 }
 
