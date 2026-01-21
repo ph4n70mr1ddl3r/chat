@@ -162,6 +162,24 @@ impl RateLimiter {
 
         entries.retain(|_, entry| entry.window_start.elapsed() <= self.window_duration);
     }
+
+    /// Start a background task that periodically cleans up expired entries
+    ///
+    /// Returns a handle that can be used to stop the cleanup task
+    pub fn start_periodic_cleanup(&self) -> tokio::task::JoinHandle<()> {
+        let limiter = self.clone();
+        let interval = self.window_duration;
+
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(interval);
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+            loop {
+                interval.tick().await;
+                limiter.cleanup_expired().await;
+            }
+        })
+    }
 }
 
 /// Rejection used to signal rate limiting to the caller

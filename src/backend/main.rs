@@ -6,6 +6,7 @@
 use chat_backend::{db, init_tracing, server};
 use clap::Parser;
 use std::path::PathBuf;
+use tokio::signal;
 
 #[derive(Parser, Debug)]
 #[command(name = "chat-server")]
@@ -28,18 +29,23 @@ struct Args {
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    // Initialize logging
     init_tracing(Some(&args.log_level));
 
     tracing::info!("Starting chat server on port {}", args.port);
     tracing::info!("Database: {}", args.db_path.display());
 
-    // Initialize database
     let pool = db::init_db(&args.db_path).await?;
     tracing::info!("Database initialized");
 
-    // Start HTTP server
-    server::start_server(args.port, pool, None).await?;
+    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+
+    tokio::spawn(async move {
+        signal::ctrl_c().await.ok();
+        tracing::info!("Received shutdown signal, initiating graceful shutdown...");
+        let _ = shutdown_tx.send(true);
+    });
+
+    server::start_server(args.port, pool, None, shutdown_rx).await?;
 
     Ok(())
 }

@@ -3,6 +3,7 @@
 //! Handles user creation, password validation, hashing, and JWT token generation/verification.
 
 use crate::models::User;
+use crate::validators;
 use bcrypt::{hash, verify, DEFAULT_COST};
 use chrono::Utc;
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
@@ -12,36 +13,12 @@ use tracing::{info, warn};
 /// JWT token claims
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenClaims {
-    pub sub: String, // Subject (user ID)
-    pub aud: String, // Audience
-    pub iat: i64,    // Issued at
-    pub exp: i64,    // Expiration time
+    pub sub: String,
+    pub aud: String,
+    pub iat: i64,
+    pub exp: i64,
     #[serde(default)]
     pub scopes: Vec<String>,
-}
-
-/// Password validation error types
-#[derive(Debug, Clone)]
-pub enum PasswordError {
-    TooShort,
-    MissingUppercase,
-    MissingLowercase,
-    MissingDigit,
-}
-
-impl std::fmt::Display for PasswordError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PasswordError::TooShort => write!(f, "Password must be at least 8 characters"),
-            PasswordError::MissingUppercase => {
-                write!(f, "Password must contain at least one uppercase letter")
-            }
-            PasswordError::MissingLowercase => {
-                write!(f, "Password must contain at least one lowercase letter")
-            }
-            PasswordError::MissingDigit => write!(f, "Password must contain at least one digit"),
-        }
-    }
 }
 
 /// Authentication service
@@ -60,24 +37,8 @@ impl AuthService {
     /// - At least 1 uppercase letter
     /// - At least 1 lowercase letter
     /// - At least 1 digit
-    pub fn validate_password(password: &str) -> Result<(), PasswordError> {
-        if password.len() < 8 {
-            return Err(PasswordError::TooShort);
-        }
-
-        if !password.chars().any(|c| c.is_uppercase()) {
-            return Err(PasswordError::MissingUppercase);
-        }
-
-        if !password.chars().any(|c| c.is_lowercase()) {
-            return Err(PasswordError::MissingLowercase);
-        }
-
-        if !password.chars().any(|c| c.is_numeric()) {
-            return Err(PasswordError::MissingDigit);
-        }
-
-        Ok(())
+    pub fn validate_password(password: &str) -> Result<(), String> {
+        validators::validate_password(password)
     }
 
     /// Hash a password with bcrypt + salt
