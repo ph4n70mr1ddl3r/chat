@@ -132,7 +132,8 @@ impl MessageHandler {
                     "delivered",
                 );
 
-                self.connection_manager
+                let delivery_count = self
+                    .connection_manager
                     .send_to_user(
                         &data.recipient_id,
                         WsMessage::text(
@@ -141,6 +142,14 @@ impl MessageHandler {
                         ),
                     )
                     .await;
+
+                if delivery_count == 0 {
+                    tracing::warn!(
+                        "Failed to deliver message {} to recipient {}",
+                        message.id,
+                        data.recipient_id
+                    );
+                }
 
                 // Update message status to 'delivered'
                 self.message_service.mark_delivered(&message.id).await?;

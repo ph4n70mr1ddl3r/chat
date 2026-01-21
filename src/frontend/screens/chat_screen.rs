@@ -147,7 +147,6 @@ impl ChatScreen {
         });
 
         // Clone UI handles for callbacks
-        let user_id_clone = user_id.clone();
         let runtime_for_select = runtime.clone();
         let conversations_for_select = conversations.clone();
         let messages_for_select = messages.clone();
@@ -163,7 +162,6 @@ impl ChatScreen {
             let messages = messages_for_select.clone();
             let selected_conv = selected_conv_for_select.clone();
             let selected_participant = selected_participant_for_select.clone();
-            let _user_id = user_id_clone.clone();
 
             let _ui = match ui_weak.upgrade() {
                 Some(ui) => ui,

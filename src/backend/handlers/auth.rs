@@ -66,10 +66,11 @@ pub async fn logout_handler(
     info!("Logout request for user: {}", user_id);
 
     // Log the event
+    // Note: IP address is not available in logout context without modifying the filter signature
     if let Err(e) = queries::insert_auth_log(
         &pool,
-        "unknown", // IP address not available in this context easily without extraction
-        None,      // username not strictly needed if we have user_id but log takes username
+        "",
+        None,
         queries::AuthEventType::Logout,
         None,
         Some(&format!("User {} logged out", user_id)),

@@ -77,7 +77,7 @@ impl Default for ServerConfig {
             use rand::RngCore;
             let mut secret = [0u8; 64];
             rand::rngs::OsRng.fill_bytes(&mut secret);
-            hex::encode(secret)
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, secret)
         });
 
         Self {
