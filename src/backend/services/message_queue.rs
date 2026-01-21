@@ -19,6 +19,9 @@ use warp::ws::Message as WsMessage;
 /// Retry schedule in seconds
 const RETRY_SCHEDULE: &[u64] = &[0, 1, 3, 7, 15, 30, 60];
 
+/// Maximum queued messages per recipient to prevent memory exhaustion
+const MAX_QUEUED_MESSAGES_PER_USER: usize = 100;
+
 /// Message delivery queue entry
 #[derive(Debug, Clone)]
 struct QueuedMessage {
@@ -138,10 +141,12 @@ impl MessageQueueService {
         };
 
         let mut queue = self.queue.write().await;
-        queue
-            .entry(recipient_id)
-            .or_insert_with(Vec::new)
-            .push(queued_msg);
+        let user_queue = queue.entry(recipient_id).or_insert_with(Vec::new);
+
+        if user_queue.len() >= MAX_QUEUED_MESSAGES_PER_USER {
+            user_queue.remove(0);
+        }
+        user_queue.push(queued_msg);
     }
 
     /// Deliver a message to online recipient
@@ -272,11 +277,18 @@ impl MessageQueueService {
 
     /// Load pending messages from database on startup
     pub async fn load_pending_messages(&self) -> Result<(), String> {
-        // Get all pending messages
         let pending_messages = queries::get_all_pending_messages(&self.pool).await?;
 
         let mut queue = self.queue.write().await;
         for message in pending_messages {
+            let user_queue = queue
+                .entry(message.recipient_id.clone())
+                .or_insert_with(Vec::new);
+
+            if user_queue.len() >= MAX_QUEUED_MESSAGES_PER_USER {
+                continue;
+            }
+
             let queued_msg = QueuedMessage {
                 message_id: message.id,
                 recipient_id: message.recipient_id.clone(),
@@ -284,10 +296,7 @@ impl MessageQueueService {
                 next_retry_at: chrono::Utc::now().timestamp() as u64,
             };
 
-            queue
-                .entry(message.recipient_id)
-                .or_insert_with(Vec::new)
-                .push(queued_msg);
+            user_queue.push(queued_msg);
         }
 
         Ok(())

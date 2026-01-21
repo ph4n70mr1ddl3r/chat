@@ -62,6 +62,42 @@ impl SignupScreen {
                 return;
             }
 
+            if password.len() > 128 {
+                tracing::debug!("Password too long");
+                ui_handle.set_error_message("Password must be at most 128 characters".into());
+                return;
+            }
+
+            if !password.chars().any(|c| c.is_uppercase()) {
+                tracing::debug!("Password lacks uppercase");
+                ui_handle.set_error_message(
+                    "Password must contain at least one uppercase letter".into(),
+                );
+                return;
+            }
+
+            if !password.chars().any(|c| c.is_lowercase()) {
+                tracing::debug!("Password lacks lowercase");
+                ui_handle.set_error_message(
+                    "Password must contain at least one lowercase letter".into(),
+                );
+                return;
+            }
+
+            if !password.chars().any(|c| c.is_numeric()) {
+                tracing::debug!("Password lacks digit");
+                ui_handle.set_error_message("Password must contain at least one digit".into());
+                return;
+            }
+
+            if !password.chars().any(|c| !c.is_alphanumeric()) {
+                tracing::debug!("Password lacks special character");
+                ui_handle.set_error_message(
+                    "Password must contain at least one special character".into(),
+                );
+                return;
+            }
+
             tracing::debug!("Validation passed, spawning signup thread");
             // Clear previous error
             ui_handle.set_error_message("".into());

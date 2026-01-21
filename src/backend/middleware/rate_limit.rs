@@ -3,6 +3,7 @@
 //! Implements token-bucket rate limiting for authentication endpoints
 
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
@@ -185,12 +186,26 @@ pub fn rate_limit_filter(
     limiter: Arc<RateLimiter>,
 ) -> impl Filter<Extract = (), Error = Rejection> + Clone {
     remote()
-        .map(|addr: Option<std::net::SocketAddr>| {
-            addr.map(|a| a.ip().to_string())
-                .unwrap_or_else(|| "unknown".to_string())
-        })
+        .and(warp::header::optional::<String>("X-Forwarded-For"))
         .and(warp::any().map(move || limiter.clone()))
-        .and_then(|ip: String, limiter: Arc<RateLimiter>| async move {
+        .and_then(|remote_ip: Option<std::net::SocketAddr>, forwarded_header: Option<String>, limiter: Arc<RateLimiter>| async move {
+            let ip = if let Some(ref header) = forwarded_header {
+                if let Ok(parsed_ip) = header.split(',').next().unwrap_or(header).trim().parse::<IpAddr>() {
+                    let is_trusted = match parsed_ip {
+                        IpAddr::V4(ipv4) => ipv4.is_loopback(),
+                        IpAddr::V6(ipv6) => ipv6.is_loopback(),
+                    };
+                    if is_trusted {
+                        remote_ip.map(|a| a.ip().to_string()).unwrap_or_else(|| "unknown".to_string())
+                    } else {
+                        parsed_ip.to_string()
+                    }
+                } else {
+                    remote_ip.map(|a| a.ip().to_string()).unwrap_or_else(|| "unknown".to_string())
+                }
+            } else {
+                remote_ip.map(|a| a.ip().to_string()).unwrap_or_else(|| "unknown".to_string())
+            };
             limiter.check_and_record(&ip).await.map_err(reject::custom)
         })
         .untuple_one()

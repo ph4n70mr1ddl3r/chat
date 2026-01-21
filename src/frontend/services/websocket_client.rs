@@ -9,7 +9,7 @@ use serde::Deserialize;
 use std::collections::VecDeque;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
-use tokio_tungstenite::connect_async;
+use tokio_tungstenite::tungstenite::http::Request;
 use tokio_tungstenite::tungstenite::Message;
 use uuid::Uuid;
 
@@ -108,10 +108,23 @@ impl WebSocketClient {
                 }
 
                 let token_to_use = session::get_token().unwrap_or_else(|| token.clone());
-                let connect_url = format!("{}?token={}", websocket_url, token_to_use);
                 let _ = event_tx.send(WebSocketEvent::ConnectionState(ConnectionStatus::Connecting));
 
-                match connect_async(&connect_url).await {
+                let request = match Request::builder()
+                    .uri(&websocket_url)
+                    .header("Authorization", format!("Bearer {}", token_to_use))
+                    .header("Sec-WebSocket-Protocol", "chat")
+                    .body(())
+                {
+                    Ok(req) => req,
+                    Err(e) => {
+                        let _ = event_tx.send(WebSocketEvent::Error(format!("Failed to build request: {}", e)));
+                        let _ = event_tx.send(WebSocketEvent::ConnectionState(ConnectionStatus::Disconnected { reason: "Failed to build request".to_string() }));
+                        continue;
+                    }
+                };
+
+                match tokio_tungstenite::connect_async(request).await {
                     Ok((ws_stream, _)) => {
                         attempt = 0;
                         let _ = event_tx

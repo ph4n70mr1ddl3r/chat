@@ -31,7 +31,8 @@ use crate::services::{MessageQueueService, PresenceService};
 use crate::handlers::{self, auth, conversation, server as server_handlers, user, websocket};
 use crate::middleware::{auth as auth_middleware, rate_limit};
 
-/// Server configuration
+/// Maximum request body size in bytes (1KB for auth requests)
+const MAX_BODY_SIZE: u64 = 1024;
 #[derive(Clone)]
 pub struct ServerConfig {
     pub jwt_secret: String,
@@ -175,6 +176,7 @@ pub fn create_routes(
         warp::post()
             .and(warp::path("signup"))
             .and(rate_limit_filter.clone())
+            .and(warp::body::content_length_limit(MAX_BODY_SIZE))
             .and(warp::body::json())
             .and(warp::addr::remote())
             .and(state_filter.clone())
@@ -184,6 +186,7 @@ pub fn create_routes(
                 warp::post()
                     .and(warp::path("login"))
                     .and(rate_limit_filter.clone())
+                    .and(warp::body::content_length_limit(MAX_BODY_SIZE))
                     .and(warp::body::json())
                     .and(warp::addr::remote())
                     .and(state_filter.clone())

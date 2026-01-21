@@ -222,7 +222,13 @@ pub async fn get_conversations(
         Ok(users) => users,
         Err(e) => {
             warn!("Failed to fetch participants: {}", e);
-            std::collections::HashMap::new()
+            return Ok(reply::with_status(
+                reply::json(&ErrorResponse {
+                    error: "DATABASE_ERROR".to_string(),
+                    message: "Failed to retrieve participant information".to_string(),
+                }),
+                warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+            ));
         }
     };
 
@@ -330,7 +336,13 @@ pub async fn get_conversation_messages(
         Ok(users) => users,
         Err(e) => {
             warn!("Failed to fetch senders: {}", e);
-            std::collections::HashMap::new()
+            return Ok(reply::with_status(
+                reply::json(&ErrorResponse {
+                    error: "DATABASE_ERROR".to_string(),
+                    message: "Failed to retrieve sender information".to_string(),
+                }),
+                warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+            ));
         }
     };
 

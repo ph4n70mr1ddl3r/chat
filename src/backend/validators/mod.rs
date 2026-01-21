@@ -6,16 +6,25 @@
 ///
 /// Rules:
 /// - 1-50 characters
-/// - Alphanumeric + underscore only
+/// - Alphanumeric + underscore, hyphen, dot, and Unicode letters
 /// - Case-sensitive
 pub fn validate_username(username: &str) -> Result<(), String> {
     if username.is_empty() || username.len() > 50 {
         return Err("Username must be between 1 and 50 characters".to_string());
     }
 
-    if !username.chars().all(|c| c.is_alphanumeric() || c == '_') {
+    let first_char = username.chars().next().unwrap();
+    if !first_char.is_alphanumeric() && first_char != '_' {
+        return Err("Username must start with a letter or underscore".to_string());
+    }
+
+    if !username
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.')
+    {
         return Err(
-            "Username can only contain alphanumeric characters and underscores".to_string(),
+            "Username can only contain alphanumeric characters, underscore, hyphen, and dot"
+                .to_string(),
         );
     }
 
@@ -91,6 +100,9 @@ mod tests {
         assert!(validate_username("alice").is_ok());
         assert!(validate_username("bob_123").is_ok());
         assert!(validate_username("_underscore_user_").is_ok());
+        assert!(validate_username("user-name").is_ok());
+        assert!(validate_username("user.name").is_ok());
+        assert!(validate_username("first.last").is_ok());
     }
 
     #[test]
@@ -106,9 +118,9 @@ mod tests {
 
     #[test]
     fn test_validate_username_invalid_chars() {
-        assert!(validate_username("user-name").is_err());
         assert!(validate_username("user@name").is_err());
         assert!(validate_username("user name").is_err());
+        assert!(validate_username("-startwithdash").is_err());
     }
 
     #[test]

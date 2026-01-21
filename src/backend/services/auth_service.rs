@@ -208,7 +208,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_user() {
-        let auth = AuthService::new("test_secret".to_string());
+        let auth = AuthService::new(uuid::Uuid::new_v4().to_string());
         let user = auth
             .create_user("testuser".to_string(), "TestPass123!".to_string())
             .await;
@@ -221,7 +221,7 @@ mod tests {
 
     #[test]
     fn test_generate_token() {
-        let auth = AuthService::new("test_secret".to_string());
+        let auth = AuthService::new(uuid::Uuid::new_v4().to_string());
         let result = auth.generate_token("user123".to_string());
 
         assert!(result.is_ok());
@@ -232,7 +232,7 @@ mod tests {
 
     #[test]
     fn test_verify_token_valid() {
-        let auth = AuthService::new("test_secret".to_string());
+        let auth = AuthService::new(uuid::Uuid::new_v4().to_string());
         let (token, _) = auth.generate_token("user123".to_string()).unwrap();
 
         let claims = auth.verify_token(&token);
@@ -242,7 +242,7 @@ mod tests {
 
     #[test]
     fn test_verify_token_invalid() {
-        let auth = AuthService::new("test_secret".to_string());
+        let auth = AuthService::new(uuid::Uuid::new_v4().to_string());
         let result = auth.verify_token("invalid.token.here");
 
         assert!(result.is_err());
@@ -250,10 +250,10 @@ mod tests {
 
     #[test]
     fn test_verify_token_wrong_secret() {
-        let auth1 = AuthService::new("secret1".to_string());
+        let auth1 = AuthService::new(uuid::Uuid::new_v4().to_string());
         let (token, _) = auth1.generate_token("user123".to_string()).unwrap();
 
-        let auth2 = AuthService::new("secret2".to_string());
+        let auth2 = AuthService::new(uuid::Uuid::new_v4().to_string());
         let result = auth2.verify_token(&token);
 
         assert!(result.is_err());
