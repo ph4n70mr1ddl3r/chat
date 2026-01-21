@@ -198,7 +198,7 @@ pub async fn signup_handler(
             user_id: user.id,
             username: user.username,
             token,
-            expires_in: expires_at as u64,
+            expires_in: expires_at.cast_unsigned(),
         }),
         warp::http::StatusCode::CREATED,
     ))
@@ -298,7 +298,7 @@ pub async fn login_handler(
             user_id: user.id,
             username: user.username,
             token,
-            expires_in: expires_at as u64,
+            expires_in: expires_at.cast_unsigned(),
         }),
         warp::http::StatusCode::OK,
     ))

@@ -16,6 +16,7 @@ pub enum AuthEventType {
 }
 
 impl AuthEventType {
+    #[must_use]
     pub fn as_str(&self) -> &str {
         match self {
             AuthEventType::LoginSuccess => "login_success",

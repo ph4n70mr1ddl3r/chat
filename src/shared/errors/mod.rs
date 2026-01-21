@@ -36,6 +36,7 @@ pub enum ChatError {
 
 impl ChatError {
     /// Get error code for HTTP/WebSocket responses
+    #[must_use]
     pub fn code(&self) -> &str {
         match self {
             ChatError::AuthError(_) => "AUTH_ERROR",
@@ -50,16 +51,15 @@ impl ChatError {
     }
 
     /// Get HTTP status code equivalent
+    #[must_use]
     pub fn http_status(&self) -> u16 {
         match self {
             ChatError::AuthError(_) => 401,
-            ChatError::MessageError(_) => 400,
-            ChatError::DatabaseError(_) => 500,
-            ChatError::ValidationError(_) => 400,
+            ChatError::MessageError(_) | ChatError::ValidationError(_) => 400,
+            ChatError::DatabaseError(_) | ChatError::InternalError => 500,
             ChatError::NotFound(_) => 404,
             ChatError::Conflict(_) => 409,
             ChatError::RateLimited(_) => 429,
-            ChatError::InternalError => 500,
         }
     }
 }
@@ -80,10 +80,11 @@ impl ErrorResponse {
             error: error.into(),
             message: message.into(),
             details: None,
-            timestamp: chrono::Utc::now().timestamp_millis() as u64,
+            timestamp: chrono::Utc::now().timestamp_millis().cast_unsigned(),
         }
     }
 
+    #[must_use]
     pub fn with_details(mut self, details: serde_json::Value) -> Self {
         self.details = Some(details);
         self

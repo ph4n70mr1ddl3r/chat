@@ -169,7 +169,7 @@ impl MessageValidator {
         // Check timestamp is reasonable (not far in future/past)
         let now = chrono::Utc::now().timestamp_millis() as u64;
         let time_diff = (envelope.timestamp as i64 - now as i64).abs();
-        if time_diff > 300000 {
+        if time_diff > 300_000 {
             // Allow 5 minutes skew
             return Err("Timestamp out of reasonable range".to_string());
         }

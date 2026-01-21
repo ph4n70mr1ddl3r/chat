@@ -33,6 +33,7 @@ pub enum DispatchResult {
 
 impl MessageDispatcher {
     /// Parse and validate incoming WebSocket message frame
+    #[must_use]
     pub fn parse_message(msg: &WsMessage) -> DispatchResult {
         // Only process text messages
         if msg.is_text() {
@@ -60,7 +61,7 @@ impl MessageDispatcher {
                 envelope: MessageEnvelope {
                     id: uuid::Uuid::new_v4().to_string(),
                     msg_type: "ping".to_string(),
-                    timestamp: chrono::Utc::now().timestamp_millis() as u64,
+                    timestamp: chrono::Utc::now().timestamp_millis().cast_unsigned(),
                     data: json!({}),
                 },
             };
@@ -72,7 +73,7 @@ impl MessageDispatcher {
                 envelope: MessageEnvelope {
                     id: uuid::Uuid::new_v4().to_string(),
                     msg_type: "pong".to_string(),
-                    timestamp: chrono::Utc::now().timestamp_millis() as u64,
+                    timestamp: chrono::Utc::now().timestamp_millis().cast_unsigned(),
                     data: json!({}),
                 },
             };
