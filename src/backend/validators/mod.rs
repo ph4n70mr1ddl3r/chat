@@ -6,7 +6,8 @@
 ///
 /// Rules:
 /// - 1-50 characters
-/// - Alphanumeric + underscore, hyphen, dot, and Unicode letters
+/// - Must start with alphanumeric or underscore
+/// - Can contain alphanumeric, underscore, hyphen, dot, and Unicode letters
 /// - Case-sensitive
 pub fn validate_username(username: &str) -> Result<(), String> {
     if username.is_empty() || username.len() > 50 {

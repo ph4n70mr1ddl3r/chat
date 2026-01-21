@@ -9,6 +9,9 @@ use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use warp::{self, addr::remote, reject, Filter, Rejection};
 
+/// Maximum number of entries in the rate limiter to prevent memory exhaustion
+const MAX_RATE_LIMIT_ENTRIES: usize = 100_000;
+
 /// Rate limit entry tracking attempts and reset time
 #[derive(Debug, Clone)]
 struct RateLimitEntry {
@@ -85,14 +88,22 @@ impl RateLimiter {
                 entry.attempts += 1;
             }
         } else {
-            // First attempt
-            entries.insert(
-                ip.to_string(),
-                RateLimitEntry {
-                    attempts: 1,
-                    window_start: now,
-                },
-            );
+            // First attempt - check capacity to prevent memory exhaustion
+            if entries.len() >= MAX_RATE_LIMIT_ENTRIES {
+                // Remove expired entries to make room
+                entries.retain(|_, entry| entry.window_start.elapsed() <= self.window_duration);
+            }
+
+            // Only add if we're under capacity after cleanup
+            if entries.len() < MAX_RATE_LIMIT_ENTRIES {
+                entries.insert(
+                    ip.to_string(),
+                    RateLimitEntry {
+                        attempts: 1,
+                        window_start: now,
+                    },
+                );
+            }
         }
     }
 
