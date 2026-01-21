@@ -51,7 +51,6 @@ impl HttpClient {
     }
 
     /// Sign up a new user
-    #[allow(dead_code)]
     pub async fn signup(&self, username: String, password: String) -> Result<AuthResponse, String> {
         let url = format!("{}/auth/signup", self.base_url);
         let request = SignupRequest { username, password };
@@ -62,18 +61,18 @@ impl HttpClient {
             .json(&request)
             .send()
             .await
-            .map_err(|e| format!("Network error: {}", e))?;
+            .map_err(|e| format!("Network error during signup: {}", e))?;
 
         if response.status().is_success() {
             response
                 .json::<AuthResponse>()
                 .await
-                .map_err(|e| format!("Failed to parse response: {}", e))
+                .map_err(|e| format!("Failed to parse signup response: {}", e))
         } else {
             let error = response
                 .json::<ErrorResponse>()
                 .await
-                .map_err(|e| format!("Failed to parse error: {}", e))?;
+                .map_err(|e| format!("Failed to parse signup error: {}", e))?;
             Err(error.message)
         }
     }

@@ -131,7 +131,7 @@ pub async fn signup_handler(
             ));
         }
         Err(e) => {
-            warn!("Database error during user lookup: {}", e);
+            warn!("Database error during user lookup for '{}': {}", req.username, e);
             return Ok(reply::with_status(
                 reply::json(&ErrorResponse {
                     error: "DATABASE_ERROR".to_string(),
@@ -153,7 +153,7 @@ pub async fn signup_handler(
     {
         Ok(user) => user,
         Err(e) => {
-            warn!("Failed to create user: {}", e);
+            warn!("Failed to create user '{}': {}", req.username, e);
             return Ok(reply::with_status(
                 reply::json(&ErrorResponse {
                     error: "AUTH_ERROR".to_string(),
@@ -166,7 +166,7 @@ pub async fn signup_handler(
 
     // Save user to database
     if let Err(e) = queries::insert_user(&pool, &user).await {
-        warn!("Failed to save user to database: {}", e);
+        warn!("Failed to save user '{}' to database: {}", user.username, e);
         return Ok(reply::with_status(
             reply::json(&ErrorResponse {
                 error: "DATABASE_ERROR".to_string(),
@@ -226,7 +226,7 @@ pub async fn login_handler(
             ));
         }
         Err(e) => {
-            warn!("Database error during login: {}", e);
+            warn!("Database error during login lookup for '{}': {}", req.username, e);
             return Ok(reply::with_status(
                 reply::json(&ErrorResponse {
                     error: "DATABASE_ERROR".to_string(),
