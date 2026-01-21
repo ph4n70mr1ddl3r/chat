@@ -38,7 +38,7 @@ pub fn validate_username(username: &str) -> Result<(), String> {
 /// - At least 1 uppercase letter
 /// - At least 1 lowercase letter
 /// - At least 1 digit
-/// - At least 1 special character
+/// - At least 1 special character (non-alphanumeric)
 pub fn validate_password(password: &str) -> Result<(), String> {
     let len = password.len();
 

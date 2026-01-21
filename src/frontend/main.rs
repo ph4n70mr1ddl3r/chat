@@ -51,7 +51,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_secs() as i64)
-                .map_err(|e| tracing::error!("Failed to get system time: {}", e))
                 .unwrap_or(0);
 
             if now >= session.expires_at {

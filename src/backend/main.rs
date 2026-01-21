@@ -40,7 +40,9 @@ async fn main() -> anyhow::Result<()> {
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
     tokio::spawn(async move {
-        signal::ctrl_c().await.ok();
+        if let Err(e) = signal::ctrl_c().await {
+            tracing::error!("Failed to handle shutdown signal: {}", e);
+        }
         tracing::info!("Received shutdown signal, initiating graceful shutdown...");
         let _ = shutdown_tx.send(true);
     });

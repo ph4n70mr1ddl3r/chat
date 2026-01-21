@@ -26,6 +26,12 @@ pub struct AuthService {
     jwt_secret: String,
 }
 
+/// JWT token expiration time in seconds (1 hour)
+const TOKEN_EXPIRATION_SECONDS: i64 = 3600;
+
+/// Default token scopes
+const DEFAULT_SCOPES: [&str; 2] = ["send", "receive"];
+
 impl AuthService {
     /// Create a new authentication service with the given secret key
     pub fn new(jwt_secret: String) -> Self {
@@ -37,6 +43,7 @@ impl AuthService {
     /// - At least 1 uppercase letter
     /// - At least 1 lowercase letter
     /// - At least 1 digit
+    /// - At least 1 special character
     pub fn validate_password(password: &str) -> Result<(), String> {
         validators::validate_password(password)
     }
@@ -85,14 +92,14 @@ impl AuthService {
     /// Generate JWT token for a user
     pub fn generate_token(&self, user_id: String) -> Result<(String, i64), String> {
         let now = Utc::now().timestamp();
-        let expiration = now + 3600; // 1 hour expiration
+        let expiration = now + TOKEN_EXPIRATION_SECONDS;
 
         let claims = TokenClaims {
             sub: user_id,
             aud: "chat-app".to_string(),
             iat: now,
             exp: expiration,
-            scopes: vec!["send".to_string(), "receive".to_string()],
+            scopes: DEFAULT_SCOPES.iter().map(|s| s.to_string()).collect(),
         };
 
         let key = EncodingKey::from_secret(self.jwt_secret.as_bytes());
