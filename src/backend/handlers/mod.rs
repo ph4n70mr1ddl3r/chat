@@ -18,35 +18,6 @@ use serde_json::Value;
 use warp::http::StatusCode;
 use warp::reject::Reject;
 
-/// HTTP request/response types
-#[derive(Debug, serde::Deserialize)]
-pub struct LoginRequest {
-    pub username: String,
-    pub password: String,
-}
-
-#[derive(Debug, serde::Serialize)]
-pub struct LoginResponse {
-    pub user_id: String,
-    pub username: String,
-    pub token: String,
-    pub expires_in: u64,
-}
-
-#[derive(Debug, serde::Deserialize)]
-pub struct SignupRequest {
-    pub username: String,
-    pub password: String,
-}
-
-#[derive(Debug, serde::Serialize)]
-pub struct SignupResponse {
-    pub user_id: String,
-    pub username: String,
-    pub token: String,
-    pub expires_in: u64,
-}
-
 /// Standard API error payload returned to clients.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ErrorBody {

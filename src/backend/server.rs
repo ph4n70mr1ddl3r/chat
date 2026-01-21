@@ -68,9 +68,11 @@ impl Default for ServerConfig {
         let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| {
             let is_production = std::env::var("RUST_ENV").as_deref().unwrap_or("development") == "production";
             if is_production {
-                panic!("JWT_SECRET must be set in production environment. Set the JWT_SECRET environment variable.");
+                tracing::error!("JWT_SECRET must be set in production environment. Using a generated secret - connections will not persist across restarts!");
+                tracing::error!("Set the JWT_SECRET environment variable for production use.");
+            } else {
+                tracing::warn!("JWT_SECRET not set, generating random secret for development. Set JWT_SECRET environment variable for production!");
             }
-            tracing::warn!("JWT_SECRET not set, generating random secret for development. Set JWT_SECRET environment variable for production!");
             use rand::{Rng, thread_rng};
             let mut rng = thread_rng();
             (0..32).map(|_| rng.sample(rand::distributions::Alphanumeric) as char).collect()

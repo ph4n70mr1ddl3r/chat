@@ -1,18 +1,11 @@
-// ============================================================================
-// Design Token Tests Integration Test
-// ============================================================================
-// This file runs the token validation tests through the integration test runner
-
-// ============================================================================
-// Token Unit Tests
-// ============================================================================
-// Validates all design tokens for correctness:
-// - Color values are valid hex
-// - Spacing values are grid-aligned (multiples of 4px)
-// - Typography values are within valid ranges
-// - Motion durations are positive and reasonable
-// - MOTION_DURATION_REDUCED helper works correctly
-// ============================================================================
+//! Design token tests for the chat frontend
+//!
+//! This file validates all design tokens for correctness:
+//! - Color values are valid hex
+//! - Spacing values are grid-aligned (multiples of 4px)
+//! - Typography values are within valid ranges
+//! - Motion durations are positive and reasonable
+//! - MOTION_DURATION_REDUCED helper works correctly
 
 /// Test that all color tokens are valid hex values
 #[test]
@@ -29,14 +22,12 @@ fn test_color_tokens_valid_hex() {
     ];
 
     for (hex, name) in colors {
-        // Verify hex format
         assert!(
             hex.starts_with('#') && hex.len() == 7,
             "Color {} has invalid hex format: {}",
             name,
             hex
         );
-        // Verify hex digits are valid
         assert!(
             u32::from_str_radix(&hex[1..], 16).is_ok(),
             "Color {} has invalid hex value: {}",
@@ -59,7 +50,6 @@ fn test_spacing_tokens_on_grid() {
     ];
 
     for (pixels, name) in spacings {
-        // Check divisible by 4px
         assert_eq!(
             pixels % 4,
             0,
@@ -67,7 +57,6 @@ fn test_spacing_tokens_on_grid() {
             name,
             pixels
         );
-        // Check reasonable range (4-100px)
         assert!(
             (4..=100).contains(&pixels),
             "Spacing token {} ({} px) outside reasonable range",
@@ -89,9 +78,7 @@ fn test_typography_font_sizes_valid() {
     ];
 
     for (pixels, name) in sizes {
-        // Font size should be positive
         assert!(pixels > 0, "Font size {} is not positive", name);
-        // Font size should be readable (12-72px typical range)
         assert!(
             (12..=72).contains(&pixels),
             "Font size {} ({} px) outside readable range",
@@ -100,7 +87,6 @@ fn test_typography_font_sizes_valid() {
         );
     }
 
-    // Verify descending order for visual hierarchy
     assert!(48 > 12, "Font sizes not in descending order");
 }
 
@@ -115,7 +101,6 @@ fn test_typography_font_weights_valid() {
     ];
 
     for (weight, name) in weights {
-        // Font weight should be multiple of 100 and 100-900 range
         assert!(
             (100..=900).contains(&weight) && weight % 100 == 0,
             "Font weight {} ({}) is not valid CSS value",
@@ -124,7 +109,6 @@ fn test_typography_font_weights_valid() {
         );
     }
 
-    // Verify weights in ascending order
     assert!(400 < 700, "Font weights not in ascending order");
 }
 
@@ -138,7 +122,6 @@ fn test_typography_line_heights_valid() {
     ];
 
     for (height, name) in line_heights {
-        // Line height should be between 1.0 and 2.0
         assert!(
             (1.0..=2.0).contains(&height),
             "Line height {} ({}) outside reasonable range",
@@ -147,7 +130,6 @@ fn test_typography_line_heights_valid() {
         );
     }
 
-    // Verify heights in ascending order
     assert!(1.2 < 1.6, "Line heights not in ascending order");
 }
 
@@ -162,14 +144,12 @@ fn test_motion_durations_valid() {
     ];
 
     for (ms, name) in durations {
-        // Duration should be positive
         assert!(
             ms > 0,
             "Motion duration {} ({} ms) is not positive",
             name,
             ms
         );
-        // Duration should be within reasonable animation range (100-1000ms)
         assert!(
             (100..=1000).contains(&ms),
             "Motion duration {} ({} ms) outside reasonable range",
@@ -178,17 +158,12 @@ fn test_motion_durations_valid() {
         );
     }
 
-    // Verify durations in ascending order
     assert!(200 < 800, "Durations not in ascending order");
 }
 
 /// Test that MOTION_DURATION_REDUCED helper works correctly
 #[test]
 fn test_motion_duration_reduced_logic() {
-    // Simulating the MOTION_DURATION_REDUCED function logic:
-    // When PREFERS_REDUCED_MOTION = true, should return 0ms
-    // When PREFERS_REDUCED_MOTION = false, should return original duration
-
     struct MockMotionPreference {
         prefers_reduced: bool,
     }
@@ -203,57 +178,34 @@ fn test_motion_duration_reduced_logic() {
         }
     }
 
-    // Test with animations enabled
     let prefs_enabled = MockMotionPreference {
         prefers_reduced: false,
     };
-    assert_eq!(
-        prefs_enabled.motion_duration_reduced(300),
-        300,
-        "Should return original duration when animations enabled"
-    );
-    assert_eq!(
-        prefs_enabled.motion_duration_reduced(0),
-        0,
-        "Should handle 0ms correctly"
-    );
+    assert_eq!(prefs_enabled.motion_duration_reduced(300), 300);
+    assert_eq!(prefs_enabled.motion_duration_reduced(0), 0);
 
-    // Test with reduced motion enabled
     let prefs_reduced = MockMotionPreference {
         prefers_reduced: true,
     };
-    assert_eq!(
-        prefs_reduced.motion_duration_reduced(300),
-        0,
-        "Should return 0ms when reduced motion enabled"
-    );
-    assert_eq!(
-        prefs_reduced.motion_duration_reduced(200),
-        0,
-        "Should return 0ms for all durations when reduced motion"
-    );
+    assert_eq!(prefs_reduced.motion_duration_reduced(300), 0);
+    assert_eq!(prefs_reduced.motion_duration_reduced(200), 0);
 }
 
 /// Test that we have all required token types
 #[test]
 fn test_token_completeness() {
-    // Color tokens: 8 required
     let color_count = 8;
     assert_eq!(color_count, 8, "Should have 8 color tokens");
 
-    // Typography tokens: 12 required (5 sizes + 4 weights + 3 line heights)
     let typography_count = 12;
     assert_eq!(typography_count, 12, "Should have 12 typography tokens");
 
-    // Spacing tokens: 6 required
     let spacing_count = 6;
     assert_eq!(spacing_count, 6, "Should have 6 spacing tokens");
 
-    // Motion tokens: 7 required (4 durations + 3 easing)
     let motion_count = 7;
     assert_eq!(motion_count, 7, "Should have 7 motion tokens");
 
-    // Total: 33 + 1 PREFERS_REDUCED_MOTION + 1 helper = 35 exports
     let total_expected = 35;
     assert!(
         total_expected > 0,
@@ -264,13 +216,6 @@ fn test_token_completeness() {
 /// Test accessibility compliance
 #[test]
 fn test_accessibility_compliance() {
-    // WCAG AA contrast requirement: 4.5:1 for normal text
-    // Color pairs to verify:
-    // - Dark text on light background
-    // - Light text on dark background
-    // - Semantic colors on white
-
-    // Simple luminance calculation for contrast ratio
     fn relative_luminance(r: f32, g: f32, b: f32) -> f32 {
         let [r, g, b] = [r, g, b].map(|c| {
             let c = c / 255.0;
@@ -289,10 +234,9 @@ fn test_accessibility_compliance() {
         (max + 0.05) / (min + 0.05)
     }
 
-    // Test key color combinations
-    let neutral_dark = relative_luminance(51.0, 51.0, 51.0); // #333333
-    let neutral_light = relative_luminance(245.0, 245.0, 245.0); // #F5F5F5
-    let white = relative_luminance(255.0, 255.0, 255.0); // #FFFFFF
+    let neutral_dark = relative_luminance(51.0, 51.0, 51.0);
+    let neutral_light = relative_luminance(245.0, 245.0, 245.0);
+    let white = relative_luminance(255.0, 255.0, 255.0);
 
     let ratio = contrast_ratio(neutral_dark, white);
     assert!(
@@ -312,7 +256,6 @@ fn test_accessibility_compliance() {
 /// Test token naming conventions
 #[test]
 fn test_naming_conventions() {
-    // All tokens should use UPPER_CASE_WITH_UNDERSCORES (Rust constant convention)
     let valid_names = vec![
         "FLUENT_BLUE",
         "NEUTRAL_DARK",
