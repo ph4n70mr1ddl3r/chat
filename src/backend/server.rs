@@ -69,11 +69,11 @@ impl Default for ServerConfig {
         let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| {
             let is_production = std::env::var("RUST_ENV").as_deref().unwrap_or("development") == "production";
             if is_production {
-                tracing::error!("JWT_SECRET must be set in production environment. Using a generated secret - connections will not persist across restarts!");
-                tracing::error!("Set the JWT_SECRET environment variable for production use.");
-            } else {
-                tracing::warn!("JWT_SECRET not set, generating cryptographically secure secret for development. Set JWT_SECRET environment variable for production!");
+                tracing::error!("JWT_SECRET must be set in production environment.");
+                tracing::error!("Set the JWT_SECRET environment variable before starting the server.");
+                std::process::exit(1);
             }
+            tracing::warn!("JWT_SECRET not set, generating cryptographically secure secret for development. Set JWT_SECRET environment variable for production!");
             use rand::RngCore;
             let mut secret = [0u8; 64];
             rand::rngs::OsRng.fill_bytes(&mut secret);
@@ -364,13 +364,15 @@ fn build_cors(config: &ServerConfig) -> Cors {
         .allow_methods(vec!["GET", "POST", "DELETE", "OPTIONS"])
         .max_age(86_400);
 
-    let allow_any = config.allowed_origins.iter().any(|o| o == "*");
-
-    if allow_any {
-        tracing::warn!("CORS configured to allow any origin. This is insecure for production!");
-        cors = cors.allow_any_origin();
+    if config.allowed_origins.is_empty() {
+        tracing::warn!("No CORS origins configured, allowing localhost only");
+        cors = cors.allow_origin("http://localhost:3000");
     } else {
         for origin in &config.allowed_origins {
+            if origin == "*" {
+                tracing::error!("Wildcard CORS origin (*) is not allowed. Remove it from CORS_ALLOWED_ORIGINS.");
+                std::process::exit(1);
+            }
             cors = cors.allow_origin(origin.as_str());
         }
     }
@@ -663,6 +665,20 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Rejection> {
     }
 
     // Convert to JSON error response
+    if let Some(rate_err) = err.find::<rate_limit::RateLimitExceeded>() {
+        let retry_after = rate_err.retry_after_secs;
+        let body = serde_json::json!({
+            "error": "RATE_LIMITED",
+            "message": "Too many requests; retry later",
+            "retryAfter": retry_after
+        });
+
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&body),
+            warp::http::StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
     let (code, message) = if let Some(auth_err) = err.find::<WebSocketAuthError>() {
         (auth_err.status, auth_err.message.clone())
     } else if err.find::<auth_middleware::Unauthorized>().is_some() {
@@ -685,21 +701,6 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Rejection> {
             warp::http::StatusCode::METHOD_NOT_ALLOWED,
             "Method Not Allowed".to_string(),
         )
-    } else if let Some(rate_err) = err.find::<rate_limit::RateLimitExceeded>() {
-        let retry_after = rate_err.retry_after_secs;
-        let mut body = serde_json::json!({
-            "error": "RATE_LIMITED",
-            "message": "Too many requests; retry later"
-        });
-
-        if retry_after > 0 {
-            body["retryAfter"] = serde_json::json!(retry_after);
-        }
-
-        return Ok(warp::reply::with_status(
-            warp::reply::json(&body),
-            warp::http::StatusCode::TOO_MANY_REQUESTS,
-        ));
     } else {
         (
             warp::http::StatusCode::INTERNAL_SERVER_ERROR,

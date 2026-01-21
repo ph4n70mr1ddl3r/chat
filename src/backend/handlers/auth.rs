@@ -242,10 +242,10 @@ pub async fn login_handler(
         warn!("Login failed: deleted account ({})", req.username);
         return Ok(reply::with_status(
             reply::json(&ErrorResponse {
-                error: "ACCOUNT_DELETED".to_string(),
-                message: "Account has been deleted".to_string(),
+                error: "AUTH_ERROR".to_string(),
+                message: "Invalid credentials".to_string(),
             }),
-            warp::http::StatusCode::NOT_FOUND,
+            warp::http::StatusCode::UNAUTHORIZED,
         ));
     }
 
