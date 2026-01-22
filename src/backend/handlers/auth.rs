@@ -95,7 +95,7 @@ pub async fn signup_handler(
             reply::json(&ErrorBody {
                 code: "VALIDATION_ERROR".to_string(),
                 message: e,
-            details: None,
+                details: None,
             }),
             warp::http::StatusCode::BAD_REQUEST,
         ));
@@ -108,7 +108,7 @@ pub async fn signup_handler(
             reply::json(&ErrorBody {
                 code: "VALIDATION_ERROR".to_string(),
                 message: e,
-            details: None,
+                details: None,
             }),
             warp::http::StatusCode::BAD_REQUEST,
         ));
@@ -170,7 +170,7 @@ pub async fn signup_handler(
             reply::json(&ErrorBody {
                 code: "DATABASE_ERROR".to_string(),
                 message: "Failed to create account".to_string(),
-            details: None,
+                details: None,
             }),
             warp::http::StatusCode::INTERNAL_SERVER_ERROR,
         ));
@@ -260,7 +260,7 @@ pub async fn login_handler(
             reply::json(&ErrorBody {
                 code: "AUTH_ERROR".to_string(),
                 message: "Invalid credentials".to_string(),
-            details: None,
+                details: None,
             }),
             warp::http::StatusCode::UNAUTHORIZED,
         ));

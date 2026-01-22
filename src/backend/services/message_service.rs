@@ -287,10 +287,7 @@ impl MessageService {
 
             if new_weight >= current_weight {
                 // Apply idempotent update
-                let now = chrono::Utc::now()
-                    .timestamp_millis()
-                    .try_into()
-                    .unwrap_or(0);
+                let now = chrono::Utc::now().timestamp_millis();
 
                 match new_status.as_str() {
                     "read" => {
