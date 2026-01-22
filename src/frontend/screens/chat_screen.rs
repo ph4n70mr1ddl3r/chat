@@ -806,6 +806,7 @@ fn spawn_event_listener(
                         }
                     }
                 }
+                crate::services::WebSocketEvent::HeartbeatReceived => {}
                 crate::services::WebSocketEvent::Error(err) => {
                     let ui_weak_err = ui_weak.clone();
                     slint::invoke_from_event_loop(move || {

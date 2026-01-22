@@ -55,6 +55,8 @@ pub enum WebSocketEvent {
         is_online: bool,
         last_seen_at: u64,
     },
+    /// Heartbeat response received (server acknowledged ping)
+    HeartbeatReceived,
     /// Error surfaced to the UI.
     Error(String),
 }
@@ -168,6 +170,9 @@ impl WebSocketClient {
                                         }
                                         Some(Ok(Message::Ping(p))) => {
                                             let _ = ws_write.send(Message::Pong(p)).await;
+                                        }
+                                        Some(Ok(Message::Pong(_))) => {
+                                            let _ = event_tx.send(WebSocketEvent::HeartbeatReceived);
                                         }
                                         Some(Ok(Message::Close(_))) => {
                                             let _ = event_tx.send(WebSocketEvent::ConnectionState(ConnectionStatus::Disconnected { reason: "Server closed connection".to_string() }));
@@ -346,9 +351,8 @@ fn calculate_backoff(attempt: usize) -> Duration {
 }
 
 fn jitter_delay(min_secs: f64, max_secs: f64) -> Duration {
-    let span = max_secs - min_secs;
-    let mut rng = rand::thread_rng();
-    let ratio = rand::Rng::gen_range(&mut rng, 0.0..1.0);
+    let span = (max_secs - min_secs).max(0.0);
+    let ratio = rand::random::<f64>();
     let millis = (min_secs + span * ratio) * 1000.0;
     Duration::from_millis(millis.round() as u64)
 }

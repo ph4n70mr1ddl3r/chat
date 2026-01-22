@@ -51,8 +51,8 @@ pub struct HttpResponse {
 
 impl Reply for HttpResponse {
     fn into_response(self) -> warp::reply::Response {
-        let status =
-            warp::http::StatusCode::from_u16(self.status).expect("Invalid HTTP status code");
+        let status = warp::http::StatusCode::from_u16(self.status)
+            .unwrap_or(warp::http::StatusCode::INTERNAL_SERVER_ERROR);
         reply::with_status(self.body, status).into_response()
     }
 }
