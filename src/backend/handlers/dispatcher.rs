@@ -4,6 +4,7 @@
 //! Validates message format, extracts message types, and dispatches to service layer.
 
 use crate::handlers::websocket::{ErrorResponse, MessageValidator};
+use crate::models::MAX_MESSAGE_LENGTH;
 use chat_shared::protocol::MessageEnvelope;
 use serde_json::json;
 use warp::ws::Message as WsMessage;
@@ -143,7 +144,7 @@ impl MessageDispatcher {
         if let Err(e) = MessageValidator::validate_text_message(content, recipient_id) {
             return DispatchResult::Error {
                 error_msg: if e.contains("character") {
-                    ErrorResponse::invalid_message_length(content.len(), 5000)
+                    ErrorResponse::invalid_message_length(content.len(), MAX_MESSAGE_LENGTH)
                 } else {
                     ErrorResponse::server_error(&e)
                 },

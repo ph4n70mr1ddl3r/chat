@@ -4,9 +4,8 @@
 
 use std::collections::HashMap;
 use std::net::IpAddr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use tokio::sync::Mutex;
 use warp::{self, addr::remote, reject, Filter, Rejection};
 
 /// Maximum number of entries in the rate limiter to prevent memory exhaustion
@@ -59,7 +58,7 @@ impl RateLimiter {
     ///
     /// Returns true if the IP has exceeded the rate limit
     pub async fn is_rate_limited(&self, ip: &str) -> bool {
-        let mut entries = self.entries.lock().await;
+        let mut entries = self.entries.lock().unwrap();
 
         if let Some(entry) = entries.get(ip) {
             let elapsed = entry.window_start.elapsed();
@@ -79,7 +78,7 @@ impl RateLimiter {
 
     /// Record a failed attempt for an IP address
     pub async fn record_attempt(&self, ip: &str) {
-        let mut entries = self.entries.lock().await;
+        let mut entries = self.entries.lock().unwrap();
 
         let now = Instant::now();
 
@@ -115,7 +114,7 @@ impl RateLimiter {
 
     /// Get remaining attempts for an IP address
     pub async fn get_remaining_attempts(&self, ip: &str) -> u32 {
-        let entries = self.entries.lock().await;
+        let entries = self.entries.lock().unwrap();
 
         if let Some(entry) = entries.get(ip) {
             let elapsed = entry.window_start.elapsed();
@@ -132,13 +131,13 @@ impl RateLimiter {
 
     /// Reset rate limit for an IP address (e.g., after successful login)
     pub async fn reset(&self, ip: &str) {
-        let mut entries = self.entries.lock().await;
+        let mut entries = self.entries.lock().unwrap();
         entries.remove(ip);
     }
 
     /// Determine how long until the window resets for a given key
     pub async fn retry_after_seconds(&self, ip: &str) -> u64 {
-        let entries = self.entries.lock().await;
+        let entries = self.entries.lock().unwrap();
 
         if let Some(entry) = entries.get(ip) {
             let elapsed = entry.window_start.elapsed();
@@ -166,7 +165,7 @@ impl RateLimiter {
 
     /// Clean up expired entries (should be called periodically)
     pub async fn cleanup_expired(&self) {
-        let mut entries = self.entries.lock().await;
+        let mut entries = self.entries.lock().unwrap();
 
         entries.retain(|_, entry| entry.window_start.elapsed() <= self.window_duration);
     }

@@ -3,6 +3,9 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// Maximum length for message content
+pub const MAX_MESSAGE_LENGTH: usize = 5000;
+
 /// User account
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct User {
@@ -130,8 +133,11 @@ impl Message {
         if len < 1 {
             return Err("Message content cannot be empty".to_string());
         }
-        if len > 5000 {
-            return Err("Message content exceeds 5000 character limit".to_string());
+        if len > MAX_MESSAGE_LENGTH {
+            return Err(format!(
+                "Message content exceeds {} character limit",
+                MAX_MESSAGE_LENGTH
+            ));
         }
         if self.sender_id == self.recipient_id {
             return Err("Cannot send message to yourself".to_string());

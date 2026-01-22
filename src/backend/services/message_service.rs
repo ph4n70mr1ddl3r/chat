@@ -3,7 +3,7 @@
 //! Implements message validation, status tracking, and offline delivery logic
 
 use crate::db::queries;
-use crate::models::Message;
+use crate::models::{Message, MAX_MESSAGE_LENGTH};
 use chat_shared::protocol::MessageStatus;
 use sqlx::SqlitePool;
 use tracing::{info, warn};
@@ -31,8 +31,8 @@ impl MessageService {
         recipient_id: String,
         content: String,
     ) -> Result<Message, String> {
-        // Validate content length (1-5000 characters)
-        if content.is_empty() || content.len() > 5000 {
+        // Validate content length (1-MAX_MESSAGE_LENGTH characters)
+        if content.is_empty() || content.len() > MAX_MESSAGE_LENGTH {
             warn!(
                 target: "message",
                 event = "message.send",
@@ -43,7 +43,7 @@ impl MessageService {
                 reason = "invalid_length",
                 content_length = content.len()
             );
-            return Err("Message content must be between 1 and 5000 characters".to_string());
+            return Err(format!("Message content must be between 1 and {} characters", MAX_MESSAGE_LENGTH).to_string());
         }
 
         // Verify recipient exists and is not deleted
@@ -350,7 +350,7 @@ impl MessageService {
     ///
     /// Returns true if content is valid, false otherwise
     pub fn validate_content(content: &str) -> bool {
-        !content.is_empty() && content.len() <= 5000 && content.chars().all(|c| c.is_allowed())
+        !content.is_empty() && content.len() <= MAX_MESSAGE_LENGTH && content.chars().all(|c| c.is_allowed())
     }
 }
 

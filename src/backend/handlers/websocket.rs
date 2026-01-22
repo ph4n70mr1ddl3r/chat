@@ -3,6 +3,7 @@
 //! Manages WebSocket connections, message routing, and real-time delivery.
 //! Handles authentication, message validation, and client-server communication.
 
+use crate::models::MAX_MESSAGE_LENGTH;
 use chat_shared::protocol::MessageEnvelope;
 use serde_json::json;
 use std::collections::HashMap;
@@ -179,9 +180,10 @@ impl MessageValidator {
 
     /// Validate text message data
     pub fn validate_text_message(content: &str, recipient_id: &str) -> Result<(), String> {
-        if content.is_empty() || content.len() > 5000 {
+        if content.is_empty() || content.len() > MAX_MESSAGE_LENGTH {
             return Err(format!(
-                "Message content must be 1-5000 characters, got {}",
+                "Message content must be 1-{} characters, got {}",
+                MAX_MESSAGE_LENGTH,
                 content.len()
             ));
         }
@@ -388,7 +390,7 @@ mod tests {
 
     #[test]
     fn test_message_validator_text_message_too_long() {
-        let long_content = "a".repeat(5001);
+        let long_content = "a".repeat(MAX_MESSAGE_LENGTH + 1);
         assert!(MessageValidator::validate_text_message(&long_content, "recipient-456").is_err());
     }
 
@@ -399,12 +401,12 @@ mod tests {
 
     #[test]
     fn test_error_response_invalid_message_length() {
-        let response = ErrorResponse::invalid_message_length(5001, 5000);
+        let response = ErrorResponse::invalid_message_length(5001, MAX_MESSAGE_LENGTH);
         if response.is_text() {
             let text = response.to_str().unwrap();
             assert!(text.contains("INVALID_MESSAGE_LENGTH"));
             assert!(text.contains("5001"));
-            assert!(text.contains("5000"));
+            assert!(text.contains(&MAX_MESSAGE_LENGTH.to_string()));
         } else {
             panic!("Expected text message");
         }

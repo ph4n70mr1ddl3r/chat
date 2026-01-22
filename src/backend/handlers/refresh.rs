@@ -60,7 +60,7 @@ pub async fn refresh_token_handler(
     Ok(reply::with_status(
         reply::json(&AuthResponse {
             user_id: claims.sub.clone(),
-            username: "".to_string(), // Username not needed for refresh
+            username: String::new(), // Username not available in refresh token claims
             token: new_token,
             expires_in: expires_at,
         }),

@@ -6,6 +6,7 @@
 
 use crate::db::queries;
 use crate::handlers::websocket::{ClientConnection, ConnectionManager, ErrorResponse};
+use crate::models::MAX_MESSAGE_LENGTH;
 use crate::services::{message_queue::MessageQueueService, message_service::MessageService};
 use chat_shared::protocol::{MessageEnvelope, TextMessageData};
 use tracing::warn;
@@ -59,8 +60,8 @@ impl MessageHandler {
         if data.content.trim().is_empty() {
             return Ok(vec![ErrorResponse::invalid_message("Message content cannot be empty")]);
         }
-        if data.content.len() > 5000 {
-            return Ok(vec![ErrorResponse::invalid_message("Message content exceeds 5000 character limit")]);
+        if data.content.len() > MAX_MESSAGE_LENGTH {
+            return Ok(vec![ErrorResponse::invalid_message(&format!("Message content exceeds {} character limit", MAX_MESSAGE_LENGTH))]);
         }
 
         // Prevent self-messaging

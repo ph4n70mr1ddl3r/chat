@@ -71,7 +71,7 @@ pub struct ErrorResponse {
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details: Option<serde_json::Value>,
-    pub timestamp: u64,
+    pub timestamp: i64,
 }
 
 impl ErrorResponse {
@@ -80,7 +80,7 @@ impl ErrorResponse {
             error: error.into(),
             message: message.into(),
             details: None,
-            timestamp: chrono::Utc::now().timestamp_millis().cast_unsigned(),
+            timestamp: chrono::Utc::now().timestamp_millis(),
         }
     }
 
