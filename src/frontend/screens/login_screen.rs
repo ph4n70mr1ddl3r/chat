@@ -59,7 +59,20 @@ impl LoginScreen {
             let success_cb = callback.clone();
 
             std::thread::spawn(move || {
-                let runtime = tokio::runtime::Runtime::new().unwrap();
+                let runtime = match tokio::runtime::Runtime::new() {
+                    Ok(runtime) => runtime,
+                    Err(e) => {
+                        tracing::error!("Failed to create async runtime: {}", e);
+                        slint::invoke_from_event_loop(move || {
+                            if let Some(ui) = ui_weak_inner.upgrade() {
+                                ui.set_is_loading(false);
+                                ui.set_error_message("Failed to initialize network".into());
+                            }
+                        })
+                        .ok();
+                        return;
+                    }
+                };
                 match runtime.block_on(http_client.login(username.clone(), password.clone())) {
                     Ok(response) => {
                         // Save session to disk

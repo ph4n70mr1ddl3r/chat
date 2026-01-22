@@ -6,6 +6,36 @@ use crate::ui::SignupScreenComponent;
 use slint::ComponentHandle;
 use std::sync::Arc;
 
+fn validate_password_strength(password: &str) -> Result<(), String> {
+    let len = password.len();
+
+    if len < 8 {
+        return Err("Password must be at least 8 characters".to_string());
+    }
+
+    if len > 128 {
+        return Err("Password must be at most 128 characters".to_string());
+    }
+
+    if !password.chars().any(|c| c.is_uppercase()) {
+        return Err("Password must contain at least one uppercase letter".to_string());
+    }
+
+    if !password.chars().any(|c| c.is_lowercase()) {
+        return Err("Password must contain at least one lowercase letter".to_string());
+    }
+
+    if !password.chars().any(|c| c.is_numeric()) {
+        return Err("Password must contain at least one digit".to_string());
+    }
+
+    if !password.chars().any(|c| !c.is_alphanumeric()) {
+        return Err("Password must contain at least one special character".to_string());
+    }
+
+    Ok(())
+}
+
 /// Signup screen controller
 pub struct SignupScreen {
     ui: SignupScreenComponent,
@@ -56,45 +86,15 @@ impl SignupScreen {
                 return;
             }
 
-            if password.len() < 8 {
-                tracing::debug!("Password too short");
-                ui_handle.set_error_message("Password must be at least 8 characters".into());
+            if let Err(e) = validate_password_strength(&password) {
+                tracing::debug!("Password validation failed: {}", e);
+                ui_handle.set_error_message(e.into());
                 return;
             }
 
-            if password.len() > 128 {
-                tracing::debug!("Password too long");
-                ui_handle.set_error_message("Password must be at most 128 characters".into());
-                return;
-            }
-
-            if !password.chars().any(|c| c.is_uppercase()) {
-                tracing::debug!("Password lacks uppercase");
-                ui_handle.set_error_message(
-                    "Password must contain at least one uppercase letter".into(),
-                );
-                return;
-            }
-
-            if !password.chars().any(|c| c.is_lowercase()) {
-                tracing::debug!("Password lacks lowercase");
-                ui_handle.set_error_message(
-                    "Password must contain at least one lowercase letter".into(),
-                );
-                return;
-            }
-
-            if !password.chars().any(|c| c.is_numeric()) {
-                tracing::debug!("Password lacks digit");
-                ui_handle.set_error_message("Password must contain at least one digit".into());
-                return;
-            }
-
-            if !password.chars().any(|c| !c.is_alphanumeric()) {
-                tracing::debug!("Password lacks special character");
-                ui_handle.set_error_message(
-                    "Password must contain at least one special character".into(),
-                );
+            if password != confirm_password {
+                tracing::debug!("Passwords don't match");
+                ui_handle.set_error_message("Passwords do not match".into());
                 return;
             }
 
@@ -109,7 +109,19 @@ impl SignupScreen {
             let success_cb = success_callback.clone();
             std::thread::spawn(move || {
                 tracing::debug!("Signup thread started");
-                let runtime = tokio::runtime::Runtime::new().unwrap();
+                let runtime = match tokio::runtime::Runtime::new() {
+                    Ok(runtime) => runtime,
+                    Err(e) => {
+                        tracing::error!("Failed to create async runtime: {}", e);
+                        slint::invoke_from_event_loop(move || {
+                            if let Some(ui) = ui_weak_inner.upgrade() {
+                                ui.set_error_message("Failed to initialize network".into());
+                            }
+                        })
+                        .ok();
+                        return;
+                    }
+                };
                 tracing::debug!("Calling signup API for user: {}", username);
                 match runtime.block_on(http_client.signup(username.clone(), password.clone())) {
                     Ok(response) => {
