@@ -24,6 +24,7 @@ async fn rejects_invalid_characters_in_content() {
 /// When: Message validation checks recipient exists
 /// Then: Validation should fail with "recipient not found" error
 #[tokio::test]
+async fn rejects_invalid_recipient() {
     let pool = setup_test_db().await;
     let service = MessageService::new(pool.clone());
 
@@ -56,6 +57,7 @@ async fn rejects_invalid_characters_in_content() {
 /// When: Message length validation is performed
 /// Then: Validation should fail with "content must be between 1 and 5000 characters" error
 #[tokio::test]
+async fn rejects_oversized_content() {
     let pool = setup_test_db().await;
     let service = MessageService::new(pool.clone());
 
