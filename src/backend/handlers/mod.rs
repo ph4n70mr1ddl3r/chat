@@ -19,6 +19,8 @@ use thiserror::Error;
 use warp::http::StatusCode;
 use warp::reject::Reject;
 
+use chat_shared::errors::ChatError;
+
 #[derive(Error, Debug, Clone)]
 #[error("{message}")]
 pub struct ApiError {
@@ -78,6 +80,20 @@ impl ApiError {
 
     pub fn internal(message: impl Into<String>) -> Self {
         Self::new(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", message)
+    }
+}
+
+impl From<ChatError> for ApiError {
+    fn from(err: ChatError) -> Self {
+        match err {
+            ChatError::AuthError(msg) => Self::unauthorized(msg),
+            ChatError::MessageError(msg) | ChatError::ValidationError(msg) => Self::bad_request(msg),
+            ChatError::DatabaseError(msg) => Self::internal(msg),
+            ChatError::InternalError => Self::internal("Internal server error"),
+            ChatError::NotFound(msg) => Self::not_found(msg),
+            ChatError::Conflict(msg) => Self::conflict(msg),
+            ChatError::RateLimited(msg) => Self::too_many_requests(msg),
+        }
     }
 }
 

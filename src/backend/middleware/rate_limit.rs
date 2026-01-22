@@ -37,11 +37,13 @@ impl RateLimiter {
     /// * `max_attempts` - Maximum failed attempts allowed (default: 5)
     /// * `window_secs` - Time window in seconds (default: 900 = 15 minutes)
     pub fn new(max_attempts: u32, window_secs: u64) -> Self {
-        Self {
+        let limiter = Self {
             entries: Arc::new(Mutex::new(HashMap::new())),
             max_attempts,
             window_duration: Duration::from_secs(window_secs),
-        }
+        };
+        limiter.start_periodic_cleanup();
+        limiter
     }
 
     /// Convenience constructor for global requests (1000 req/min)

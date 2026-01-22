@@ -42,6 +42,7 @@ pub struct ChatScreen {
     selected_participant_id: Arc<Mutex<Option<String>>>,
     _typing_state: Arc<Mutex<bool>>,
     _typing_indicator_token: Arc<Mutex<String>>,
+    _typing_timeout_handles: Arc<Mutex<Vec<tokio::task::AbortHandle>>>,
     websocket_client: Option<crate::services::WebSocketClient>,
     _event_handle: Option<std::thread::JoinHandle<()>>,
 }
@@ -61,6 +62,7 @@ impl ChatScreen {
         let selected_participant_id = Arc::new(Mutex::new(None::<String>));
         let typing_state = Arc::new(Mutex::new(false));
         let typing_indicator_token = Arc::new(Mutex::new(String::new()));
+        let typing_timeout_handles = Arc::new(Mutex::new(Vec::new()));
         ui.set_connection_status("Connecting...".into());
         ui.set_connection_online(false);
         ui.set_show_error_dialog(false);
@@ -88,6 +90,7 @@ impl ChatScreen {
             selected_conversation_id.clone(),
             selected_participant_id.clone(),
             typing_indicator_token.clone(),
+            typing_timeout_handles.clone(),
             current_user_id.clone(),
             runtime.clone(),
             websocket_client.clone(),
@@ -121,8 +124,8 @@ impl ChatScreen {
 
                 slint::invoke_from_event_loop(move || {
                     if let Some(ui) = ui_weak.upgrade() {
-                        ui.hide().unwrap(); // Hide chat screen
-                        logout_cb_inner(); // Trigger callback
+                        let _ = ui.hide();
+                        logout_cb_inner();
                     }
                 })
                 .ok();
@@ -141,7 +144,7 @@ impl ChatScreen {
             // Here we are in UI callback (main thread).
             // But we want to ensure clean state.
             if let Some(ui) = ui_weak.upgrade() {
-                ui.hide().unwrap();
+                let _ = ui.hide();
                 settings_cb_inner();
             }
         });
@@ -488,13 +491,16 @@ impl ChatScreen {
             selected_participant_id,
             _typing_state: typing_state,
             _typing_indicator_token: typing_indicator_token,
+            _typing_timeout_handles: typing_timeout_handles,
             websocket_client,
             _event_handle: Some(event_handle),
         })
     }
 
-    pub fn show(&self) {
-        self.ui.show().unwrap();
+    pub fn show(&mut self) {
+        if let Err(e) = self.ui.show() {
+            log::error!("Failed to show chat screen: {}", e);
+        }
     }
 
     #[allow(dead_code)]
@@ -512,6 +518,7 @@ fn spawn_event_listener(
     selected_conversation_id: Arc<Mutex<Option<String>>>,
     selected_participant_id: Arc<Mutex<Option<String>>>,
     typing_indicator_token: Arc<Mutex<String>>,
+    typing_timeout_handles: Arc<Mutex<Vec<tokio::task::AbortHandle>>>,
     current_user_id: String,
     runtime: Arc<Runtime>,
     websocket_client: Option<crate::services::WebSocketClient>,
@@ -777,8 +784,9 @@ fn spawn_event_listener(
                     if is_typing {
                         let ui_weak_clone = ui_weak.clone();
                         let typing_indicator_token = typing_indicator_token.clone();
-                        std::thread::spawn(move || {
-                            std::thread::sleep(Duration::from_millis(2000));
+                        let handles = typing_timeout_handles.clone();
+                        let handle = runtime.spawn(async move {
+                            tokio::time::sleep(Duration::from_millis(2000)).await;
                             let should_clear = {
                                 let guard = typing_indicator_token.lock().unwrap();
                                 *guard == token
@@ -792,6 +800,10 @@ fn spawn_event_listener(
                                 .ok();
                             }
                         });
+                        {
+                            let mut handles = handles.lock().unwrap();
+                            handles.push(handle.abort_handle());
+                        }
                     }
                 }
                 crate::services::WebSocketEvent::Error(err) => {

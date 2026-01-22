@@ -116,7 +116,7 @@ fn show_chat(user_id: String, base_url: String) {
             show_settings(user_id_settings.clone(), base_url_settings.clone());
         }),
     ) {
-        Ok(chat) => {
+        Ok(mut chat) => {
             tracing::info!("Chat screen created successfully, showing window");
             // Show the new window BEFORE hiding the old ones
             chat.show();
