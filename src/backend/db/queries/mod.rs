@@ -27,6 +27,15 @@ impl AuthEventType {
     }
 }
 
+const SQL_SELECT_USER_FIELDS: &str =
+    "SELECT id, username, password_hash, password_salt, created_at, updated_at, deleted_at, is_online, last_seen_at";
+
+const SQL_SELECT_MESSAGE_FIELDS: &str =
+    "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, read_at, status, is_anonymized";
+
+const SQL_SELECT_CONVERSATION_FIELDS: &str =
+    "SELECT id, user1_id, user2_id, created_at, updated_at, last_message_at, message_count";
+
 /// Insert an auth log entry
 pub async fn insert_auth_log(
     pool: &SqlitePool,
@@ -111,9 +120,7 @@ pub async fn find_user_by_username(
     username: &str,
 ) -> Result<Option<User>, String> {
     sqlx::query_as::<_, User>(
-        "SELECT id, username, password_hash, password_salt, created_at, updated_at, deleted_at, is_online, last_seen_at
-         FROM users
-         WHERE username = ?"
+        &format!("{} FROM users WHERE username = ?", SQL_SELECT_USER_FIELDS),
     )
     .bind(username)
     .fetch_optional(pool)
@@ -126,9 +133,7 @@ pub async fn find_user_by_username(
 /// Returns the user if found, None if not found
 pub async fn find_user_by_id(pool: &SqlitePool, user_id: &str) -> Result<Option<User>, String> {
     sqlx::query_as::<_, User>(
-        "SELECT id, username, password_hash, password_salt, created_at, updated_at, deleted_at, is_online, last_seen_at
-         FROM users
-         WHERE id = ?"
+        &format!("{} FROM users WHERE id = ?", SQL_SELECT_USER_FIELDS),
     )
     .bind(user_id)
     .fetch_optional(pool)
@@ -149,10 +154,8 @@ pub async fn find_users_by_ids(
 
     let placeholders: String = user_ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
     let query = format!(
-        "SELECT id, username, password_hash, password_salt, created_at, updated_at, deleted_at, is_online, last_seen_at
-         FROM users
-         WHERE id IN ({})",
-        placeholders
+        "{} FROM users WHERE id IN ({})",
+        SQL_SELECT_USER_FIELDS, placeholders
     );
 
     let mut users = std::collections::HashMap::new();
@@ -259,10 +262,10 @@ pub async fn search_users_by_prefix(
     let search_pattern = format!("{}%", escaped_query);
 
     sqlx::query_as::<_, User>(
-        "SELECT id, username, password_hash, password_salt, created_at, updated_at, deleted_at, is_online, last_seen_at
-         FROM users
-         WHERE username LIKE ? ESCAPE '\\' AND deleted_at IS NULL
-         LIMIT ?"
+        &format!(
+            "{} FROM users WHERE username LIKE ? ESCAPE '\\' AND deleted_at IS NULL LIMIT ?",
+            SQL_SELECT_USER_FIELDS
+        ),
     )
     .bind(search_pattern)
     .bind(limit)
@@ -282,10 +285,10 @@ pub async fn search_users_excluding_self(
     let search_pattern = format!("{}%", escaped_query);
 
     sqlx::query_as::<_, User>(
-        "SELECT id, username, password_hash, password_salt, created_at, updated_at, deleted_at, is_online, last_seen_at
-         FROM users
-         WHERE username LIKE ? ESCAPE '\\' AND id != ? AND deleted_at IS NULL
-         LIMIT ?"
+        &format!(
+            "{} FROM users WHERE username LIKE ? ESCAPE '\\' AND id != ? AND deleted_at IS NULL LIMIT ?",
+            SQL_SELECT_USER_FIELDS
+        ),
     )
     .bind(search_pattern)
     .bind(current_user_id)
@@ -325,9 +328,10 @@ pub async fn get_conversation_by_users(
     user2_id: &str,
 ) -> Result<Option<Conversation>, String> {
     sqlx::query_as::<_, Conversation>(
-        "SELECT id, user1_id, user2_id, created_at, updated_at, last_message_at, message_count
-         FROM conversations
-         WHERE user1_id = ? AND user2_id = ?",
+        &format!(
+            "{} FROM conversations WHERE user1_id = ? AND user2_id = ?",
+            SQL_SELECT_CONVERSATION_FIELDS
+        ),
     )
     .bind(user1_id)
     .bind(user2_id)
@@ -342,9 +346,7 @@ pub async fn get_conversation_by_id(
     conversation_id: &str,
 ) -> Result<Option<Conversation>, String> {
     sqlx::query_as::<_, Conversation>(
-        "SELECT id, user1_id, user2_id, created_at, updated_at, last_message_at, message_count
-         FROM conversations
-         WHERE id = ?",
+        &format!("{} FROM conversations WHERE id = ?", SQL_SELECT_CONVERSATION_FIELDS),
     )
     .bind(conversation_id)
     .fetch_optional(pool)
@@ -360,11 +362,10 @@ pub async fn get_user_conversations(
     offset: u32,
 ) -> Result<Vec<Conversation>, String> {
     sqlx::query_as::<_, Conversation>(
-        "SELECT id, user1_id, user2_id, created_at, updated_at, last_message_at, message_count
-         FROM conversations
-         WHERE user1_id = ? OR user2_id = ?
-         ORDER BY updated_at DESC
-         LIMIT ? OFFSET ?",
+        &format!(
+            "{} FROM conversations WHERE user1_id = ? OR user2_id = ? ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+            SQL_SELECT_CONVERSATION_FIELDS
+        ),
     )
     .bind(user_id)
     .bind(user_id)
@@ -408,9 +409,7 @@ pub async fn find_message_by_id(
     message_id: &str,
 ) -> Result<Option<Message>, String> {
     sqlx::query_as::<_, Message>(
-        "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, read_at, status, is_anonymized
-         FROM messages
-         WHERE id = ?"
+        &format!("{} FROM messages WHERE id = ?", SQL_SELECT_MESSAGE_FIELDS),
     )
     .bind(message_id)
     .fetch_optional(pool)
@@ -426,11 +425,10 @@ pub async fn get_messages_by_conversation(
     offset: u32,
 ) -> Result<Vec<Message>, String> {
     sqlx::query_as::<_, Message>(
-        "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, read_at, status, is_anonymized
-         FROM messages
-         WHERE conversation_id = ?
-         ORDER BY created_at DESC
-         LIMIT ? OFFSET ?"
+        &format!(
+            "{} FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            SQL_SELECT_MESSAGE_FIELDS
+        ),
     )
     .bind(conversation_id)
     .bind(limit)
@@ -446,10 +444,10 @@ pub async fn get_pending_messages(
     recipient_id: &str,
 ) -> Result<Vec<Message>, String> {
     sqlx::query_as::<_, Message>(
-        "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, read_at, status, is_anonymized
-         FROM messages
-         WHERE recipient_id = ? AND (status = 'pending' OR status = 'failed')
-         ORDER BY created_at ASC"
+        &format!(
+            "{} FROM messages WHERE recipient_id = ? AND (status = 'pending' OR status = 'failed') ORDER BY created_at ASC",
+            SQL_SELECT_MESSAGE_FIELDS
+        ),
     )
     .bind(recipient_id)
     .fetch_all(pool)
@@ -460,10 +458,10 @@ pub async fn get_pending_messages(
 /// Get all pending messages (status = 'pending' or 'failed') for queue initialization
 pub async fn get_all_pending_messages(pool: &SqlitePool) -> Result<Vec<Message>, String> {
     sqlx::query_as::<_, Message>(
-        "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, read_at, status, is_anonymized
-         FROM messages
-         WHERE status = 'pending' OR status = 'failed'
-         ORDER BY created_at ASC"
+        &format!(
+            "{} FROM messages WHERE status = 'pending' OR status = 'failed' ORDER BY created_at ASC",
+            SQL_SELECT_MESSAGE_FIELDS
+        ),
     )
     .fetch_all(pool)
     .await
@@ -522,11 +520,10 @@ pub async fn search_messages_in_conversation(
     let search_pattern = format!("%{}%", escaped_query);
 
     sqlx::query_as::<_, Message>(
-        "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, read_at, status, is_anonymized
-         FROM messages
-         WHERE conversation_id = ? AND content LIKE ?
-         ORDER BY created_at DESC
-         LIMIT ?"
+        &format!(
+            "{} FROM messages WHERE conversation_id = ? AND content LIKE ? ORDER BY created_at DESC LIMIT ?",
+            SQL_SELECT_MESSAGE_FIELDS
+        ),
     )
     .bind(conversation_id)
     .bind(search_pattern)

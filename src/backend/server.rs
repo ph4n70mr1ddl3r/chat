@@ -110,10 +110,10 @@ impl ServerState {
         let auth_rate_limiter = Arc::new(rate_limit::RateLimiter::new(5, 900));
         let user_service = Arc::new(crate::services::UserService::new(pool.clone()));
 
-        let cleanup_handles = vec![
-            global_rate_limiter.start_periodic_cleanup(),
-            auth_rate_limiter.start_periodic_cleanup(),
-        ];
+        global_rate_limiter.start_periodic_cleanup();
+        auth_rate_limiter.start_periodic_cleanup();
+
+        let cleanup_handles: Vec<tokio::task::JoinHandle<()>> = vec![];
 
         let state = Self {
             pool,

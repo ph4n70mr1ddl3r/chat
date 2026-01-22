@@ -30,6 +30,12 @@ pub struct RateLimiter {
     window_duration: Duration,
 }
 
+impl Default for RateLimiter {
+    fn default() -> Self {
+        Self::new(5, 900)
+    }
+}
+
 impl RateLimiter {
     /// Create a new rate limiter
     ///
@@ -37,13 +43,11 @@ impl RateLimiter {
     /// * `max_attempts` - Maximum failed attempts allowed (default: 5)
     /// * `window_secs` - Time window in seconds (default: 900 = 15 minutes)
     pub fn new(max_attempts: u32, window_secs: u64) -> Self {
-        let limiter = Self {
+        Self {
             entries: Arc::new(Mutex::new(HashMap::new())),
             max_attempts,
             window_duration: Duration::from_secs(window_secs),
-        };
-        limiter.start_periodic_cleanup();
-        limiter
+        }
     }
 
     /// Convenience constructor for global requests (1000 req/min)
@@ -168,9 +172,7 @@ impl RateLimiter {
     }
 
     /// Start a background task that periodically cleans up expired entries
-    ///
-    /// Returns a handle that can be used to stop the cleanup task
-    pub fn start_periodic_cleanup(&self) -> tokio::task::JoinHandle<()> {
+    pub fn start_periodic_cleanup(&self) {
         let limiter = self.clone();
         let interval = self.window_duration;
 
@@ -182,7 +184,7 @@ impl RateLimiter {
                 interval.tick().await;
                 limiter.cleanup_expired().await;
             }
-        })
+        });
     }
 }
 

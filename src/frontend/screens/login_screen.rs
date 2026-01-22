@@ -63,13 +63,12 @@ impl LoginScreen {
                     Ok(runtime) => runtime,
                     Err(e) => {
                         tracing::error!("Failed to create async runtime: {}", e);
-                        slint::invoke_from_event_loop(move || {
+                        let _ = slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_weak_inner.upgrade() {
                                 ui.set_is_loading(false);
                                 ui.set_error_message("Failed to initialize network".into());
                             }
-                        })
-                        .ok();
+                        });
                         return;
                     }
                 };
@@ -95,13 +94,12 @@ impl LoginScreen {
                         .ok();
                     }
                     Err(e) => {
-                        slint::invoke_from_event_loop(move || {
+                        let _ = slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_weak_inner.upgrade() {
                                 ui.set_is_loading(false);
                                 ui.set_error_message(e.into());
                             }
-                        })
-                        .ok();
+                        });
                     }
                 }
             });
