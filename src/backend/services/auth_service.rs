@@ -7,19 +7,9 @@ use crate::validators;
 use bcrypt::{hash, verify, DEFAULT_COST};
 use chrono::Utc;
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
-use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 
-/// JWT token claims
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TokenClaims {
-    pub sub: String,
-    pub aud: String,
-    pub iat: i64,
-    pub exp: i64,
-    #[serde(default)]
-    pub scopes: Vec<String>,
-}
+use chat_shared::protocol::TokenClaims;
 
 /// Authentication service
 pub struct AuthService {
@@ -90,9 +80,9 @@ impl AuthService {
     }
 
     /// Generate JWT token for a user
-    pub fn generate_token(&self, user_id: String) -> Result<(String, i64), String> {
-        let now = Utc::now().timestamp();
-        let expiration = now + TOKEN_EXPIRATION_SECONDS;
+    pub fn generate_token(&self, user_id: String) -> Result<(String, u64), String> {
+        let now = Utc::now().timestamp_millis() as u64;
+        let expiration = now + (TOKEN_EXPIRATION_SECONDS * 1000) as u64;
 
         let claims = TokenClaims {
             sub: user_id,
@@ -234,7 +224,7 @@ mod tests {
         assert!(result.is_ok());
         let (token, exp) = result.unwrap();
         assert!(!token.is_empty());
-        assert!(exp > Utc::now().timestamp());
+        assert!(exp > Utc::now().timestamp_millis() as u64);
     }
 
     #[test]

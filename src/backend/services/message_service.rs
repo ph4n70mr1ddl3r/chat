@@ -1,32 +1,12 @@
-// ! Message service for handling message creation, validation, and delivery
+//! Message service for handling message creation, validation, and delivery
 //!
 //! Implements message validation, status tracking, and offline delivery logic
 
 use crate::db::queries;
 use crate::models::Message;
+use chat_shared::protocol::MessageStatus;
 use sqlx::SqlitePool;
 use tracing::{info, warn};
-
-/// Message status enum
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum MessageStatus {
-    Pending,
-    Sent,
-    Delivered,
-    Failed,
-}
-
-impl MessageStatus {
-    pub fn as_str(&self) -> &str {
-        match self {
-            MessageStatus::Pending => "pending",
-            MessageStatus::Sent => "sent",
-            MessageStatus::Delivered => "delivered",
-            MessageStatus::Failed => "failed",
-        }
-    }
-}
 
 #[derive(Clone)]
 /// Message service

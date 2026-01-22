@@ -3,7 +3,7 @@
 //! Handles GET /user/me and other user-related endpoints
 
 use crate::db::queries;
-use crate::handlers::auth::ErrorResponse;
+use crate::handlers::ErrorBody;
 use crate::services::{AuthService, UserService};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -62,19 +62,21 @@ pub async fn get_current_user(user_id: String, pool: SqlitePool) -> Result<impl 
         Ok(None) => {
             warn!("User not found for id: {}", user_id);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "USER_NOT_FOUND".to_string(),
+                reply::json(&ErrorBody {
+                    code: "USER_NOT_FOUND".to_string(),
                     message: "User account not found".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::NOT_FOUND,
             ));
         }
         Err(e) => {
-            warn!("Database error: {}", e);
+            warn!("Database code: {}", e);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "DATABASE_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "DATABASE_ERROR".to_string(),
                     message: "Failed to fetch user profile".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -84,9 +86,10 @@ pub async fn get_current_user(user_id: String, pool: SqlitePool) -> Result<impl 
     // Check if deleted
     if user.is_deleted() {
         return Ok(reply::with_status(
-            reply::json(&ErrorResponse {
-                error: "ACCOUNT_DELETED".to_string(),
+            reply::json(&ErrorBody {
+                code: "ACCOUNT_DELETED".to_string(),
                 message: "Account has been deleted".to_string(),
+            details: None,
             }),
             warp::http::StatusCode::NOT_FOUND,
         ));
@@ -117,9 +120,10 @@ pub async fn search_users(
     // Validate query length (minimum 1 character)
     if query.q.is_empty() {
         return Ok(reply::with_status(
-            reply::json(&ErrorResponse {
-                error: "INVALID_QUERY".to_string(),
+            reply::json(&ErrorBody {
+                code: "INVALID_QUERY".to_string(),
                 message: "Search query must be at least 1 character".to_string(),
+            details: None,
             }),
             warp::http::StatusCode::BAD_REQUEST,
         ));
@@ -134,9 +138,10 @@ pub async fn search_users(
         Err(e) => {
             warn!("Failed to search users: {}", e);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "DATABASE_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "DATABASE_ERROR".to_string(),
                     message: "Failed to search users".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -170,19 +175,21 @@ pub async fn delete_account(
         Ok(Some(u)) => u,
         Ok(None) => {
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "USER_NOT_FOUND".to_string(),
+                reply::json(&ErrorBody {
+                    code: "USER_NOT_FOUND".to_string(),
                     message: "User account not found".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::NOT_FOUND,
             ));
         }
         Err(e) => {
-            warn!("Database error: {}", e);
+            warn!("Database code: {}", e);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "DATABASE_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "DATABASE_ERROR".to_string(),
                     message: "Failed to retrieve user".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -196,19 +203,21 @@ pub async fn delete_account(
         }
         Ok(false) => {
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "INVALID_PASSWORD".to_string(),
+                reply::json(&ErrorBody {
+                    code: "INVALID_PASSWORD".to_string(),
                     message: "Incorrect password".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::UNAUTHORIZED,
             ));
         }
         Err(e) => {
-            warn!("Password verification error: {}", e);
+            warn!("Password verification code: {}", e);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "AUTH_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "AUTH_ERROR".to_string(),
                     message: "Authentication failed".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -219,9 +228,10 @@ pub async fn delete_account(
     if let Err(e) = queries::soft_delete_user(&pool, &user_id).await {
         warn!("Failed to delete user: {}", e);
         return Ok(reply::with_status(
-            reply::json(&ErrorResponse {
-                error: "DATABASE_ERROR".to_string(),
+            reply::json(&ErrorBody {
+                code: "DATABASE_ERROR".to_string(),
                 message: "Failed to delete account".to_string(),
+            details: None,
             }),
             warp::http::StatusCode::INTERNAL_SERVER_ERROR,
         ));
@@ -245,19 +255,21 @@ pub async fn change_password(
         Ok(Some(u)) => u,
         Ok(None) => {
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "USER_NOT_FOUND".to_string(),
+                reply::json(&ErrorBody {
+                    code: "USER_NOT_FOUND".to_string(),
                     message: "User account not found".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::NOT_FOUND,
             ));
         }
         Err(e) => {
-            warn!("Database error: {}", e);
+            warn!("Database code: {}", e);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "DATABASE_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "DATABASE_ERROR".to_string(),
                     message: "Failed to retrieve user".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -269,19 +281,21 @@ pub async fn change_password(
         Ok(true) => {}
         Ok(false) => {
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "INVALID_PASSWORD".to_string(),
+                reply::json(&ErrorBody {
+                    code: "INVALID_PASSWORD".to_string(),
                     message: "Incorrect current password".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::UNAUTHORIZED,
             ));
         }
         Err(e) => {
-            warn!("Password verification error: {}", e);
+            warn!("Password verification code: {}", e);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "AUTH_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "AUTH_ERROR".to_string(),
                     message: "Authentication failed".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -295,9 +309,10 @@ pub async fn change_password(
         Ok(pair) => pair,
         Err(e) => {
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "VALIDATION_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "VALIDATION_ERROR".to_string(),
                     message: e,
+                details: None,
                 }),
                 warp::http::StatusCode::BAD_REQUEST,
             ));
@@ -308,9 +323,10 @@ pub async fn change_password(
     if let Err(e) = queries::update_password(&pool, &user_id, &new_hash, &new_salt).await {
         warn!("Failed to update password: {}", e);
         return Ok(reply::with_status(
-            reply::json(&ErrorResponse {
-                error: "DATABASE_ERROR".to_string(),
+            reply::json(&ErrorBody {
+                code: "DATABASE_ERROR".to_string(),
                 message: "Failed to update password".to_string(),
+            details: None,
             }),
             warp::http::StatusCode::INTERNAL_SERVER_ERROR,
         ));

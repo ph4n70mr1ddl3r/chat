@@ -3,8 +3,8 @@
 //! Validates JWT tokens from query parameters and manages the WebSocket upgrade process.
 //! Ensures only authenticated users can establish WebSocket connections.
 
-use crate::services::auth_service::TokenClaims;
 use crate::services::AuthService;
+use chat_shared::protocol::TokenClaims;
 use warp::http::StatusCode;
 
 /// Extract JWT token from WebSocket upgrade request query string
@@ -101,7 +101,7 @@ impl HandshakeValidator {
         }
 
         // Check token expiration explicitly
-        let now = chrono::Utc::now().timestamp();
+        let now = chrono::Utc::now().timestamp_millis() as u64;
         if claims.exp <= now {
             return Err((StatusCode::UNAUTHORIZED, "Token has expired".to_string()));
         }

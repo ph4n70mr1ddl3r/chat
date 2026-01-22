@@ -100,7 +100,7 @@ impl From<ChatError> for ApiError {
 impl Reject for ApiError {}
 
 /// Standard API error payload returned to clients.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, Default)]
 pub struct ErrorBody {
     pub code: String,
     pub message: String,

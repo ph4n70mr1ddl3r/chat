@@ -3,7 +3,8 @@
 //! Wraps the auth handlers with rate limiting and logging
 
 use crate::db::queries::{self, AuthEventType};
-use crate::handlers::auth::{AuthResponse, ErrorResponse, LoginRequest};
+use crate::handlers::auth::{AuthResponse, LoginRequest};
+use crate::handlers::ErrorBody;
 use crate::middleware::RateLimiter;
 use crate::services::AuthService;
 use sqlx::SqlitePool;
@@ -25,12 +26,13 @@ pub async fn login_with_rate_limit(
         warn!("Rate limit exceeded for IP: {}", ip_address);
 
         return Ok(reply::with_status(
-            reply::json(&ErrorResponse {
-                error: "RATE_LIMITED".to_string(),
+            reply::json(&ErrorBody {
+                code: "RATE_LIMITED".to_string(),
                 message: format!(
                     "Too many failed login attempts. Try again later. Remaining attempts: {}",
                     remaining
                 ),
+            details: None,
             }),
             warp::http::StatusCode::TOO_MANY_REQUESTS,
         ));
@@ -55,9 +57,10 @@ pub async fn login_with_rate_limit(
             .await;
 
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "AUTH_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "AUTH_ERROR".to_string(),
                     message: "Invalid credentials".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::UNAUTHORIZED,
             ));
@@ -65,9 +68,10 @@ pub async fn login_with_rate_limit(
         Err(e) => {
             warn!("Database error during login: {}", e);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "DATABASE_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "DATABASE_ERROR".to_string(),
                     message: "Failed to authenticate".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -91,9 +95,10 @@ pub async fn login_with_rate_limit(
         .await;
 
         return Ok(reply::with_status(
-            reply::json(&ErrorResponse {
-                error: "ACCOUNT_DELETED".to_string(),
+            reply::json(&ErrorBody {
+                code: "ACCOUNT_DELETED".to_string(),
                 message: "Account has been deleted".to_string(),
+            details: None,
             }),
             warp::http::StatusCode::NOT_FOUND,
         ));
@@ -120,19 +125,21 @@ pub async fn login_with_rate_limit(
             .await;
 
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "AUTH_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "AUTH_ERROR".to_string(),
                     message: "Invalid credentials".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::UNAUTHORIZED,
             ));
         }
         Err(e) => {
-            warn!("Password verification error: {}", e);
+            warn!("Password verification code: {}", e);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "AUTH_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "AUTH_ERROR".to_string(),
                     message: "Authentication failed".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -146,9 +153,10 @@ pub async fn login_with_rate_limit(
         Err(e) => {
             warn!("Failed to generate token: {}", e);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "AUTH_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "AUTH_ERROR".to_string(),
                     message: "Failed to generate authentication token".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -174,7 +182,7 @@ pub async fn login_with_rate_limit(
             user_id: user.id,
             username: user.username,
             token,
-            expires_in: expires_at.cast_unsigned(),
+            expires_in: expires_at,
         }),
         warp::http::StatusCode::OK,
     ))

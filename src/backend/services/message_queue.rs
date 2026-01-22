@@ -6,8 +6,8 @@
 
 use crate::db::queries;
 use crate::handlers::websocket::ConnectionManager;
-use crate::services::message_service::{MessageService, MessageStatus};
-use chat_shared::protocol::MessageEnvelope;
+use crate::services::message_service::MessageService;
+use chat_shared::protocol::{MessageEnvelope, MessageStatus};
 use serde_json::json;
 use sqlx::SqlitePool;
 use std::collections::HashMap;

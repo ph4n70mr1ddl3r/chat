@@ -8,7 +8,7 @@ use tracing::{info, warn};
 use warp::{reply, Rejection, Reply};
 
 use crate::db::queries;
-use crate::handlers::websocket::ConnectionManager;
+use crate::handlers::{websocket::ConnectionManager, ErrorBody};
 use crate::services::AuthService;
 use crate::validators;
 use std::sync::Arc;
@@ -34,13 +34,6 @@ pub struct AuthResponse {
     pub username: String,
     pub token: String,
     pub expires_in: u64,
-}
-
-/// Error response
-#[derive(Debug, Serialize)]
-pub struct ErrorResponse {
-    pub error: String,
-    pub message: String,
 }
 
 /// Unified HTTP response that can be either success or error
@@ -99,9 +92,10 @@ pub async fn signup_handler(
     if let Err(e) = validators::validate_username(&req.username) {
         warn!("Invalid username: {}", e);
         return Ok(reply::with_status(
-            reply::json(&ErrorResponse {
-                error: "VALIDATION_ERROR".to_string(),
+            reply::json(&ErrorBody {
+                code: "VALIDATION_ERROR".to_string(),
                 message: e,
+            details: None,
             }),
             warp::http::StatusCode::BAD_REQUEST,
         ));
@@ -111,9 +105,10 @@ pub async fn signup_handler(
     if let Err(e) = validators::validate_password(&req.password) {
         warn!("Invalid password: {}", e);
         return Ok(reply::with_status(
-            reply::json(&ErrorResponse {
-                error: "VALIDATION_ERROR".to_string(),
+            reply::json(&ErrorBody {
+                code: "VALIDATION_ERROR".to_string(),
                 message: e,
+            details: None,
             }),
             warp::http::StatusCode::BAD_REQUEST,
         ));
@@ -124,9 +119,10 @@ pub async fn signup_handler(
         Ok(Some(_)) => {
             warn!("Username already exists: {}", req.username);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "CONFLICT".to_string(),
+                reply::json(&ErrorBody {
+                    code: "CONFLICT".to_string(),
                     message: "Username already exists".to_string(),
+                    details: None,
                 }),
                 warp::http::StatusCode::CONFLICT,
             ));
@@ -134,9 +130,10 @@ pub async fn signup_handler(
         Err(e) => {
             warn!("Database error during user lookup for '{}': {}", req.username, e);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "DATABASE_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "DATABASE_ERROR".to_string(),
                     message: "Failed to check username availability".to_string(),
+                    details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -156,9 +153,10 @@ pub async fn signup_handler(
         Err(e) => {
             warn!("Failed to create user '{}': {}", req.username, e);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "AUTH_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "AUTH_ERROR".to_string(),
                     message: e,
+                    details: None,
                 }),
                 warp::http::StatusCode::BAD_REQUEST,
             ));
@@ -169,9 +167,10 @@ pub async fn signup_handler(
     if let Err(e) = queries::insert_user(&pool, &user).await {
         warn!("Failed to save user '{}' to database: {}", user.username, e);
         return Ok(reply::with_status(
-            reply::json(&ErrorResponse {
-                error: "DATABASE_ERROR".to_string(),
+            reply::json(&ErrorBody {
+                code: "DATABASE_ERROR".to_string(),
                 message: "Failed to create account".to_string(),
+            details: None,
             }),
             warp::http::StatusCode::INTERNAL_SERVER_ERROR,
         ));
@@ -183,9 +182,10 @@ pub async fn signup_handler(
         Err(e) => {
             warn!("Failed to generate token: {}", e);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "AUTH_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "AUTH_ERROR".to_string(),
                     message: "Failed to generate authentication token".to_string(),
+                    details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -199,7 +199,7 @@ pub async fn signup_handler(
             user_id: user.id,
             username: user.username,
             token,
-            expires_in: expires_at as u64,
+            expires_in: expires_at,
         }),
         warp::http::StatusCode::CREATED,
     ))
@@ -219,9 +219,10 @@ pub async fn login_handler(
         Ok(None) => {
             warn!("Login failed: user not found ({})", req.username);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "AUTH_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "AUTH_ERROR".to_string(),
                     message: "Invalid credentials".to_string(),
+                    details: None,
                 }),
                 warp::http::StatusCode::UNAUTHORIZED,
             ));
@@ -229,9 +230,10 @@ pub async fn login_handler(
         Err(e) => {
             warn!("Database error during login lookup for '{}': {}", req.username, e);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "DATABASE_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "DATABASE_ERROR".to_string(),
                     message: "Failed to authenticate".to_string(),
+                    details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -242,9 +244,10 @@ pub async fn login_handler(
     if user.is_deleted() {
         warn!("Login failed: deleted account ({})", req.username);
         return Ok(reply::with_status(
-            reply::json(&ErrorResponse {
-                error: "AUTH_ERROR".to_string(),
+            reply::json(&ErrorBody {
+                code: "AUTH_ERROR".to_string(),
                 message: "Invalid credentials".to_string(),
+            details: None,
             }),
             warp::http::StatusCode::UNAUTHORIZED,
         ));
@@ -258,19 +261,21 @@ pub async fn login_handler(
         Ok(false) => {
             warn!("Login failed: invalid password ({})", req.username);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "AUTH_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "AUTH_ERROR".to_string(),
                     message: "Invalid credentials".to_string(),
+                    details: None,
                 }),
                 warp::http::StatusCode::UNAUTHORIZED,
             ));
         }
         Err(e) => {
-            warn!("Password verification error: {}", e);
+            warn!("Password verification code: {}", e);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "AUTH_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "AUTH_ERROR".to_string(),
                     message: "Authentication failed".to_string(),
+                    details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -283,9 +288,10 @@ pub async fn login_handler(
         Err(e) => {
             warn!("Failed to generate token: {}", e);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "AUTH_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "AUTH_ERROR".to_string(),
                     message: "Failed to generate authentication token".to_string(),
+                    details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -299,7 +305,7 @@ pub async fn login_handler(
             user_id: user.id,
             username: user.username,
             token,
-            expires_in: expires_at as u64,
+            expires_in: expires_at,
         }),
         warp::http::StatusCode::OK,
     ))

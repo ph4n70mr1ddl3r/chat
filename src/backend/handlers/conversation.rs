@@ -3,7 +3,7 @@
 //! Handles conversation creation, retrieval, and participant management
 
 use crate::db::queries;
-use crate::handlers::auth::ErrorResponse;
+use crate::handlers::ErrorBody;
 use crate::services::{ConversationService, MessageService};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -88,9 +88,10 @@ pub async fn start_conversation(
         Ok(Some(user)) => user,
         Ok(None) => {
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "USER_NOT_FOUND".to_string(),
+                reply::json(&ErrorBody {
+                    code: "USER_NOT_FOUND".to_string(),
                     message: "The specified user does not exist".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::NOT_FOUND,
             ));
@@ -98,9 +99,10 @@ pub async fn start_conversation(
         Err(e) => {
             warn!("Failed to find user: {}", e);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "DATABASE_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "DATABASE_ERROR".to_string(),
                     message: "Failed to verify user exists".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -110,9 +112,10 @@ pub async fn start_conversation(
     // Prevent self-conversation
     if user_id == request.other_user_id {
         return Ok(reply::with_status(
-            reply::json(&ErrorResponse {
-                error: "INVALID_REQUEST".to_string(),
+            reply::json(&ErrorBody {
+                code: "INVALID_REQUEST".to_string(),
                 message: "Cannot create conversation with yourself".to_string(),
+            details: None,
             }),
             warp::http::StatusCode::BAD_REQUEST,
         ));
@@ -121,9 +124,10 @@ pub async fn start_conversation(
     // Check if other user is deleted
     if other_user.is_deleted() {
         return Ok(reply::with_status(
-            reply::json(&ErrorResponse {
-                error: "USER_DELETED".to_string(),
+            reply::json(&ErrorBody {
+                code: "USER_DELETED".to_string(),
                 message: "Cannot start conversation with deleted user".to_string(),
+            details: None,
             }),
             warp::http::StatusCode::GONE,
         ));
@@ -139,9 +143,10 @@ pub async fn start_conversation(
         Err(e) => {
             warn!("Failed to create conversation: {}", e);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "DATABASE_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "DATABASE_ERROR".to_string(),
                     message: "Failed to create conversation".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -196,9 +201,10 @@ pub async fn get_conversations(
         Err(e) => {
             warn!("Failed to get conversations: {}", e);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "DATABASE_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "DATABASE_ERROR".to_string(),
                     message: "Failed to retrieve conversations".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -223,9 +229,10 @@ pub async fn get_conversations(
         Err(e) => {
             warn!("Failed to fetch participants: {}", e);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "DATABASE_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "DATABASE_ERROR".to_string(),
                     message: "Failed to retrieve participant information".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -279,9 +286,10 @@ pub async fn get_conversation_messages(
         Ok(Some(conv)) => conv,
         Ok(None) => {
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "CONVERSATION_NOT_FOUND".to_string(),
+                reply::json(&ErrorBody {
+                    code: "CONVERSATION_NOT_FOUND".to_string(),
                     message: "The specified conversation does not exist".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::NOT_FOUND,
             ));
@@ -289,9 +297,10 @@ pub async fn get_conversation_messages(
         Err(e) => {
             warn!("Failed to get conversation: {}", e);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "DATABASE_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "DATABASE_ERROR".to_string(),
                     message: "Failed to retrieve conversation".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -301,9 +310,10 @@ pub async fn get_conversation_messages(
     // Verify user is participant
     if conversation.user1_id != user_id && conversation.user2_id != user_id {
         return Ok(reply::with_status(
-            reply::json(&ErrorResponse {
-                error: "FORBIDDEN".to_string(),
+            reply::json(&ErrorBody {
+                code: "FORBIDDEN".to_string(),
                 message: "You are not a participant in this conversation".to_string(),
+            details: None,
             }),
             warp::http::StatusCode::FORBIDDEN,
         ));
@@ -319,9 +329,10 @@ pub async fn get_conversation_messages(
         Err(e) => {
             warn!("Failed to get messages: {}", e);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "DATABASE_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "DATABASE_ERROR".to_string(),
                     message: "Failed to retrieve messages".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -337,9 +348,10 @@ pub async fn get_conversation_messages(
         Err(e) => {
             warn!("Failed to fetch senders: {}", e);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "DATABASE_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "DATABASE_ERROR".to_string(),
                     message: "Failed to retrieve sender information".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -380,9 +392,10 @@ pub async fn search_messages(
 ) -> Result<impl Reply, Rejection> {
     if query.q.trim().is_empty() {
         return Ok(reply::with_status(
-            reply::json(&ErrorResponse {
-                error: "INVALID_QUERY".to_string(),
+            reply::json(&ErrorBody {
+                code: "INVALID_QUERY".to_string(),
                 message: "Search query must not be empty".to_string(),
+            details: None,
             }),
             warp::http::StatusCode::BAD_REQUEST,
         ));
@@ -395,9 +408,10 @@ pub async fn search_messages(
         Ok(Some(conv)) => conv,
         Ok(None) => {
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "CONVERSATION_NOT_FOUND".to_string(),
+                reply::json(&ErrorBody {
+                    code: "CONVERSATION_NOT_FOUND".to_string(),
                     message: "The specified conversation does not exist".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::NOT_FOUND,
             ));
@@ -405,9 +419,10 @@ pub async fn search_messages(
         Err(e) => {
             warn!("Failed to get conversation: {}", e);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "DATABASE_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "DATABASE_ERROR".to_string(),
                     message: "Failed to retrieve conversation".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -416,9 +431,10 @@ pub async fn search_messages(
 
     if conversation.user1_id != user_id && conversation.user2_id != user_id {
         return Ok(reply::with_status(
-            reply::json(&ErrorResponse {
-                error: "FORBIDDEN".to_string(),
+            reply::json(&ErrorBody {
+                code: "FORBIDDEN".to_string(),
                 message: "You are not a participant in this conversation".to_string(),
+            details: None,
             }),
             warp::http::StatusCode::FORBIDDEN,
         ));
@@ -432,9 +448,10 @@ pub async fn search_messages(
             Err(e) => {
                 warn!("Failed to search messages: {}", e);
                 return Ok(reply::with_status(
-                    reply::json(&ErrorResponse {
-                        error: "DATABASE_ERROR".to_string(),
+                    reply::json(&ErrorBody {
+                        code: "DATABASE_ERROR".to_string(),
                         message: "Failed to search messages".to_string(),
+                    details: None,
                     }),
                     warp::http::StatusCode::INTERNAL_SERVER_ERROR,
                 ));

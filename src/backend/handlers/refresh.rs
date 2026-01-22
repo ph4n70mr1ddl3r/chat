@@ -2,11 +2,13 @@
 //!
 //! Handles POST /auth/refresh for refreshing JWT tokens
 
-use crate::handlers::auth::{AuthResponse, ErrorResponse};
+use crate::handlers::ErrorBody;
 use crate::services::AuthService;
 use serde::Deserialize;
 use tracing::{info, warn};
 use warp::{reply, Rejection, Reply};
+
+use crate::handlers::auth::AuthResponse;
 
 /// Token refresh request
 #[derive(Debug, Deserialize)]
@@ -27,9 +29,10 @@ pub async fn refresh_token_handler(
         Err(e) => {
             warn!("Token verification failed: {}", e);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "INVALID_TOKEN".to_string(),
+                reply::json(&ErrorBody {
+                    code: "INVALID_TOKEN".to_string(),
                     message: "Token is invalid or expired".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::UNAUTHORIZED,
             ));
@@ -42,9 +45,10 @@ pub async fn refresh_token_handler(
         Err(e) => {
             warn!("Failed to generate new token: {}", e);
             return Ok(reply::with_status(
-                reply::json(&ErrorResponse {
-                    error: "TOKEN_GENERATION_ERROR".to_string(),
+                reply::json(&ErrorBody {
+                    code: "TOKEN_GENERATION_ERROR".to_string(),
                     message: "Failed to refresh token".to_string(),
+                details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -58,7 +62,7 @@ pub async fn refresh_token_handler(
             user_id: claims.sub.clone(),
             username: "".to_string(), // Username not needed for refresh
             token: new_token,
-            expires_in: expires_at as u64,
+            expires_in: expires_at,
         }),
         warp::http::StatusCode::OK,
     ))

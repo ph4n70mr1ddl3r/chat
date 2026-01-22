@@ -25,7 +25,7 @@ use warp::{Filter, Rejection, Reply};
 use crate::handlers::dispatcher::{DispatchResult, MessageDispatcher};
 use crate::handlers::handshake::HandshakeValidator;
 use crate::handlers::messages::MessageHandler;
-use crate::services::auth_service::TokenClaims;
+use chat_shared::protocol::TokenClaims;
 use crate::services::{MessageQueueService, PresenceService};
 
 use crate::handlers::{self, auth, conversation, server as server_handlers, user, websocket};

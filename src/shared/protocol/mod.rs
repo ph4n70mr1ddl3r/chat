@@ -30,6 +30,18 @@ impl std::fmt::Display for MessageStatus {
     }
 }
 
+impl MessageStatus {
+    pub fn as_str(&self) -> &str {
+        match self {
+            MessageStatus::Pending => "pending",
+            MessageStatus::Sent => "sent",
+            MessageStatus::Delivered => "delivered",
+            MessageStatus::Read => "read",
+            MessageStatus::Failed => "failed",
+        }
+    }
+}
+
 impl std::str::FromStr for MessageStatus {
     type Err = String;
 
