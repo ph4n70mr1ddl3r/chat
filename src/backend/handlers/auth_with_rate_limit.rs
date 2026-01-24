@@ -32,7 +32,7 @@ pub async fn login_with_rate_limit(
                     "Too many failed login attempts. Try again later. Remaining attempts: {}",
                     remaining
                 ),
-            details: None,
+                details: None,
             }),
             warp::http::StatusCode::TOO_MANY_REQUESTS,
         ));
@@ -60,7 +60,7 @@ pub async fn login_with_rate_limit(
                 reply::json(&ErrorBody {
                     code: "AUTH_ERROR".to_string(),
                     message: "Invalid credentials".to_string(),
-                details: None,
+                    details: None,
                 }),
                 warp::http::StatusCode::UNAUTHORIZED,
             ));
@@ -71,7 +71,7 @@ pub async fn login_with_rate_limit(
                 reply::json(&ErrorBody {
                     code: "DATABASE_ERROR".to_string(),
                     message: "Failed to authenticate".to_string(),
-                details: None,
+                    details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -98,7 +98,7 @@ pub async fn login_with_rate_limit(
             reply::json(&ErrorBody {
                 code: "ACCOUNT_DELETED".to_string(),
                 message: "Account has been deleted".to_string(),
-            details: None,
+                details: None,
             }),
             warp::http::StatusCode::NOT_FOUND,
         ));
@@ -128,7 +128,7 @@ pub async fn login_with_rate_limit(
                 reply::json(&ErrorBody {
                     code: "AUTH_ERROR".to_string(),
                     message: "Invalid credentials".to_string(),
-                details: None,
+                    details: None,
                 }),
                 warp::http::StatusCode::UNAUTHORIZED,
             ));
@@ -139,7 +139,7 @@ pub async fn login_with_rate_limit(
                 reply::json(&ErrorBody {
                     code: "AUTH_ERROR".to_string(),
                     message: "Authentication failed".to_string(),
-                details: None,
+                    details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -156,7 +156,7 @@ pub async fn login_with_rate_limit(
                 reply::json(&ErrorBody {
                     code: "AUTH_ERROR".to_string(),
                     message: "Failed to generate authentication token".to_string(),
-                details: None,
+                    details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));

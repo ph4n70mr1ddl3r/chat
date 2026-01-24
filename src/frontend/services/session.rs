@@ -107,7 +107,9 @@ impl SessionManager {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            if let Err(e) = std::fs::set_permissions(&self.session_file, std::fs::Permissions::from_mode(0o600)) {
+            if let Err(e) =
+                std::fs::set_permissions(&self.session_file, std::fs::Permissions::from_mode(0o600))
+            {
                 tracing::warn!("Failed to set secure file permissions: {}. Session may have weaker permissions than expected.", e);
             }
         }

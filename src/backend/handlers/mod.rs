@@ -87,7 +87,9 @@ impl From<ChatError> for ApiError {
     fn from(err: ChatError) -> Self {
         match err {
             ChatError::AuthError(msg) => Self::unauthorized(msg),
-            ChatError::MessageError(msg) | ChatError::ValidationError(msg) => Self::bad_request(msg),
+            ChatError::MessageError(msg) | ChatError::ValidationError(msg) => {
+                Self::bad_request(msg)
+            }
             ChatError::DatabaseError(msg) => Self::internal(msg),
             ChatError::InternalError => Self::internal("Internal server error"),
             ChatError::NotFound(msg) => Self::not_found(msg),

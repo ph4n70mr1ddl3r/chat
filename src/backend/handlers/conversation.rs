@@ -91,7 +91,7 @@ pub async fn start_conversation(
                 reply::json(&ErrorBody {
                     code: "USER_NOT_FOUND".to_string(),
                     message: "The specified user does not exist".to_string(),
-                details: None,
+                    details: None,
                 }),
                 warp::http::StatusCode::NOT_FOUND,
             ));
@@ -102,7 +102,7 @@ pub async fn start_conversation(
                 reply::json(&ErrorBody {
                     code: "DATABASE_ERROR".to_string(),
                     message: "Failed to verify user exists".to_string(),
-                details: None,
+                    details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -115,7 +115,7 @@ pub async fn start_conversation(
             reply::json(&ErrorBody {
                 code: "INVALID_REQUEST".to_string(),
                 message: "Cannot create conversation with yourself".to_string(),
-            details: None,
+                details: None,
             }),
             warp::http::StatusCode::BAD_REQUEST,
         ));
@@ -127,7 +127,7 @@ pub async fn start_conversation(
             reply::json(&ErrorBody {
                 code: "USER_DELETED".to_string(),
                 message: "Cannot start conversation with deleted user".to_string(),
-            details: None,
+                details: None,
             }),
             warp::http::StatusCode::GONE,
         ));
@@ -146,7 +146,7 @@ pub async fn start_conversation(
                 reply::json(&ErrorBody {
                     code: "DATABASE_ERROR".to_string(),
                     message: "Failed to create conversation".to_string(),
-                details: None,
+                    details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -204,7 +204,7 @@ pub async fn get_conversations(
                 reply::json(&ErrorBody {
                     code: "DATABASE_ERROR".to_string(),
                     message: "Failed to retrieve conversations".to_string(),
-                details: None,
+                    details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -232,7 +232,7 @@ pub async fn get_conversations(
                 reply::json(&ErrorBody {
                     code: "DATABASE_ERROR".to_string(),
                     message: "Failed to retrieve participant information".to_string(),
-                details: None,
+                    details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -289,7 +289,7 @@ pub async fn get_conversation_messages(
                 reply::json(&ErrorBody {
                     code: "CONVERSATION_NOT_FOUND".to_string(),
                     message: "The specified conversation does not exist".to_string(),
-                details: None,
+                    details: None,
                 }),
                 warp::http::StatusCode::NOT_FOUND,
             ));
@@ -300,7 +300,7 @@ pub async fn get_conversation_messages(
                 reply::json(&ErrorBody {
                     code: "DATABASE_ERROR".to_string(),
                     message: "Failed to retrieve conversation".to_string(),
-                details: None,
+                    details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -313,7 +313,7 @@ pub async fn get_conversation_messages(
             reply::json(&ErrorBody {
                 code: "FORBIDDEN".to_string(),
                 message: "You are not a participant in this conversation".to_string(),
-            details: None,
+                details: None,
             }),
             warp::http::StatusCode::FORBIDDEN,
         ));
@@ -332,7 +332,7 @@ pub async fn get_conversation_messages(
                 reply::json(&ErrorBody {
                     code: "DATABASE_ERROR".to_string(),
                     message: "Failed to retrieve messages".to_string(),
-                details: None,
+                    details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -351,7 +351,7 @@ pub async fn get_conversation_messages(
                 reply::json(&ErrorBody {
                     code: "DATABASE_ERROR".to_string(),
                     message: "Failed to retrieve sender information".to_string(),
-                details: None,
+                    details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -395,7 +395,7 @@ pub async fn search_messages(
             reply::json(&ErrorBody {
                 code: "INVALID_QUERY".to_string(),
                 message: "Search query must not be empty".to_string(),
-            details: None,
+                details: None,
             }),
             warp::http::StatusCode::BAD_REQUEST,
         ));
@@ -411,7 +411,7 @@ pub async fn search_messages(
                 reply::json(&ErrorBody {
                     code: "CONVERSATION_NOT_FOUND".to_string(),
                     message: "The specified conversation does not exist".to_string(),
-                details: None,
+                    details: None,
                 }),
                 warp::http::StatusCode::NOT_FOUND,
             ));
@@ -422,7 +422,7 @@ pub async fn search_messages(
                 reply::json(&ErrorBody {
                     code: "DATABASE_ERROR".to_string(),
                     message: "Failed to retrieve conversation".to_string(),
-                details: None,
+                    details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
@@ -434,7 +434,7 @@ pub async fn search_messages(
             reply::json(&ErrorBody {
                 code: "FORBIDDEN".to_string(),
                 message: "You are not a participant in this conversation".to_string(),
-            details: None,
+                details: None,
             }),
             warp::http::StatusCode::FORBIDDEN,
         ));
@@ -451,7 +451,7 @@ pub async fn search_messages(
                     reply::json(&ErrorBody {
                         code: "DATABASE_ERROR".to_string(),
                         message: "Failed to search messages".to_string(),
-                    details: None,
+                        details: None,
                     }),
                     warp::http::StatusCode::INTERNAL_SERVER_ERROR,
                 ));

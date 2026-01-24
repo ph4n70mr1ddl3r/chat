@@ -32,7 +32,7 @@ pub async fn refresh_token_handler(
                 reply::json(&ErrorBody {
                     code: "INVALID_TOKEN".to_string(),
                     message: "Token is invalid or expired".to_string(),
-                details: None,
+                    details: None,
                 }),
                 warp::http::StatusCode::UNAUTHORIZED,
             ));
@@ -48,7 +48,7 @@ pub async fn refresh_token_handler(
                 reply::json(&ErrorBody {
                     code: "TOKEN_GENERATION_ERROR".to_string(),
                     message: "Failed to refresh token".to_string(),
-                details: None,
+                    details: None,
                 }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));

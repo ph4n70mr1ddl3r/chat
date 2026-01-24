@@ -119,9 +119,10 @@ pub async fn find_user_by_username(
     pool: &SqlitePool,
     username: &str,
 ) -> Result<Option<User>, String> {
-    sqlx::query_as::<_, User>(
-        &format!("{} FROM users WHERE username = ?", SQL_SELECT_USER_FIELDS),
-    )
+    sqlx::query_as::<_, User>(&format!(
+        "{} FROM users WHERE username = ?",
+        SQL_SELECT_USER_FIELDS
+    ))
     .bind(username)
     .fetch_optional(pool)
     .await
@@ -132,9 +133,10 @@ pub async fn find_user_by_username(
 ///
 /// Returns the user if found, None if not found
 pub async fn find_user_by_id(pool: &SqlitePool, user_id: &str) -> Result<Option<User>, String> {
-    sqlx::query_as::<_, User>(
-        &format!("{} FROM users WHERE id = ?", SQL_SELECT_USER_FIELDS),
-    )
+    sqlx::query_as::<_, User>(&format!(
+        "{} FROM users WHERE id = ?",
+        SQL_SELECT_USER_FIELDS
+    ))
     .bind(user_id)
     .fetch_optional(pool)
     .await
@@ -261,12 +263,10 @@ pub async fn search_users_by_prefix(
     let escaped_query = query.replace('%', "\\%").replace('_', "\\_");
     let search_pattern = format!("{}%", escaped_query);
 
-    sqlx::query_as::<_, User>(
-        &format!(
-            "{} FROM users WHERE username LIKE ? ESCAPE '\\' AND deleted_at IS NULL LIMIT ?",
-            SQL_SELECT_USER_FIELDS
-        ),
-    )
+    sqlx::query_as::<_, User>(&format!(
+        "{} FROM users WHERE username LIKE ? ESCAPE '\\' AND deleted_at IS NULL LIMIT ?",
+        SQL_SELECT_USER_FIELDS
+    ))
     .bind(search_pattern)
     .bind(limit)
     .fetch_all(pool)
@@ -327,12 +327,10 @@ pub async fn get_conversation_by_users(
     user1_id: &str,
     user2_id: &str,
 ) -> Result<Option<Conversation>, String> {
-    sqlx::query_as::<_, Conversation>(
-        &format!(
-            "{} FROM conversations WHERE user1_id = ? AND user2_id = ?",
-            SQL_SELECT_CONVERSATION_FIELDS
-        ),
-    )
+    sqlx::query_as::<_, Conversation>(&format!(
+        "{} FROM conversations WHERE user1_id = ? AND user2_id = ?",
+        SQL_SELECT_CONVERSATION_FIELDS
+    ))
     .bind(user1_id)
     .bind(user2_id)
     .fetch_optional(pool)
@@ -345,9 +343,10 @@ pub async fn get_conversation_by_id(
     pool: &SqlitePool,
     conversation_id: &str,
 ) -> Result<Option<Conversation>, String> {
-    sqlx::query_as::<_, Conversation>(
-        &format!("{} FROM conversations WHERE id = ?", SQL_SELECT_CONVERSATION_FIELDS),
-    )
+    sqlx::query_as::<_, Conversation>(&format!(
+        "{} FROM conversations WHERE id = ?",
+        SQL_SELECT_CONVERSATION_FIELDS
+    ))
     .bind(conversation_id)
     .fetch_optional(pool)
     .await
@@ -408,9 +407,10 @@ pub async fn find_message_by_id(
     pool: &SqlitePool,
     message_id: &str,
 ) -> Result<Option<Message>, String> {
-    sqlx::query_as::<_, Message>(
-        &format!("{} FROM messages WHERE id = ?", SQL_SELECT_MESSAGE_FIELDS),
-    )
+    sqlx::query_as::<_, Message>(&format!(
+        "{} FROM messages WHERE id = ?",
+        SQL_SELECT_MESSAGE_FIELDS
+    ))
     .bind(message_id)
     .fetch_optional(pool)
     .await
@@ -424,12 +424,10 @@ pub async fn get_messages_by_conversation(
     limit: u32,
     offset: u32,
 ) -> Result<Vec<Message>, String> {
-    sqlx::query_as::<_, Message>(
-        &format!(
-            "{} FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
-            SQL_SELECT_MESSAGE_FIELDS
-        ),
-    )
+    sqlx::query_as::<_, Message>(&format!(
+        "{} FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+        SQL_SELECT_MESSAGE_FIELDS
+    ))
     .bind(conversation_id)
     .bind(limit)
     .bind(offset)
@@ -457,12 +455,10 @@ pub async fn get_pending_messages(
 
 /// Get all pending messages (status = 'pending' or 'failed') for queue initialization
 pub async fn get_all_pending_messages(pool: &SqlitePool) -> Result<Vec<Message>, String> {
-    sqlx::query_as::<_, Message>(
-        &format!(
-            "{} FROM messages WHERE status = 'pending' OR status = 'failed' ORDER BY created_at ASC",
-            SQL_SELECT_MESSAGE_FIELDS
-        ),
-    )
+    sqlx::query_as::<_, Message>(&format!(
+        "{} FROM messages WHERE status = 'pending' OR status = 'failed' ORDER BY created_at ASC",
+        SQL_SELECT_MESSAGE_FIELDS
+    ))
     .fetch_all(pool)
     .await
     .map_err(|e| format!("Failed to get all pending messages: {}", e))

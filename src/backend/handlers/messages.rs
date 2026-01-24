@@ -9,10 +9,10 @@ use crate::handlers::websocket::{ClientConnection, ConnectionManager, ErrorRespo
 use crate::models::MAX_MESSAGE_LENGTH;
 use crate::services::{message_queue::MessageQueueService, message_service::MessageService};
 use chat_shared::protocol::{MessageEnvelope, TextMessageData};
-use tracing::warn;
 use serde_json::json;
 use sqlx::SqlitePool;
 use std::sync::Arc;
+use tracing::warn;
 use warp::ws::Message as WsMessage;
 
 /// Message handler for processing incoming messages
@@ -58,15 +58,22 @@ impl MessageHandler {
 
         // Validate message content
         if data.content.trim().is_empty() {
-            return Ok(vec![ErrorResponse::invalid_message("Message content cannot be empty")]);
+            return Ok(vec![ErrorResponse::invalid_message(
+                "Message content cannot be empty",
+            )]);
         }
         if data.content.len() > MAX_MESSAGE_LENGTH {
-            return Ok(vec![ErrorResponse::invalid_message(&format!("Message content exceeds {} character limit", MAX_MESSAGE_LENGTH))]);
+            return Ok(vec![ErrorResponse::invalid_message(&format!(
+                "Message content exceeds {} character limit",
+                MAX_MESSAGE_LENGTH
+            ))]);
         }
 
         // Prevent self-messaging
         if data.recipient_id == sender.user_id {
-            return Ok(vec![ErrorResponse::invalid_message("Cannot send message to yourself")]);
+            return Ok(vec![ErrorResponse::invalid_message(
+                "Cannot send message to yourself",
+            )]);
         }
 
         // Validate recipient exists

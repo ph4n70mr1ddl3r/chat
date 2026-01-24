@@ -128,7 +128,10 @@ pub async fn signup_handler(
             ));
         }
         Err(e) => {
-            warn!("Database error during user lookup for '{}': {}", req.username, e);
+            warn!(
+                "Database error during user lookup for '{}': {}",
+                req.username, e
+            );
             return Ok(reply::with_status(
                 reply::json(&ErrorBody {
                     code: "DATABASE_ERROR".to_string(),
@@ -241,7 +244,10 @@ pub async fn login_handler(
             ));
         }
         Err(e) => {
-            warn!("Database error during login lookup for '{}': {}", req.username, e);
+            warn!(
+                "Database error during login lookup for '{}': {}",
+                req.username, e
+            );
             return Ok(reply::with_status(
                 reply::json(&ErrorBody {
                     code: "DATABASE_ERROR".to_string(),

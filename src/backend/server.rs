@@ -25,8 +25,8 @@ use warp::{Filter, Rejection, Reply};
 use crate::handlers::dispatcher::{DispatchResult, MessageDispatcher};
 use crate::handlers::handshake::HandshakeValidator;
 use crate::handlers::messages::MessageHandler;
-use chat_shared::protocol::TokenClaims;
 use crate::services::{MessageQueueService, PresenceService};
+use chat_shared::protocol::TokenClaims;
 
 use crate::handlers::{self, auth, conversation, server as server_handlers, user, websocket};
 use crate::middleware::{auth as auth_middleware, rate_limit};
@@ -370,7 +370,9 @@ fn build_cors(config: &ServerConfig) -> Cors {
     } else {
         for origin in &config.allowed_origins {
             if origin == "*" {
-                tracing::error!("Wildcard CORS origin (*) is not allowed. Remove it from CORS_ALLOWED_ORIGINS.");
+                tracing::error!(
+                    "Wildcard CORS origin (*) is not allowed. Remove it from CORS_ALLOWED_ORIGINS."
+                );
                 std::process::exit(1);
             }
             cors = cors.allow_origin(origin.as_str());
@@ -738,13 +740,14 @@ pub async fn start_server(
 
     info!("Starting HTTP server on port {}", port);
 
-    let (addr, server) = warp::serve(routes).bind_with_graceful_shutdown(([0, 0, 0, 0], port), async move {
-        let _ = shutdown_rx.changed().await;
-        info!("Server shutting down gracefully...");
-        for handle in cleanup_handles {
-            handle.abort();
-        }
-    });
+    let (addr, server) =
+        warp::serve(routes).bind_with_graceful_shutdown(([0, 0, 0, 0], port), async move {
+            let _ = shutdown_rx.changed().await;
+            info!("Server shutting down gracefully...");
+            for handle in cleanup_handles {
+                handle.abort();
+            }
+        });
 
     tokio::spawn(async move {
         server.await;

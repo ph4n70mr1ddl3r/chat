@@ -43,7 +43,11 @@ impl MessageService {
                 reason = "invalid_length",
                 content_length = content.len()
             );
-            return Err(format!("Message content must be between 1 and {} characters", MAX_MESSAGE_LENGTH).to_string());
+            return Err(format!(
+                "Message content must be between 1 and {} characters",
+                MAX_MESSAGE_LENGTH
+            )
+            .to_string());
         }
 
         // Verify recipient exists and is not deleted
@@ -347,7 +351,9 @@ impl MessageService {
     ///
     /// Returns true if content is valid, false otherwise
     pub fn validate_content(content: &str) -> bool {
-        !content.is_empty() && content.len() <= MAX_MESSAGE_LENGTH && content.chars().all(|c| c.is_allowed())
+        !content.is_empty()
+            && content.len() <= MAX_MESSAGE_LENGTH
+            && content.chars().all(|c| c.is_allowed())
     }
 }
 
