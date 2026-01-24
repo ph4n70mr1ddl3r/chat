@@ -10,6 +10,7 @@ use tokio::signal;
 
 #[derive(Parser, Debug)]
 #[command(name = "chat-server")]
+#[command(version = "0.1.0")]
 #[command(about = "Private chat application server", long_about = None)]
 struct Args {
     /// Server port
