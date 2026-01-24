@@ -22,10 +22,6 @@ use warp::http::header::{AUTHORIZATION, CONTENT_TYPE};
 use warp::http::StatusCode;
 use warp::{Filter, Rejection, Reply};
 
-use base64::Engine;
-
-
-
 use crate::handlers::dispatcher::{DispatchResult, MessageDispatcher};
 use crate::handlers::handshake::HandshakeValidator;
 use crate::handlers::messages::MessageHandler;
