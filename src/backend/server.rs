@@ -69,11 +69,14 @@ impl Default for ServerConfig {
         let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| {
             let is_production = std::env::var("RUST_ENV").as_deref().unwrap_or("development") == "production";
             if is_production {
-                tracing::error!("JWT_SECRET must be set in production environment.");
+                tracing::error!("CRITICAL SECURITY ERROR: JWT_SECRET must be set in production environment.");
                 tracing::error!("Set the JWT_SECRET environment variable before starting the server.");
+                tracing::error!("Exiting to prevent insecure operation.");
                 std::process::exit(1);
             }
-            tracing::warn!("JWT_SECRET not set, generating cryptographically secure secret for development. Set JWT_SECRET environment variable for production!");
+            tracing::warn!("SECURITY WARNING: JWT_SECRET not set, generating cryptographically secure secret for development.");
+            tracing::warn!("For production deployments, ALWAYS set the JWT_SECRET environment variable.");
+            tracing::warn!("Generated secrets are not persisted between restarts and will invalidate all existing tokens.");
             use rand::RngCore;
             let mut secret = [0u8; 64];
             rand::rngs::OsRng.fill_bytes(&mut secret);
@@ -425,7 +428,14 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
     // Lookup username from database
     let username = match crate::db::queries::find_user_by_id(&state.pool, &user_id).await {
         Ok(Some(user)) => user.username,
-        _ => "unknown".to_string(),
+        Ok(None) => {
+            warn!("User not found for ID: {}", user_id);
+            "unknown".to_string()
+        }
+        Err(e) => {
+            warn!("Database error fetching user {}: {}", user_id, e);
+            "unknown".to_string()
+        }
     };
 
     // Register connection with connection manager
@@ -442,8 +452,13 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
         connection_id, user_id
     );
 
-    if let Err(e) = state.presence_service.mark_online(&user_id).await {
-        warn!("Failed to mark presence online: {}", e);
+    // Only mark user as online after successful connection registration
+    if !connection_id.is_empty() {
+        if let Err(e) = state.presence_service.mark_online(&user_id).await {
+            warn!("Failed to mark presence online: {}", e);
+        }
+    } else {
+        warn!("Failed to register connection for user {}", user_id);
     }
 
     // Create message handler

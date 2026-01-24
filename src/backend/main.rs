@@ -35,7 +35,23 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Starting chat server on port {}", args.port);
     tracing::info!("Database: {}", args.db_path.display());
 
-    let pool = db::init_db(&args.db_path).await?;
+    // Get database connection pool settings from environment variables
+    let min_connections: u32 = std::env::var("DB_MIN_CONNECTIONS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(5);
+    
+    let max_connections: u32 = std::env::var("DB_MAX_CONNECTIONS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(20);
+
+    tracing::info!(
+        "Database connection pool settings: min={}, max={}",
+        min_connections, max_connections
+    );
+
+    let pool = db::init_db_with_pool_settings(&args.db_path, min_connections, max_connections).await?;
     tracing::info!("Database initialized");
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);

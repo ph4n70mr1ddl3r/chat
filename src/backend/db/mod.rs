@@ -10,6 +10,15 @@ pub mod queries;
 
 /// Initialize SQLite database and run migrations
 pub async fn init_db(db_path: impl AsRef<Path>) -> Result<SqlitePool> {
+    init_db_with_pool_settings(db_path, 5, 20).await
+}
+
+/// Initialize SQLite database with custom connection pool settings
+pub async fn init_db_with_pool_settings(
+    db_path: impl AsRef<Path>,
+    min_connections: u32,
+    max_connections: u32,
+) -> Result<SqlitePool> {
     let db_path = db_path.as_ref();
 
     // Create parent directory if it doesn't exist
@@ -22,6 +31,10 @@ pub async fn init_db(db_path: impl AsRef<Path>) -> Result<SqlitePool> {
     let db_url = format!("sqlite://{}?mode=rwc", db_path.display());
 
     info!("Initializing database: {}", db_url);
+    info!(
+        "Connection pool settings: min={}, max={}",
+        min_connections, max_connections
+    );
 
     // Create connection options with WAL mode for better concurrency.
     // NOTE: MVP stores SQLite files in plaintext; production deployments should place
@@ -32,10 +45,10 @@ pub async fn init_db(db_path: impl AsRef<Path>) -> Result<SqlitePool> {
         .pragma("foreign_keys", "ON")
         .pragma("synchronous", "NORMAL");
 
-    // Create connection pool
+    // Create connection pool with configurable settings
     let pool = SqlitePoolOptions::new()
-        .min_connections(5)
-        .max_connections(20)
+        .min_connections(min_connections)
+        .max_connections(max_connections)
         .connect_with(connect_options)
         .await?;
 
