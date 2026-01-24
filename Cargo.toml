@@ -30,7 +30,7 @@ jsonwebtoken = "9.3"
 uuid = { version = "1.6", features = ["v4", "serde"] }
 
 # Database
-sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio", "chrono"] }
+sqlx = { version = "0.8.1", features = ["sqlite", "runtime-tokio", "chrono"] }
 
 # Password hashing
 bcrypt = "0.15"

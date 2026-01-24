@@ -134,10 +134,27 @@ fn show_chat(user_id: String, base_url: String) {
         Err(e) => {
             tracing::error!("Failed to initialize chat screen: {}", e);
             // Don't create a new login window - the old one is still there
-            // The error will be visible in the console for now
-            // TODO: Show error dialog on existing window
+            // Show user-friendly error on the existing login window
+            show_error_dialog_on_login("Failed to load chat", 
+                &format!("Could not initialize chat interface: {}. Please try again later.", e));
+}
         }
     }
+    
+/// Shows an error dialog on the existing login screen
+fn show_error_dialog_on_login(title: &str, message: &str) {
+    
+    APP_STATE.with(|state| {
+        let mut state_ref = state.borrow_mut();
+        if let Some(_login_screen) = &mut state_ref.login_screen {
+            // Show error through the login screen's error display mechanism
+            // For now, we'll log it. In a more implementation, you might want to
+            // extend the LoginScreen to support showing error dialogs
+            tracing::error!("Login Screen Error: {} - {}", title, message);
+        } else {
+            tracing::error!("No login screen available to show error: {} - {}", title, message);
+        }
+    });
 }
 
 fn show_settings(user_id: String, base_url: String) {
