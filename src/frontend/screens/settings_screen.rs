@@ -41,7 +41,7 @@ impl SettingsScreen {
             let ui_weak_inner = ui_weak.clone();
             runtime_clone.spawn(async move {
                 match api_change_password(&current, &new).await {
-                    Ok(_) => {
+                    Ok(()) => {
                         slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_weak_inner.upgrade() {
                                 ui.set_is_loading(false);
@@ -53,7 +53,7 @@ impl SettingsScreen {
                         .ok();
                     }
                     Err(e) => {
-                        let err_msg = format!("Failed: {}", e);
+                        let err_msg = format!("Failed: {e}");
                         slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_weak_inner.upgrade() {
                                 ui.set_is_loading(false);
@@ -81,7 +81,7 @@ impl SettingsScreen {
 
             runtime_clone.spawn(async move {
                 match api_delete_account(&password).await {
-                    Ok(_) => {
+                    Ok(()) => {
                         slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_weak_inner.upgrade() {
                                 ui.set_is_loading(false);
@@ -92,7 +92,7 @@ impl SettingsScreen {
                         .ok();
                     }
                     Err(e) => {
-                        let err_msg = format!("Failed to delete account: {}", e);
+                        let err_msg = format!("Failed to delete account: {e}");
                         slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_weak_inner.upgrade() {
                                 ui.set_is_loading(false);
@@ -120,8 +120,8 @@ async fn api_change_password(current: &str, new: &str) -> Result<(), Box<dyn std
 
     let client = reqwest::Client::new();
     let res = client
-        .post(format!("{}/user/change-password", base_url))
-        .header("Authorization", format!("Bearer {}", token))
+        .post(format!("{base_url}/user/change-password"))
+        .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "current_password": current,
             "new_password": new
@@ -142,8 +142,8 @@ async fn api_delete_account(password: &str) -> Result<(), Box<dyn std::error::Er
 
     let client = reqwest::Client::new();
     let res = client
-        .delete(format!("{}/user/me", base_url))
-        .header("Authorization", format!("Bearer {}", token))
+        .delete(format!("{base_url}/user/me"))
+        .header("Authorization", format!("Bearer {token}"))
         .json(&serde_json::json!({
             "password": password
         }))

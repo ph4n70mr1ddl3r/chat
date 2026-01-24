@@ -217,7 +217,7 @@ impl ChatScreen {
                         );
                     }
                     Err(e) => {
-                        let err_msg = format!("Failed to load messages: {}", e);
+                        let err_msg = format!("Failed to load messages: {e}");
                         slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_weak.upgrade() {
                                 ui.set_error_message(err_msg.into());
@@ -292,7 +292,7 @@ impl ChatScreen {
                     participant_id.clone(),
                     message_content.clone(),
                 ) {
-                    let err_msg = format!("Failed to send message: {}", e);
+                    let err_msg = format!("Failed to send message: {e}");
                     slint::invoke_from_event_loop(move || {
                         if let Some(ui) = ui_weak.upgrade() {
                             ui.set_error_message(err_msg.into());
@@ -343,7 +343,7 @@ impl ChatScreen {
 
             if let Some(ws) = ws_client.as_ref() {
                 if let Err(e) = ws.send_typing(participant_id.clone(), is_typing) {
-                    let err_msg = format!("Failed to send typing indicator: {}", e);
+                    let err_msg = format!("Failed to send typing indicator: {e}");
                     slint::invoke_from_event_loop(move || {
                         if let Some(ui) = ui_weak.upgrade() {
                             ui.set_error_message(err_msg.into());
@@ -399,7 +399,7 @@ impl ChatScreen {
                         .ok();
                     }
                     Err(e) => {
-                        let err_msg = format!("Search failed: {}", e);
+                        let err_msg = format!("Search failed: {e}");
                         slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_weak.upgrade() {
                                 ui.set_error_message(err_msg.into());
@@ -469,7 +469,7 @@ impl ChatScreen {
                     .ok();
                 }
                 Err(e) => {
-                    let err_msg = format!("Failed to load conversations: {}", e);
+                    let err_msg = format!("Failed to load conversations: {e}");
                     let ui_weak = ui_weak_init.clone();
                     slint::invoke_from_event_loop(move || {
                         if let Some(ui) = ui_weak.upgrade() {
@@ -499,7 +499,7 @@ impl ChatScreen {
 
     pub fn show(&mut self) {
         if let Err(e) = self.ui.show() {
-            log::error!("Failed to show chat screen: {}", e);
+            log::error!("Failed to show chat screen: {e}");
         }
     }
 
@@ -616,7 +616,7 @@ fn spawn_event_listener(
                                 move || {
                                     if let Some(ui) = ui_for_status.upgrade() {
                                         ui.set_connection_status(
-                                            format!("Disconnected: {}", reason).into(),
+                                            format!("Disconnected: {reason}").into(),
                                         );
                                         ui.set_connection_online(false);
                                         ui.set_error_dialog_title("Disconnected".into());
@@ -693,8 +693,7 @@ fn spawn_event_listener(
 
                     let is_searching = ui_weak
                         .upgrade()
-                        .map(|ui| ui.get_is_search_active())
-                        .unwrap_or(false);
+                        .is_some_and(|ui| ui.get_is_search_active());
                     if !is_searching {
                         render_messages_for_conversation(
                             ui_weak.clone(),
@@ -714,8 +713,7 @@ fn spawn_event_listener(
                             Some(&m.message_id) == message_id.as_ref()
                                 && conversation_id
                                     .as_ref()
-                                    .map(|id| id == &m.conversation_id)
-                                    .unwrap_or(true)
+                                    .map_or(true, |id| id == &m.conversation_id)
                         }) {
                             msg.status = status.clone();
                         }
@@ -725,8 +723,7 @@ fn spawn_event_listener(
                     if let Some(selected_id) = selected {
                         let is_searching = ui_weak
                             .upgrade()
-                            .map(|ui| ui.get_is_search_active())
-                            .unwrap_or(false);
+                            .is_some_and(|ui| ui.get_is_search_active());
                         if !is_searching {
                             render_messages_for_conversation(
                                 ui_weak.clone(),
@@ -759,7 +756,7 @@ fn spawn_event_listener(
                     }
 
                     let indicator_text = if is_typing {
-                        format!("{} is typing...", sender_username)
+                        format!("{sender_username} is typing...")
                     } else {
                         String::new()
                     };
@@ -922,7 +919,7 @@ fn format_timestamp(timestamp: Option<i64>) -> String {
             let local: DateTime<Local> = dt.into();
             local.format("%I:%M %p").to_string()
         }
-        None => "".to_string(),
+        None => String::new(),
     }
 }
 
@@ -938,8 +935,8 @@ async fn api_logout() -> Result<(), Box<dyn std::error::Error>> {
 
     let client = reqwest::Client::new();
     let _ = client
-        .post(format!("{}/auth/logout", base_url))
-        .header("Authorization", format!("Bearer {}", token))
+        .post(format!("{base_url}/auth/logout"))
+        .header("Authorization", format!("Bearer {token}"))
         .send()
         .await?;
 
@@ -965,9 +962,9 @@ async fn load_conversations() -> Result<Vec<ConversationData>, Box<dyn std::erro
 
     let client = reqwest::Client::new();
     let response = client
-        .get(format!("{}/conversations", base_url))
+        .get(format!("{base_url}/conversations"))
         .query(&[("limit", "20"), ("offset", "0")])
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Authorization", format!("Bearer {token}"))
         .send()
         .await?;
 
@@ -984,7 +981,7 @@ async fn load_conversations() -> Result<Vec<ConversationData>, Box<dyn std::erro
             participant_id: c.participant_id,
             participant_username: c.participant_username,
             participant_is_online: c.participant_is_online,
-            last_message: "".to_string(), // TODO: implement backend API endpoint for conversation history
+            last_message: String::new(), // TODO: implement backend API endpoint for conversation history
             last_message_time: format_timestamp(c.last_message_at),
             message_count: c.message_count,
         })
@@ -1017,11 +1014,10 @@ async fn load_messages(
     let client = reqwest::Client::new();
     let response = client
         .get(format!(
-            "{}/conversations/{}/messages",
-            base_url, conversation_id
+            "{base_url}/conversations/{conversation_id}/messages"
         ))
         .query(&[("limit", "100"), ("offset", "0")])
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Authorization", format!("Bearer {token}"))
         .send()
         .await?;
 
@@ -1072,11 +1068,10 @@ async fn search_messages(
     let client = reqwest::Client::new();
     let response = client
         .get(format!(
-            "{}/conversations/{}/search",
-            base_url, conversation_id
+            "{base_url}/conversations/{conversation_id}/search"
         ))
         .query(&[("q", query), ("limit", "50")])
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Authorization", format!("Bearer {token}"))
         .send()
         .await?;
 

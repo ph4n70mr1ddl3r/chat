@@ -17,15 +17,15 @@ fn validate_password_strength(password: &str) -> Result<(), String> {
         return Err("Password must be at most 128 characters".to_string());
     }
 
-    if !password.chars().any(|c| c.is_uppercase()) {
+    if !password.chars().any(char::is_uppercase) {
         return Err("Password must contain at least one uppercase letter".to_string());
     }
 
-    if !password.chars().any(|c| c.is_lowercase()) {
+    if !password.chars().any(char::is_lowercase) {
         return Err("Password must contain at least one lowercase letter".to_string());
     }
 
-    if !password.chars().any(|c| c.is_numeric()) {
+    if !password.chars().any(char::is_numeric) {
         return Err("Password must contain at least one digit".to_string());
     }
 
@@ -57,12 +57,9 @@ impl SignupScreen {
         let success_callback = Arc::new(on_signup_success);
         ui.on_signup(move || {
             tracing::debug!("Signup button clicked");
-            let ui_handle = match ui_weak.upgrade() {
-                Some(ui) => ui,
-                None => {
-                    tracing::warn!("UI weak reference failed to upgrade");
-                    return;
-                }
+            let ui_handle = if let Some(ui) = ui_weak.upgrade() { ui } else {
+                tracing::warn!("UI weak reference failed to upgrade");
+                return;
             };
             let username = ui_handle.get_username().to_string();
             let password = ui_handle.get_password().to_string();

@@ -44,27 +44,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let session_manager = services::session::get_session_manager();
 
     // Check for existing session
-    match session_manager.get_session() {
-        Ok(Some(session)) => {
-            tracing::info!("Found existing session for user: {}", session.username);
+    if let Ok(Some(session)) = session_manager.get_session() {
+        tracing::info!("Found existing session for user: {}", session.username);
 
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs() as i64)
-                .unwrap_or(0);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
 
-            if now >= session.expires_at {
-                tracing::warn!("Session expired, showing login screen");
-                show_login(base_url);
-            } else {
-                tracing::info!("Valid session found, showing chat screen");
-                show_chat(session.user_id, base_url);
-            }
-        }
-        _ => {
-            tracing::info!("No existing session, showing login screen");
+        if now >= session.expires_at {
+            tracing::warn!("Session expired, showing login screen");
             show_login(base_url);
+        } else {
+            tracing::info!("Valid session found, showing chat screen");
+            show_chat(session.user_id, base_url);
         }
+    } else {
+        tracing::info!("No existing session, showing login screen");
+        show_login(base_url);
     }
 
     slint::run_event_loop()?;
@@ -138,8 +135,7 @@ fn show_chat(user_id: String, base_url: String) {
             show_error_dialog_on_login(
                 "Failed to load chat",
                 &format!(
-                    "Could not initialize chat interface: {}. Please try again later.",
-                    e
+                    "Could not initialize chat interface: {e}. Please try again later."
                 ),
             );
         }
@@ -172,9 +168,7 @@ fn show_settings(user_id: String, base_url: String) {
 
     // We need username for settings. Session has it.
     let username = crate::services::session::get_session_manager()
-        .get_current_session()
-        .map(|s| s.username)
-        .unwrap_or_else(|| "User".to_string());
+        .get_current_session().map_or_else(|| "User".to_string(), |s| s.username);
 
     let settings = SettingsScreen::new(
         username,

@@ -79,6 +79,7 @@ impl Conversation {
     }
 
     /// Validate that conversation is between different users and ordered correctly
+    #[must_use]
     pub fn validate(&self) -> Result<(), String> {
         if self.user1_id == self.user2_id {
             return Err("Cannot create conversation with self".to_string());
@@ -128,6 +129,7 @@ impl Message {
     }
 
     /// Validate message content
+    #[must_use]
     pub fn validate(&self) -> Result<(), String> {
         let len = self.content.len();
         if len < 1 {
@@ -146,21 +148,25 @@ impl Message {
     }
 
     /// Check if message is pending delivery
+    #[must_use]
     pub fn is_pending(&self) -> bool {
         self.status == "pending"
     }
 
     /// Check if message is delivered
+    #[must_use]
     pub fn is_delivered(&self) -> bool {
         self.status == "delivered"
     }
 
     /// Check if message is read
+    #[must_use]
     pub fn is_read(&self) -> bool {
         self.status == "read"
     }
 
     /// Check if message failed
+    #[must_use]
     pub fn is_failed(&self) -> bool {
         self.status == "failed"
     }

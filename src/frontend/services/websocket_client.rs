@@ -119,13 +119,13 @@ impl WebSocketClient {
 
                 let request = match Request::builder()
                     .uri(&websocket_url)
-                    .header("Authorization", format!("Bearer {}", token_to_use))
+                    .header("Authorization", format!("Bearer {token_to_use}"))
                     .header("Sec-WebSocket-Protocol", "chat")
                     .body(())
                 {
                     Ok(req) => req,
                     Err(e) => {
-                        let _ = event_tx.send(WebSocketEvent::Error(format!("Failed to build request: {}", e)));
+                        let _ = event_tx.send(WebSocketEvent::Error(format!("Failed to build request: {e}")));
                         let _ = event_tx.send(WebSocketEvent::ConnectionState(ConnectionStatus::Disconnected { reason: "Failed to build request".to_string() }));
                         continue;
                     }
@@ -143,7 +143,7 @@ impl WebSocketClient {
                         {
                             let _ = event_tx.send(WebSocketEvent::ConnectionState(
                                 ConnectionStatus::Disconnected {
-                                    reason: format!("Send failed: {}", e),
+                                    reason: format!("Send failed: {e}"),
                                 },
                             ));
                             continue;
@@ -159,7 +159,7 @@ impl WebSocketClient {
                                     }
                                     pending.push_back(cmd);
                                     if let Err(e) = flush_queue(&mut ws_write, &mut pending, &event_tx).await {
-                                        let _ = event_tx.send(WebSocketEvent::ConnectionState(ConnectionStatus::Disconnected { reason: format!("Send failed: {}", e) }));
+                                        let _ = event_tx.send(WebSocketEvent::ConnectionState(ConnectionStatus::Disconnected { reason: format!("Send failed: {e}") }));
                                         break;
                                     }
                                 }
@@ -179,7 +179,7 @@ impl WebSocketClient {
                                             break;
                                         }
                                         Some(Err(e)) => {
-                                            let _ = event_tx.send(WebSocketEvent::ConnectionState(ConnectionStatus::Disconnected { reason: format!("WebSocket error: {}", e) }));
+                                            let _ = event_tx.send(WebSocketEvent::ConnectionState(ConnectionStatus::Disconnected { reason: format!("WebSocket error: {e}") }));
                                             break;
                                         }
                                         None => {
@@ -195,7 +195,7 @@ impl WebSocketClient {
                     Err(e) => {
                         let _ = event_tx.send(WebSocketEvent::ConnectionState(
                             ConnectionStatus::Disconnected {
-                                reason: format!("Connect failed: {}", e),
+                                reason: format!("Connect failed: {e}"),
                             },
                         ));
                     }
@@ -242,7 +242,7 @@ impl WebSocketClient {
                 recipient_id,
                 content,
             })
-            .map_err(|e| format!("Failed to queue send: {}", e))
+            .map_err(|e| format!("Failed to queue send: {e}"))
     }
 
     /// Send typing indicator.
@@ -252,14 +252,14 @@ impl WebSocketClient {
                 recipient_id,
                 is_typing,
             })
-            .map_err(|e| format!("Failed to queue typing: {}", e))
+            .map_err(|e| format!("Failed to queue typing: {e}"))
     }
 
     /// Disconnect WebSocket
     pub fn disconnect(&self) -> Result<(), String> {
         self.command_tx
             .send(WebSocketCommand::Disconnect)
-            .map_err(|e| format!("Failed to queue disconnect: {}", e))
+            .map_err(|e| format!("Failed to queue disconnect: {e}"))
     }
 }
 
@@ -288,7 +288,7 @@ where
                     Ok(p) => p,
                     Err(e) => {
                         let _ =
-                            event_tx.send(WebSocketEvent::Error(format!("Serialize error: {}", e)));
+                            event_tx.send(WebSocketEvent::Error(format!("Serialize error: {e}")));
                         pending.pop_front();
                         continue;
                     }
@@ -307,7 +307,7 @@ where
                     Ok(p) => p,
                     Err(e) => {
                         let _ =
-                            event_tx.send(WebSocketEvent::Error(format!("Serialize error: {}", e)));
+                            event_tx.send(WebSocketEvent::Error(format!("Serialize error: {e}")));
                         pending.pop_front();
                         continue;
                     }
@@ -373,7 +373,7 @@ fn build_message_envelope(
     };
 
     let data_value =
-        serde_json::to_value(data).map_err(|e| format!("Serialize message data: {}", e))?;
+        serde_json::to_value(data).map_err(|e| format!("Serialize message data: {e}"))?;
 
     Ok(MessageEnvelope {
         id: message_id,
@@ -392,7 +392,7 @@ fn build_typing_envelope(recipient_id: String, is_typing: bool) -> Result<Messag
     };
 
     let data_value =
-        serde_json::to_value(data).map_err(|e| format!("Serialize typing data: {}", e))?;
+        serde_json::to_value(data).map_err(|e| format!("Serialize typing data: {e}"))?;
 
     Ok(MessageEnvelope {
         id: Uuid::new_v4().to_string(),
@@ -415,8 +415,7 @@ fn handle_incoming_text(text: &str, event_tx: &mpsc::UnboundedSender<WebSocketEv
         Ok(v) => v,
         Err(e) => {
             let _ = event_tx.send(WebSocketEvent::Error(format!(
-                "Invalid message payload: {}",
-                e
+                "Invalid message payload: {e}"
             )));
             return;
         }
@@ -435,7 +434,7 @@ fn handle_incoming_text(text: &str, event_tx: &mpsc::UnboundedSender<WebSocketEv
                 }
                 Err(e) => {
                     let _ =
-                        event_tx.send(WebSocketEvent::Error(format!("Failed to parse ack: {}", e)));
+                        event_tx.send(WebSocketEvent::Error(format!("Failed to parse ack: {e}")));
                 }
             }
         }
@@ -458,8 +457,7 @@ fn handle_incoming_text(text: &str, event_tx: &mpsc::UnboundedSender<WebSocketEv
                 }
                 Err(e) => {
                     let _ = event_tx.send(WebSocketEvent::Error(format!(
-                        "Failed to parse message: {}",
-                        e
+                        "Failed to parse message: {e}"
                     )));
                 }
             }
@@ -479,8 +477,7 @@ fn handle_incoming_text(text: &str, event_tx: &mpsc::UnboundedSender<WebSocketEv
                 }
                 Err(e) => {
                     let _ = event_tx.send(WebSocketEvent::Error(format!(
-                        "Failed to parse typing: {}",
-                        e
+                        "Failed to parse typing: {e}"
                     )));
                 }
             }
@@ -498,8 +495,7 @@ fn handle_incoming_text(text: &str, event_tx: &mpsc::UnboundedSender<WebSocketEv
                 }
                 Err(e) => {
                     let _ = event_tx.send(WebSocketEvent::Error(format!(
-                        "Failed to parse presence: {}",
-                        e
+                        "Failed to parse presence: {e}"
                     )));
                 }
             }

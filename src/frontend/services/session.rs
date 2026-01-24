@@ -92,16 +92,16 @@ impl SessionManager {
         // Ensure parent directory exists
         if let Some(parent) = self.session_file.parent() {
             std::fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create session directory: {}", e))?;
+                .map_err(|e| format!("Failed to create session directory: {e}"))?;
         }
 
         // Serialize session
         let json = serde_json::to_string_pretty(&session)
-            .map_err(|e| format!("Failed to serialize session: {}", e))?;
+            .map_err(|e| format!("Failed to serialize session: {e}"))?;
 
         // Write to file
         std::fs::write(&self.session_file, json)
-            .map_err(|e| format!("Failed to write session file: {}", e))?;
+            .map_err(|e| format!("Failed to write session file: {e}"))?;
 
         // Set restrictive file permissions (owner read/write only)
         #[cfg(unix)]
@@ -131,11 +131,11 @@ impl SessionManager {
         // Read file
         let contents = fs::read_to_string(&self.session_file)
             .await
-            .map_err(|e| format!("Failed to read session file: {}", e))?;
+            .map_err(|e| format!("Failed to read session file: {e}"))?;
 
         // Deserialize
         let session: SessionData = serde_json::from_str(&contents)
-            .map_err(|e| format!("Failed to parse session file: {}", e))?;
+            .map_err(|e| format!("Failed to parse session file: {e}"))?;
 
         // Update in-memory session
         *self.current_session.lock().unwrap() = Some(session.clone());
@@ -152,7 +152,7 @@ impl SessionManager {
         if self.session_file.exists() {
             fs::remove_file(&self.session_file)
                 .await
-                .map_err(|e| format!("Failed to delete session file: {}", e))?;
+                .map_err(|e| format!("Failed to delete session file: {e}"))?;
         }
 
         Ok(())
@@ -176,10 +176,10 @@ impl SessionManager {
         }
 
         let contents = std::fs::read_to_string(&self.session_file)
-            .map_err(|e| format!("Failed to read session file: {}", e))?;
+            .map_err(|e| format!("Failed to read session file: {e}"))?;
 
         let session: SessionData = serde_json::from_str(&contents)
-            .map_err(|e| format!("Failed to parse session file: {}", e))?;
+            .map_err(|e| format!("Failed to parse session file: {e}"))?;
 
         // Update in-memory session
         *self.current_session.lock().unwrap() = Some(session.clone());

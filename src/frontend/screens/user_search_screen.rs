@@ -37,16 +37,7 @@ impl UserSearchScreen {
             }
 
             // Set loading state immediately if query is not empty
-            if !query.is_empty() {
-                let ui_weak_loading = ui_weak.clone();
-                slint::invoke_from_event_loop(move || {
-                    if let Some(ui) = ui_weak_loading.upgrade() {
-                        ui.set_is_searching(true);
-                        ui.set_error_message("".into());
-                    }
-                })
-                .ok();
-            } else {
+            if query.is_empty() {
                 // Clear results if empty
                 let ui_weak_clear = ui_weak.clone();
                 slint::invoke_from_event_loop(move || {
@@ -57,6 +48,15 @@ impl UserSearchScreen {
                 })
                 .ok();
                 return;
+            } else {
+                let ui_weak_loading = ui_weak.clone();
+                slint::invoke_from_event_loop(move || {
+                    if let Some(ui) = ui_weak_loading.upgrade() {
+                        ui.set_is_searching(true);
+                        ui.set_error_message("".into());
+                    }
+                })
+                .ok();
             }
 
             // Start new timer
@@ -86,7 +86,7 @@ impl UserSearchScreen {
                         .ok();
                     }
                     Err(e) => {
-                        let err_msg = format!("Search failed: {}", e);
+                        let err_msg = format!("Search failed: {e}");
                         slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_weak_inner.upgrade() {
                                 ui.set_is_searching(false);
@@ -134,9 +134,9 @@ async fn search_users_api(query: &str) -> Result<Vec<ApiUserResult>, Box<dyn std
 
     let client = reqwest::Client::new();
     let res = client
-        .get(format!("{}/users/search", base_url))
+        .get(format!("{base_url}/users/search"))
         .query(&[("q", query), ("limit", "20")])
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Authorization", format!("Bearer {token}"))
         .send()
         .await?;
 
