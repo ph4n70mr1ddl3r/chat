@@ -26,21 +26,20 @@ Rust chat application with backend (Warp + SQLite) and frontend (Slint UI). ~13k
 - **RUSTSEC-2023-0071 (Medium)**: RSA crate vulnerable to timing sidechannel attacks
   - **Status**: Not actually used in build (only SQLite features enabled)
   - **Dependency**: sqlx-mysql → rsa
-  - **Risk**: Low (mysql feature not enabled)
+  - **Risk**: Low (mysql feature not enabled, no known exploits)
   - **Action**: Monitoring for sqlx updates
 
 - **RUSTSEC-2025-0141 (Warning)**: bincode 2.0.1 is unmaintained
   - **Dependency**: slint → typed-index-collections → bincode
   - **Action**: Monitor slint updates
 
-- **RUSTSEC-2024-0436 (Warning)**: paste 1.0.15 is no longer maintained  
+- **RUSTSEC-2024-0436 (Warning)**: paste 1.0.15 is no longer maintained
   - **Dependency**: slint → rav1e → image → paste
   - **Action**: Monitor slint updates
 
-- **RUSTSEC-2025-0134 (Warning)**: rustls-pemfile 1.0.4 is unmaintained
+- **✅ RUSTSEC-2025-0134 (Fixed)**: rustls-pemfile 1.0.4 is unmaintained
   - **Dependency**: reqwest 0.11 → rustls-pemfile
-  - **Attempted Fix**: Updated to reqwest 0.13.1 (API incompatibility)
-  - **Action**: Consider reqwest 0.12.x migration or accept risk
+  - **Fix Applied**: Updated reqwest to 0.12.x, removed rustls-pemfile dependency
 
 #### 3. **Dependency Issues**
 - **reqwest 0.11 → 0.13.1**: Breaking API changes prevent easy upgrade
@@ -66,7 +65,7 @@ Rust chat application with backend (Warp + SQLite) and frontend (Slint UI). ~13k
 ### 📊 Metrics
 - **Code Quality**: 9/10 (excellent structure, minor improvements needed)
 - **Test Coverage**: 9/10 (142/143 tests pass, comprehensive suite)
-- **Security**: 7/10 (vulnerabilities documented, no critical issues)
+- **Security**: 8/10 (one vulnerability remains but risk is low, rustls-pemfile fixed)
 - **Maintainability**: 8/10 (good documentation, clean architecture)
 - **Performance**: 8/10 (async architecture, SQLite with PostgreSQL path)
 
@@ -75,6 +74,8 @@ Rust chat application with backend (Warp + SQLite) and frontend (Slint UI). ~13k
 2. Updated Cargo.toml with correct sqlx features
 3. Documented security vulnerabilities
 4. Created comprehensive review documentation
+5. **NEW**: Updated reqwest from 0.11 to 0.12.x, eliminating rustls-pemfile security vulnerability
+6. **NEW**: Added default-features = false to sqlx dependencies for better security
 
 ### 🔄 Next Steps
 1. Monitor dependency updates for security fixes
