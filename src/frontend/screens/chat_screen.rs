@@ -713,7 +713,7 @@ fn spawn_event_listener(
                             Some(&m.message_id) == message_id.as_ref()
                                 && conversation_id
                                     .as_ref()
-                                    .map_or(true, |id| id == &m.conversation_id)
+                                    .is_none_or(|id| id == &m.conversation_id)
                         }) {
                             msg.status = status.clone();
                         }
