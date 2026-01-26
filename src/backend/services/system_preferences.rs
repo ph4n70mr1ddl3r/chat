@@ -45,19 +45,15 @@ impl SystemPreferences {
     /// Value: "DisableAnimations" (0 = animations enabled, 1 = animations disabled)
     #[cfg(target_os = "windows")]
     fn detect_system_preference() -> MotionPreference {
-        use winreg::RegKey;
         use winreg::enums::HKEY_CURRENT_USER;
+        use winreg::RegKey;
 
-        match RegKey::predef(HKEY_CURRENT_USER)
-            .open_subkey("Control Panel\\Accessibility")
-        {
-            Ok(key) => {
-                match key.get_value::<u32, _>("DisableAnimations") {
-                    Ok(1) => MotionPreference::ReducedMotion,
-                    Ok(0) => MotionPreference::AnimationsEnabled,
-                    _ => MotionPreference::AnimationsEnabled,
-                }
-            }
+        match RegKey::predef(HKEY_CURRENT_USER).open_subkey("Control Panel\\Accessibility") {
+            Ok(key) => match key.get_value::<u32, _>("DisableAnimations") {
+                Ok(1) => MotionPreference::ReducedMotion,
+                Ok(0) => MotionPreference::AnimationsEnabled,
+                _ => MotionPreference::AnimationsEnabled,
+            },
             Err(_) => MotionPreference::AnimationsEnabled,
         }
     }
@@ -72,12 +68,18 @@ impl SystemPreferences {
 
     /// Get current motion preference
     pub fn motion_preference(&self) -> MotionPreference {
-        *self.motion_preference.lock().unwrap()
+        *self
+            .motion_preference
+            .lock()
+            .expect("motion_preference mutex poisoned")
     }
 
     /// Set motion preference (used for user overrides)
     pub fn set_motion_preference(&self, preference: MotionPreference) {
-        *self.motion_preference.lock().unwrap() = preference;
+        *self
+            .motion_preference
+            .lock()
+            .expect("motion_preference mutex poisoned") = preference;
     }
 
     /// Check if animations should be shown
@@ -122,16 +124,22 @@ mod tests {
     #[test]
     fn test_motion_preference_toggle() {
         let prefs = SystemPreferences::new();
-        
+
         // Start with animations
-        assert_eq!(prefs.motion_preference(), MotionPreference::AnimationsEnabled);
-        
+        assert_eq!(
+            prefs.motion_preference(),
+            MotionPreference::AnimationsEnabled
+        );
+
         // Disable
         prefs.set_motion_preference(MotionPreference::ReducedMotion);
         assert_eq!(prefs.motion_preference(), MotionPreference::ReducedMotion);
-        
+
         // Re-enable
         prefs.set_motion_preference(MotionPreference::AnimationsEnabled);
-        assert_eq!(prefs.motion_preference(), MotionPreference::AnimationsEnabled);
+        assert_eq!(
+            prefs.motion_preference(),
+            MotionPreference::AnimationsEnabled
+        );
     }
 }

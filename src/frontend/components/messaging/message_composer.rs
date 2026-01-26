@@ -36,10 +36,13 @@ impl TypingManager {
     /// Call when user starts typing
     pub fn on_typing(&self) {
         let now = Instant::now();
-        let mut last_time = self.last_type_time.lock().unwrap();
+        let mut last_time = self
+            .last_type_time
+            .lock()
+            .expect("last_type_time mutex poisoned");
         *last_time = Some(now);
 
-        let mut currently_typing = self.is_typing.lock().unwrap();
+        let mut currently_typing = self.is_typing.lock().expect("is_typing mutex poisoned");
         if !*currently_typing {
             *currently_typing = true;
             // In a real implementation, emit TypingIndicator command here
@@ -48,7 +51,7 @@ impl TypingManager {
 
     /// Call when inactivity is detected (e.g., on message send or after timer)
     pub fn on_inactivity(&self) {
-        let mut currently_typing = self.is_typing.lock().unwrap();
+        let mut currently_typing = self.is_typing.lock().expect("is_typing mutex poisoned");
         if *currently_typing {
             *currently_typing = false;
             // In a real implementation, emit TypingIndicator command here
@@ -105,12 +108,15 @@ mod tests {
     fn test_should_stop_typing() {
         let manager = TypingManager::new();
         manager.on_typing();
-        
+
         // Should not immediately be ready to stop
         assert!(!manager.should_stop_typing(), "Should not stop immediately");
-        
+
         // Wait for debounce time
         std::thread::sleep(Duration::from_millis(TYPING_DEBOUNCE_MS + 100));
-        assert!(manager.should_stop_typing(), "Should be ready to stop after debounce");
+        assert!(
+            manager.should_stop_typing(),
+            "Should be ready to stop after debounce"
+        );
     }
 }
