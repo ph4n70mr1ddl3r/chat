@@ -35,6 +35,9 @@ sqlx = { version = "0.8.1", features = ["sqlite", "runtime-tokio", "chrono", "de
 # Password hashing
 bcrypt = "0.15"
 
+# Encoding
+base64 = "0.21"
+
 # CLI parsing
 clap = { version = "4.4", features = ["derive"] }
 

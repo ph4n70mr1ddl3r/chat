@@ -85,7 +85,18 @@ pub fn validate_email(email: &str) -> Result<(), String> {
         return Err("Email format is invalid".to_string());
     }
 
-    if !parts[1].contains('.') {
+    let local_part = parts[0];
+    let domain = parts[1];
+
+    if local_part.len() > 64 {
+        return Err("Email local part is too long (max 64 characters)".to_string());
+    }
+
+    if domain.len() > 255 {
+        return Err("Email domain is too long (max 255 characters)".to_string());
+    }
+
+    if !domain.contains('.') {
         return Err("Email domain must contain a dot".to_string());
     }
 

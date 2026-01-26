@@ -259,6 +259,22 @@ impl MessageService {
         result
     }
 
+    /// Helper function to get status weight for idempotent updates
+    ///
+    /// Returns weight of a status for comparison.
+    /// Higher weights represent "more delivered" states.
+    /// Status hierarchy: pending < sent < delivered < read
+    pub fn status_weight(status: &str) -> u32 {
+        match status {
+            "pending" => 0,
+            "sent" => 1,
+            "delivered" => 2,
+            "read" => 3,
+            "failed" => 99,
+            _ => 0,
+        }
+    }
+
     /// Sync delivery status updates (idempotent)
     ///
     /// Batch updates delivery status for multiple messages with idempotent logic.
@@ -271,18 +287,6 @@ impl MessageService {
         updates: Vec<(String, String)>, // (message_id, new_status)
     ) -> Result<Vec<Message>, String> {
         let mut updated_messages = Vec::new();
-
-        // Status hierarchy for idempotent updates
-        let status_weight = |s: &str| -> u32 {
-            match s {
-                "pending" => 0,
-                "sent" => 1,
-                "delivered" => 2,
-                "read" => 3,
-                "failed" => 99, // Failed is separate
-                _ => 0,
-            }
-        };
 
         for (message_id, new_status) in updates {
             // Load current message
@@ -297,8 +301,8 @@ impl MessageService {
             }
 
             // Check if update is valid (idempotent - only upgrade)
-            let current_weight = status_weight(&current.status);
-            let new_weight = status_weight(&new_status);
+            let current_weight = Self::status_weight(&current.status);
+            let new_weight = Self::status_weight(&new_status);
 
             if new_weight >= current_weight {
                 // Apply idempotent update

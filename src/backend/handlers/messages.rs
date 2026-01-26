@@ -291,18 +291,6 @@ impl MessageHandler {
         let mut responses = Vec::new();
         let mut synced_count = 0u32;
 
-        // Define status hierarchy for idempotent updates
-        let status_order = |s: &str| -> u32 {
-            match s {
-                "pending" => 0,
-                "sent" => 1,
-                "delivered" => 2,
-                "read" => 3,
-                "failed" => 99, // Failed doesn't follow order
-                _ => 0,
-            }
-        };
-
         for update in updates {
             // Load current message
             let current = match queries::find_message_by_id(&self.pool, &update.message_id).await {
@@ -316,8 +304,8 @@ impl MessageHandler {
             }
 
             // Check if update is valid (don't downgrade status)
-            let current_weight = status_order(&current.status);
-            let new_weight = status_order(&update.status);
+            let current_weight = crate::services::message_service::MessageService::status_weight(&current.status);
+            let new_weight = crate::services::message_service::MessageService::status_weight(&update.status);
 
             if new_weight >= current_weight {
                 // Update is valid - apply idempotent upgrade

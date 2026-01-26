@@ -645,9 +645,9 @@ fn client_ip(remote_addr: Option<SocketAddr>) -> String {
         .map(|addr| addr.ip().to_string())
         .unwrap_or_else(|| {
             tracing::warn!(
-                "Request missing remote address, rate limiting disabled for this request"
+                "Request missing remote address, using request-scoped identifier for rate limiting"
             );
-            "unknown".to_string()
+            format!("anon-{}", uuid::Uuid::new_v4())
         })
 }
 
