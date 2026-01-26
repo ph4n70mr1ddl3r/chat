@@ -11,7 +11,9 @@ pub const MAX_MESSAGE_LENGTH: usize = 5000;
 pub struct User {
     pub id: String,
     pub username: String,
+    /// bcrypt hash which includes salt internally
     pub password_hash: String,
+    /// Deprecated: bcrypt includes salt in password_hash, kept for backward compatibility
     pub password_salt: String,
     pub created_at: i64,
     pub updated_at: i64,

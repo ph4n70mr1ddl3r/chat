@@ -214,13 +214,13 @@ pub async fn login_handler(
     pool: SqlitePool,
     jwt_secret: String,
 ) -> Result<impl Reply, Rejection> {
-    // Validate username length to prevent empty or excessively long usernames
-    if req.username.is_empty() || req.username.len() > 50 {
-        warn!("Login failed: invalid username length ({})", req.username);
+    // Validate username using the same validator as signup
+    if let Err(e) = validators::validate_username(&req.username) {
+        warn!("Login failed: invalid username ({}) - {}", req.username, e);
         return Ok(reply::with_status(
             reply::json(&ErrorBody {
                 code: "VALIDATION_ERROR".to_string(),
-                message: "Invalid username".to_string(),
+                message: e,
                 details: None,
             }),
             warp::http::StatusCode::BAD_REQUEST,

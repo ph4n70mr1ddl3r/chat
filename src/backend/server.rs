@@ -106,7 +106,7 @@ pub struct ServerState {
 }
 
 impl ServerState {
-    pub fn new(pool: SqlitePool, config: ServerConfig) -> (Self, Vec<tokio::task::JoinHandle<()>>) {
+    pub fn new(pool: SqlitePool, config: ServerConfig) -> Self {
         let connection_manager = Arc::new(websocket::ConnectionManager::new());
         let pool_for_services = pool.clone();
         let global_rate_limiter = Arc::new(rate_limit::RateLimiter::global());
@@ -116,9 +116,7 @@ impl ServerState {
         global_rate_limiter.start_periodic_cleanup();
         auth_rate_limiter.start_periodic_cleanup();
 
-        let cleanup_handles: Vec<tokio::task::JoinHandle<()>> = vec![];
-
-        let state = Self {
+        Self {
             pool,
             config,
             presence_service: PresenceService::new(
@@ -131,9 +129,7 @@ impl ServerState {
             global_rate_limiter,
             auth_rate_limiter,
             start_time: Instant::now(),
-        };
-
-        (state, cleanup_handles)
+        }
     }
 }
 
@@ -746,7 +742,7 @@ pub async fn start_server(
     mut shutdown_rx: tokio::sync::watch::Receiver<bool>,
 ) -> anyhow::Result<()> {
     let config = config.unwrap_or_default();
-    let (state, cleanup_handles) = ServerState::new(pool, config);
+    let state = ServerState::new(pool, config);
 
     state
         .message_queue
@@ -763,9 +759,6 @@ pub async fn start_server(
         warp::serve(routes).bind_with_graceful_shutdown(([0, 0, 0, 0], port), async move {
             let _ = shutdown_rx.changed().await;
             info!("Server shutting down gracefully...");
-            for handle in cleanup_handles {
-                handle.abort();
-            }
         });
 
     tokio::spawn(async move {
@@ -794,7 +787,7 @@ mod tests {
     #[tokio::test]
     async fn test_health_endpoint() {
         let pool = init_test_pool().await;
-        let (state, _) = ServerState::new(pool, ServerConfig::test_config());
+        let state = ServerState::new(pool, ServerConfig::test_config());
         let routes = create_routes(state);
 
         let resp = request().method("GET").path("/health").reply(&routes).await;
@@ -806,7 +799,7 @@ mod tests {
     #[tokio::test]
     async fn test_websocket_upgrade_without_token() {
         let pool = init_test_pool().await;
-        let (state, _) = ServerState::new(pool, ServerConfig::test_config());
+        let state = ServerState::new(pool, ServerConfig::test_config());
         let routes = create_routes(state);
 
         let resp = request()
@@ -831,7 +824,7 @@ mod tests {
     #[tokio::test]
     async fn test_websocket_upgrade_with_invalid_token() {
         let pool = init_test_pool().await;
-        let (state, _) = ServerState::new(pool, ServerConfig::test_config());
+        let state = ServerState::new(pool, ServerConfig::test_config());
         let routes = create_routes(state);
 
         let resp = request()
@@ -851,7 +844,7 @@ mod tests {
     #[tokio::test]
     async fn test_not_found() {
         let pool = init_test_pool().await;
-        let (state, _) = ServerState::new(pool, ServerConfig::test_config());
+        let state = ServerState::new(pool, ServerConfig::test_config());
         let routes = create_routes(state);
 
         let resp = request()
@@ -866,7 +859,7 @@ mod tests {
     #[tokio::test]
     async fn test_status_endpoint() {
         let pool = init_test_pool().await;
-        let (state, _) = ServerState::new(pool, ServerConfig::test_config());
+        let state = ServerState::new(pool, ServerConfig::test_config());
         let routes = create_routes(state);
 
         let resp = request().method("GET").path("/status").reply(&routes).await;
@@ -879,7 +872,7 @@ mod tests {
     #[tokio::test]
     async fn test_global_rate_limit_blocks_requests() {
         let pool = init_test_pool().await;
-        let (mut state, _) = ServerState::new(pool, ServerConfig::test_config());
+        let mut state = ServerState::new(pool, ServerConfig::test_config());
         state.global_rate_limiter = Arc::new(rate_limit::RateLimiter::new(1, 60));
         let routes = create_routes(state);
 
@@ -898,7 +891,7 @@ mod tests {
     #[tokio::test]
     async fn test_auth_rate_limit_blocks_after_failures() {
         let pool = init_test_pool().await;
-        let (mut state, _) = ServerState::new(pool, ServerConfig::test_config());
+        let mut state = ServerState::new(pool, ServerConfig::test_config());
         state.global_rate_limiter = Arc::new(rate_limit::RateLimiter::new(10, 60));
         // Allow 1 attempt (block when attempts >= 1, so block on 2nd)
         state.auth_rate_limiter = Arc::new(rate_limit::RateLimiter::new(1, 60));
@@ -932,7 +925,7 @@ mod tests {
     #[tokio::test]
     async fn test_security_headers_present() {
         let pool = init_test_pool().await;
-        let (state, _) = ServerState::new(pool, ServerConfig::test_config());
+        let state = ServerState::new(pool, ServerConfig::test_config());
         let routes = create_routes(state);
 
         let resp = request().method("GET").path("/health").reply(&routes).await;
@@ -972,7 +965,7 @@ mod tests {
             jwt_secret: uuid::Uuid::new_v4().to_string(), // Test secret
             max_message_size: 10 * 1024,
         };
-        let (state, _) = ServerState::new(pool, config);
+        let state = ServerState::new(pool, config);
         let routes = create_routes(state);
 
         let resp = request()

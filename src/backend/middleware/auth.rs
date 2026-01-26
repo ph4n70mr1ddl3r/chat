@@ -37,13 +37,8 @@ fn extract_user_id(headers: &HeaderMap, auth_service: &AuthService) -> Option<St
     let auth_header = headers.get(AUTHORIZATION)?;
     let auth_str = auth_header.to_str().ok()?;
 
-    // Check if header starts with "Bearer "
-    if !auth_str.starts_with("Bearer ") {
-        return None;
-    }
-
-    // Extract token (skip "Bearer " prefix)
-    let token = &auth_str[7..];
+    // Extract token by stripping "Bearer " prefix safely
+    let token = auth_str.strip_prefix("Bearer ")?;
 
     // Verify token and extract user_id
     auth_service
