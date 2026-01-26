@@ -115,7 +115,7 @@ impl SessionManager {
         }
 
         // Update in-memory session
-        *self.current_session.lock().unwrap() = Some(session);
+        *self.current_session.lock().expect("session mutex poisoned") = Some(session);
 
         Ok(())
     }
@@ -138,7 +138,7 @@ impl SessionManager {
             .map_err(|e| format!("Failed to parse session file: {e}"))?;
 
         // Update in-memory session
-        *self.current_session.lock().unwrap() = Some(session.clone());
+        *self.current_session.lock().expect("session mutex poisoned") = Some(session.clone());
 
         Ok(Some(session))
     }
@@ -146,7 +146,7 @@ impl SessionManager {
     /// Clear session (logout)
     pub async fn clear_session(&self) -> Result<(), String> {
         // Remove from memory
-        *self.current_session.lock().unwrap() = None;
+        *self.current_session.lock().expect("session mutex poisoned") = None;
 
         // Delete file if it exists
         if self.session_file.exists() {
@@ -160,7 +160,7 @@ impl SessionManager {
 
     /// Get current session from memory
     pub fn get_current_session(&self) -> Option<SessionData> {
-        self.current_session.lock().unwrap().clone()
+        self.current_session.lock().expect("session mutex poisoned").clone()
     }
 
     /// Get session (synchronous version that loads from disk if not in memory)
@@ -182,7 +182,7 @@ impl SessionManager {
             .map_err(|e| format!("Failed to parse session file: {e}"))?;
 
         // Update in-memory session
-        *self.current_session.lock().unwrap() = Some(session.clone());
+        *self.current_session.lock().expect("session mutex poisoned") = Some(session.clone());
 
         Ok(Some(session))
     }
