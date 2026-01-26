@@ -3,5 +3,5 @@ fn main() {
         "ui.slint",
         slint_build::CompilerConfiguration::new().with_include_paths(vec![".".into()]), // Include root so "screens/..." works
     )
-    .unwrap();
+    .expect("failed to compile Slint UI");
 }

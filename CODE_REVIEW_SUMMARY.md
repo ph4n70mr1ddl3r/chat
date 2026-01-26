@@ -23,11 +23,17 @@ Rust chat application with backend (Warp + SQLite) and frontend (Slint UI). ~13k
 - **chat_screen.rs:714**: Changed `map_or(true, |id| id == &m.conversation_id)` to `is_none_or(|id| id == &m.conversation_id)`
 - **models/mod.rs:83,133**: Removed redundant `#[must_use]` attributes from `validate()` methods
 
-#### 2. **Code Quality Improvements (Fixed in This Review)**
+#### 2. **Code Quality Improvements (Fixed in Previous Review)**
 - **validators/mod.rs:17**: Replaced `.unwrap()` with `.expect("username is not empty")` for better error messaging
-  - The `unwrap()` was safe (we check if username is not empty first), but `expect()` provides clearer documentation
 
-#### 3. **Security Vulnerabilities (Documented)**
+#### 3. **Mutex Error Handling Improvements (This Review)**
+- **rate_limit.rs**: Replaced 6 instances of `.lock().unwrap()` with `.lock().expect("rate limiter mutex poisoned")`
+  - Lines: 61, 81, 117, 134, 140, 168
+  - Provides clearer error messages while maintaining appropriate panic behavior on mutex poisoning
+- **build.rs**: Replaced `.unwrap()` with `.expect("failed to compile Slint UI")`
+  - Provides more descriptive error message for build failures
+
+#### 4. **Security Vulnerabilities (Documented)**
 - **RUSTSEC-2023-0071 (Medium - False Positive)**: RSA crate vulnerable to timing sidechannel attacks
   - **Status**: Not actually used in compiled build (verified with `cargo tree -p sqlx -i rsa` returns nothing)
   - **Dependency**: sqlx-mysql → rsa (transitive, not compiled)
@@ -46,7 +52,7 @@ Rust chat application with backend (Warp + SQLite) and frontend (Slint UI). ~13k
   - **Dependency**: reqwest 0.11 → rustls-pemfile
   - **Fix Applied**: Updated reqwest to 0.12.x in previous review
 
-#### 4. **Dependency Configuration**
+#### 5. **Dependency Configuration**
 - **sqlx**: Correctly configured with `default-features = false` and only `["sqlite", "runtime-tokio", "chrono", "derive"]` features
 - **reqwest**: Updated to 0.12.x (with json feature)
 - All other dependencies are appropriately versioned and configured
@@ -58,18 +64,22 @@ Rust chat application with backend (Warp + SQLite) and frontend (Slint UI). ~13k
 2. **Continue monitoring** slint updates for bincode and paste dependency warnings
 
 #### Medium Priority  
-3. **Review remaining unwrap() calls**: Most are in test code or appropriately placed; consider adding error context in non-test code where appropriate
-4. **Add Deadlock Prevention**: Review Mutex lock acquisition patterns in frontend for potential improvements
+3. **Review remaining unwrap() calls**: ~180 instances in non-test code, mostly in frontend and session management
+   - Most are acceptable in GUI context where panics indicate unrecoverable state
+   - Frontend mutex locks could use better error context in critical paths
+4. **Implement conversation history API**: Address TODO in chat_screen.rs:714
 5. **Generate API Documentation**: Add `cargo doc` generation to CI
+6. **Add integration tests**: Currently 142 unit tests, no integration tests documented
 
 #### Low Priority
-6. **Add More Test Types**: Consider property-based testing, fuzzing
-7. **Performance Profiling**: Profile WebSocket message handling under load
-8. **Database Migration Tests**: Test PostgreSQL migration path
+7. **Add More Test Types**: Consider property-based testing, fuzzing
+8. **Performance Profiling**: Profile WebSocket message handling under load
+9. **Database Migration Tests**: Test PostgreSQL migration path
+10. **Deadlock Prevention**: Review Mutex lock acquisition patterns in frontend for potential improvements
 
 ### 📊 Metrics
 - **Code Quality**: 9.5/10 (excellent structure, improved error messaging)
-- **Test Coverage**: 9/10 (142/143 tests pass, 1 ignored, comprehensive suite)
+- **Test Coverage**: 9/10 (142/143 tests pass, 1 ignored, comprehensive unit tests)
 - **Security**: 9/10 (no active vulnerabilities, false positive confirmed)
 - **Maintainability**: 9/10 (good documentation, clean architecture)
 - **Performance**: 8/10 (async architecture, SQLite with PostgreSQL path)
@@ -77,13 +87,15 @@ Rust chat application with backend (Warp + SQLite) and frontend (Slint UI). ~13k
 ### ✅ Actions Taken (This Review)
 1. Verified all clippy warnings are resolved (zero warnings)
 2. Confirmed RUSTSEC-2023-0071 is a false positive (rsa not in compiled build)
-3. Improved error messaging in validators/mod.rs (unwrap → expect)
-4. Updated CODE_REVIEW_SUMMARY.md with latest findings
-5. Ran full test suite: 142 passed, 0 failed, 1 ignored
-6. Ran cargo audit to verify security status
+3. Improved error messaging in rate_limit.rs (6 instances of unwrap → expect)
+4. Improved error messaging in build.rs (unwrap → expect)
+5. Updated CODE_REVIEW_SUMMARY.md with latest findings
+6. Ran full test suite: 142 passed, 0 failed, 1 ignored
+7. Ran cargo audit to verify security status
 
 ### 🔄 Next Steps
 1. Continue monitoring dependency updates for security fixes
 2. Consider adding CI security scanning with `cargo audit`
-3. Review non-test unwrap() calls for potential improvement opportunities
-4. Maintain current dependency versions and monitor for updates
+3. Review frontend mutex unwrap() calls for potential improvement in critical paths
+4. Implement conversation history API endpoint (address TODO in chat_screen.rs:714)
+5. Maintain current dependency versions and monitor for updates
