@@ -14,7 +14,7 @@ pub fn validate_username(username: &str) -> Result<(), String> {
         return Err("Username must be between 1 and 50 characters".to_string());
     }
 
-    let first_char = username.chars().next().unwrap();
+    let first_char = username.chars().next().expect("username is not empty");
     if !first_char.is_alphanumeric() && first_char != '_' {
         return Err("Username must start with a letter or underscore".to_string());
     }
