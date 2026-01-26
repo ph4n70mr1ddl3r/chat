@@ -35,8 +35,6 @@ struct QueuedMessage {
 #[derive(Clone)]
 pub struct MessageQueueService {
     pool: SqlitePool,
-    #[allow(dead_code)]
-    message_service: MessageService,
     connection_manager: Arc<ConnectionManager>,
     /// Queue of pending messages: recipient_id -> Vec<QueuedMessage>
     queue: Arc<RwLock<HashMap<String, Vec<QueuedMessage>>>>,
@@ -47,10 +45,8 @@ pub struct MessageQueueService {
 impl MessageQueueService {
     /// Create a new message queue service
     pub fn new(pool: SqlitePool, connection_manager: Arc<ConnectionManager>) -> Self {
-        let message_service = MessageService::new(pool.clone());
         Self {
             pool,
-            message_service,
             connection_manager,
             queue: Arc::new(RwLock::new(HashMap::new())),
             is_running: Arc::new(RwLock::new(false)),
@@ -114,12 +110,14 @@ impl MessageQueueService {
                             queued_messages,
                         )
                         .await;
-                    } else {
-                        // Recipient still offline - requeue all with backoff
-                        for msg in queued_messages {
-                            Self::requeue_message(queue.clone(), msg).await;
-                        }
+            } else {
+                // Recipient still offline - requeue all with backoff
+                for msg in queued_messages {
+                    if !Self::requeue_message(queue.clone(), msg).await {
+                        tracing::warn!("Dropped message for recipient {} due to queue overflow", recipient_id);
                     }
+                }
+            }
                 }
             }
         });
@@ -132,7 +130,9 @@ impl MessageQueueService {
     }
 
     /// Queue a message for delivery
-    pub async fn queue_message(&self, message_id: String, recipient_id: String) {
+    ///
+    /// Returns true if message was queued, false if queue was full (message dropped)
+    pub async fn queue_message(&self, message_id: String, recipient_id: String) -> bool {
         let queued_msg = QueuedMessage {
             message_id,
             recipient_id: recipient_id.clone(),
@@ -141,12 +141,20 @@ impl MessageQueueService {
         };
 
         let mut queue = self.queue.write().await;
-        let user_queue = queue.entry(recipient_id).or_insert_with(Vec::new);
+        let user_queue = queue.entry(recipient_id.clone()).or_insert_with(Vec::new);
 
         if user_queue.len() >= MAX_QUEUED_MESSAGES_PER_USER {
+            tracing::warn!(
+                "Message queue full for user {}, dropping oldest message",
+                recipient_id
+            );
             user_queue.remove(0);
+            user_queue.push(queued_msg);
+            false
+        } else {
+            user_queue.push(queued_msg);
+            true
         }
-        user_queue.push(queued_msg);
     }
 
     /// Deliver a message to online recipient
@@ -257,10 +265,12 @@ impl MessageQueueService {
     }
 
     /// Requeue a message with exponential backoff
+    ///
+    /// Returns true if message was requeued, false if queue was full
     async fn requeue_message(
         queue: Arc<RwLock<HashMap<String, Vec<QueuedMessage>>>>,
         mut queued_msg: QueuedMessage,
-    ) {
+    ) -> bool {
         // Calculate next retry time with exponential backoff
         let retry_index = queued_msg.retry_count.min(RETRY_SCHEDULE.len() - 1);
         let delay_seconds = RETRY_SCHEDULE[retry_index];
@@ -269,10 +279,16 @@ impl MessageQueueService {
         queued_msg.next_retry_at = chrono::Utc::now().timestamp() as u64 + delay_seconds;
 
         let mut queue_lock = queue.write().await;
-        queue_lock
+        let user_queue = queue_lock
             .entry(queued_msg.recipient_id.clone())
-            .or_insert_with(Vec::new)
-            .push(queued_msg);
+            .or_insert_with(Vec::new);
+
+        if user_queue.len() >= MAX_QUEUED_MESSAGES_PER_USER {
+            false
+        } else {
+            user_queue.push(queued_msg);
+            true
+        }
     }
 
     /// Load pending messages from database on startup

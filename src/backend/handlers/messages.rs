@@ -449,10 +449,6 @@ mod tests {
 
         // Should get acknowledgement (recipient offline)
         assert_eq!(responses.len(), 1);
-
-        // Verify message was stored
-        let _messages = queries::get_messages_by_conversation(&pool, "", 10, 0).await;
-        // Note: This test would need the actual conversation ID to verify
     }
 
     #[tokio::test]

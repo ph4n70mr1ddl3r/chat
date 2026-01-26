@@ -152,14 +152,51 @@ impl RateLimiter {
     }
 
     /// Check if limited and record usage if allowed
+    ///
+    /// This operation is atomic within a single lock acquisition to prevent
+    /// race conditions where multiple concurrent requests could bypass the limit
     pub async fn check_and_record(&self, ip: &str) -> Result<(), RateLimitExceeded> {
-        if self.is_rate_limited(ip).await {
-            return Err(RateLimitExceeded {
-                retry_after_secs: self.retry_after_seconds(ip).await,
-            });
+        let mut entries = self.entries.lock().expect("rate limiter mutex poisoned");
+
+        // Check current state atomically
+        let now = Instant::now();
+        if let Some(entry) = entries.get_mut(ip) {
+            let elapsed = entry.window_start.elapsed();
+
+            // If window has expired, reset and allow
+            if elapsed > self.window_duration {
+                entry.attempts = 1;
+                entry.window_start = now;
+                return Ok(());
+            }
+
+            // Check if limit exceeded
+            if entry.attempts >= self.max_attempts {
+                return Err(RateLimitExceeded {
+                    retry_after_secs: (self.window_duration - elapsed).as_secs().max(1),
+                });
+            }
+
+            // Increment attempts
+            entry.attempts += 1;
+            return Ok(());
         }
 
-        self.record_attempt(ip).await;
+        // First attempt - check capacity
+        if entries.len() >= MAX_RATE_LIMIT_ENTRIES {
+            entries.retain(|_, entry| entry.window_start.elapsed() <= self.window_duration);
+        }
+
+        if entries.len() < MAX_RATE_LIMIT_ENTRIES {
+            entries.insert(
+                ip.to_string(),
+                RateLimitEntry {
+                    attempts: 1,
+                    window_start: now,
+                },
+            );
+        }
+
         Ok(())
     }
 

@@ -646,7 +646,10 @@ async fn handle_change_password(
 fn client_ip(remote_addr: Option<SocketAddr>) -> String {
     remote_addr
         .map(|addr| addr.ip().to_string())
-        .unwrap_or_else(|| "unknown".to_string())
+        .unwrap_or_else(|| {
+            tracing::warn!("Request missing remote address, rate limiting disabled for this request");
+            "unknown".to_string()
+        })
 }
 
 fn enforce_frame_size(
