@@ -32,7 +32,11 @@ impl UserSearchScreen {
             let query = query.to_string();
 
             // Cancel previous timer
-            if let Some(handle) = debounce.lock().expect("debounce_timer mutex poisoned").take() {
+            if let Some(handle) = debounce
+                .lock()
+                .expect("debounce_timer mutex poisoned")
+                .take()
+            {
                 handle.abort();
             }
 

@@ -1067,9 +1067,7 @@ async fn search_messages(
 
     let client = reqwest::Client::new();
     let response = client
-        .get(format!(
-            "{base_url}/conversations/{conversation_id}/search"
-        ))
+        .get(format!("{base_url}/conversations/{conversation_id}/search"))
         .query(&[("q", query), ("limit", "50")])
         .header("Authorization", format!("Bearer {token}"))
         .send()

@@ -57,7 +57,9 @@ impl SignupScreen {
         let success_callback = Arc::new(on_signup_success);
         ui.on_signup(move || {
             tracing::debug!("Signup button clicked");
-            let ui_handle = if let Some(ui) = ui_weak.upgrade() { ui } else {
+            let ui_handle = if let Some(ui) = ui_weak.upgrade() {
+                ui
+            } else {
                 tracing::warn!("UI weak reference failed to upgrade");
                 return;
             };

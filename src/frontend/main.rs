@@ -134,9 +134,7 @@ fn show_chat(user_id: String, base_url: String) {
             // Show user-friendly error on the existing login window
             show_error_dialog_on_login(
                 "Failed to load chat",
-                &format!(
-                    "Could not initialize chat interface: {e}. Please try again later."
-                ),
+                &format!("Could not initialize chat interface: {e}. Please try again later."),
             );
         }
     }
@@ -168,7 +166,8 @@ fn show_settings(user_id: String, base_url: String) {
 
     // We need username for settings. Session has it.
     let username = crate::services::session::get_session_manager()
-        .get_current_session().map_or_else(|| "User".to_string(), |s| s.username);
+        .get_current_session()
+        .map_or_else(|| "User".to_string(), |s| s.username);
 
     let settings = SettingsScreen::new(
         username,
