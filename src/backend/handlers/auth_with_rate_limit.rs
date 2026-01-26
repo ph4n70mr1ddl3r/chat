@@ -20,17 +20,16 @@ pub async fn login_with_rate_limit(
     rate_limiter: Arc<RateLimiter>,
     ip_address: String,
 ) -> Result<impl Reply, Rejection> {
-    // Check rate limit
-    if rate_limiter.is_rate_limited(&ip_address).await {
-        let remaining = rate_limiter.get_remaining_attempts(&ip_address).await;
+    // Check rate limit and attempt
+    if let Err(err) = rate_limiter.check_and_record(&ip_address).await {
         warn!("Rate limit exceeded for IP: {}", ip_address);
 
         return Ok(reply::with_status(
             reply::json(&ErrorBody {
                 code: "RATE_LIMITED".to_string(),
                 message: format!(
-                    "Too many failed login attempts. Try again later. Remaining attempts: {}",
-                    remaining
+                    "Too many failed login attempts. Try again in {} seconds",
+                    err.retry_after_secs
                 ),
                 details: None,
             }),
@@ -44,8 +43,6 @@ pub async fn login_with_rate_limit(
         Ok(None) => {
             warn!("Login failed: user not found ({})", req.username);
 
-            // Record failed attempt
-            rate_limiter.record_attempt(&ip_address).await;
             let _ = queries::insert_auth_log(
                 &pool,
                 &ip_address,
@@ -82,8 +79,6 @@ pub async fn login_with_rate_limit(
     if user.is_deleted() {
         warn!("Login failed: deleted account ({})", req.username);
 
-        // Record failed attempt
-        rate_limiter.record_attempt(&ip_address).await;
         let _ = queries::insert_auth_log(
             &pool,
             &ip_address,
@@ -112,8 +107,6 @@ pub async fn login_with_rate_limit(
         Ok(false) => {
             warn!("Login failed: invalid password ({})", req.username);
 
-            // Record failed attempt
-            rate_limiter.record_attempt(&ip_address).await;
             let _ = queries::insert_auth_log(
                 &pool,
                 &ip_address,

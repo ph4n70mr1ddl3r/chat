@@ -103,8 +103,38 @@ impl MessageService {
         recipient_id: String,
         content: String,
     ) -> Result<(Message, bool), String> {
-        // Check if message already exists (idempotency)
-        if let Some(existing) = queries::find_message_by_id(&self.pool, &message_id).await? {
+        let now = chrono::Utc::now().timestamp_millis();
+
+        let message = Message {
+            id: message_id.clone(),
+            conversation_id: conversation_id.clone(),
+            sender_id: sender_id.clone(),
+            recipient_id: recipient_id.clone(),
+            content: content.clone(),
+            created_at: now,
+            delivered_at: None,
+            read_at: None,
+            status: "pending".to_string(),
+            is_anonymized: false,
+        };
+
+        let inserted = queries::insert_message_or_ignore(&self.pool, &message).await?;
+
+        if inserted {
+            info!(
+                target: "message",
+                event = "message.send",
+                conversation_id = %conversation_id,
+                sender_id = %sender_id,
+                recipient_id = %recipient_id,
+                message_id = %message_id,
+                status = "pending",
+                "Message persisted with client-supplied id"
+            );
+            Ok((message, true))
+        } else {
+            let existing = queries::find_message_by_id(&self.pool, &message_id).await?
+                .ok_or("Message should exist after failed insert".to_string())?;
             info!(
                 target: "message",
                 event = "message.idempotent",
@@ -115,28 +145,8 @@ impl MessageService {
                 status = %existing.status,
                 "Duplicate message detected; returning existing record"
             );
-            return Ok((existing, false)); // Not created, already exists
+            Ok((existing, false))
         }
-
-        // Validate and create new message
-        let mut message = self
-            .send_message(conversation_id, sender_id, recipient_id, content)
-            .await?;
-
-        // Update ID to client-provided one
-        message.id = message_id;
-        info!(
-            target: "message",
-            event = "message.send",
-            conversation_id = %message.conversation_id,
-            sender_id = %message.sender_id,
-            recipient_id = %message.recipient_id,
-            message_id = %message.id,
-            status = %message.status,
-            "Message persisted with client-supplied id"
-        );
-
-        Ok((message, true)) // Created new message
     }
 
     /// Get messages for a conversation

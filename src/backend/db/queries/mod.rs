@@ -379,6 +379,29 @@ pub async fn get_user_conversations(
 // Message Queries
 // ============================================================================
 
+/// Insert a new message (returns true if inserted, false if already existed)
+pub async fn insert_message_or_ignore(pool: &SqlitePool, message: &Message) -> Result<bool, String> {
+    let result = sqlx::query(
+        "INSERT OR IGNORE INTO messages (id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, read_at, status, is_anonymized)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    )
+    .bind(&message.id)
+    .bind(&message.conversation_id)
+    .bind(&message.sender_id)
+    .bind(&message.recipient_id)
+    .bind(&message.content)
+    .bind(message.created_at)
+    .bind(message.delivered_at)
+    .bind(message.read_at)
+    .bind(&message.status)
+    .bind(message.is_anonymized)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Failed to insert message: {}", e))?;
+
+    Ok(result.rows_affected() > 0)
+}
+
 /// Insert a new message
 pub async fn insert_message(pool: &SqlitePool, message: &Message) -> Result<Message, String> {
     sqlx::query(
@@ -517,13 +540,13 @@ pub async fn search_messages_in_conversation(
 
     sqlx::query_as::<_, Message>(
         &format!(
-            "{} FROM messages WHERE conversation_id = ? AND content LIKE ? ORDER BY created_at DESC LIMIT ?",
+            "{} FROM messages WHERE conversation_id = ? AND content LIKE ? ESCAPE '\\' ORDER BY created_at DESC LIMIT ?",
             SQL_SELECT_MESSAGE_FIELDS
         ),
     )
     .bind(conversation_id)
     .bind(search_pattern)
-    .bind(limit)
+    .bind(limit as i64)
     .fetch_all(pool)
     .await
     .map_err(|e| format!("Failed to search messages: {}", e))

@@ -8,7 +8,7 @@ use chat_shared::protocol::MessageEnvelope;
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::mpsc::Sender;
 use tokio::sync::RwLock;
 use warp::ws::Message as WsMessage;
 
@@ -47,7 +47,7 @@ pub struct ConnectionManager {
 #[derive(Clone)]
 pub struct ManagedConnection {
     pub client: ClientConnection,
-    pub sender: UnboundedSender<WsMessage>,
+    pub sender: Sender<WsMessage>,
 }
 
 impl Default for ConnectionManager {
@@ -67,7 +67,7 @@ impl ConnectionManager {
     pub async fn register(
         &self,
         client: ClientConnection,
-        sender: UnboundedSender<WsMessage>,
+        sender: Sender<WsMessage>,
     ) -> ConnectionId {
         let mut conns = self.connections.write().await;
         let connection_id = client.connection_id.clone();
@@ -122,13 +122,13 @@ impl ConnectionManager {
     }
 
     /// Send a WebSocket message to all active connections for a user.
-    /// Returns number of connections the message was sent to.
+    /// Returns number of connections message was sent to.
     pub async fn send_to_user(&self, user_id: &str, message: WsMessage) -> usize {
         let conns = self.connections.read().await;
         if let Some(entries) = conns.get(user_id) {
             let mut delivered = 0;
             for conn in entries {
-                if conn.sender.send(message.clone()).is_ok() {
+                if conn.sender.send(message.clone()).await.is_ok() {
                     delivered += 1;
                 }
             }
@@ -298,7 +298,7 @@ mod tests {
         let client = ClientConnection::new("user123".to_string(), "alice".to_string());
         let connection_id = client.connection_id.clone();
 
-        let (tx, _rx) = mpsc::unbounded_channel();
+        let (tx, _rx) = mpsc::channel(100);
         let registered_id = manager.register(client, tx).await;
         assert_eq!(registered_id, connection_id);
 
@@ -314,7 +314,7 @@ mod tests {
         let client = ClientConnection::new("user123".to_string(), "alice".to_string());
         let connection_id = client.connection_id.clone();
 
-        let (tx, _rx) = mpsc::unbounded_channel();
+        let (tx, _rx) = mpsc::channel(100);
         manager.register(client, tx).await;
         assert!(manager.is_user_online("user123").await);
 
@@ -329,8 +329,8 @@ mod tests {
         let client2 = ClientConnection::new("user123".to_string(), "alice".to_string());
         let conn2_id = client2.connection_id.clone();
 
-        let (tx1, _rx1) = mpsc::unbounded_channel();
-        let (tx2, _rx2) = mpsc::unbounded_channel();
+        let (tx1, _rx1) = mpsc::channel(100);
+        let (tx2, _rx2) = mpsc::channel(100);
 
         manager.register(client1, tx1).await;
         manager.register(client2, tx2).await;

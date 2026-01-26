@@ -95,7 +95,17 @@ impl MessageHandler {
                 .map_err(|e| format!("Database error: {}", e))?
                 .ok_or_else(|| "Conversation not found".to_string())?;
 
-            if conversation.user1_id != sender.user_id && conversation.user2_id != sender.user_id {
+            // Verify sender is a participant and recipient is the other participant
+            let (sender_is_user1, recipient_is_user2) = (
+                conversation.user1_id == sender.user_id,
+                conversation.user2_id == data.recipient_id,
+            );
+            let (sender_is_user2, recipient_is_user1) = (
+                conversation.user2_id == sender.user_id,
+                conversation.user1_id == data.recipient_id,
+            );
+
+            if !(sender_is_user1 && recipient_is_user2 || sender_is_user2 && recipient_is_user1) {
                 return Ok(vec![ErrorResponse::authorization_failure()]);
             }
             conversation_id
@@ -471,7 +481,7 @@ mod tests {
 
         // Register recipient as online
         let recipient_conn = ClientConnection::new(user2.id.clone(), user2.username.clone());
-        let (tx, _rx) = mpsc::unbounded_channel();
+        let (tx, _rx) = mpsc::channel(100);
         conn_mgr.register(recipient_conn, tx).await;
 
         // Create sender connection

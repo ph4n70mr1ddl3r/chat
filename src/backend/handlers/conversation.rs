@@ -458,23 +458,36 @@ pub async fn search_messages(
             }
         };
 
+    let sender_ids: Vec<String> = messages.iter().map(|m| m.sender_id.clone()).collect();
+    let sender_map = match queries::find_users_by_ids(&pool, &sender_ids).await {
+        Ok(users) => users,
+        Err(e) => {
+            warn!("Failed to fetch senders: {}", e);
+            return Ok(reply::with_status(
+                reply::json(&ErrorBody {
+                    code: "DATABASE_ERROR".to_string(),
+                    message: "Failed to fetch senders".to_string(),
+                    details: None,
+                }),
+                warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+            ));
+        }
+    };
+
     let mut responses = Vec::new();
     for msg in messages {
-        let sender = match queries::find_user_by_id(&pool, &msg.sender_id).await {
-            Ok(Some(user)) => user,
-            _ => continue,
-        };
-
-        responses.push(MessageResponse {
-            id: msg.id,
-            sender_id: msg.sender_id,
-            sender_username: sender.username,
-            recipient_id: msg.recipient_id,
-            content: msg.content,
-            created_at: msg.created_at,
-            delivered_at: msg.delivered_at,
-            status: msg.status,
-        });
+        if let Some(sender) = sender_map.get(&msg.sender_id) {
+            responses.push(MessageResponse {
+                id: msg.id,
+                sender_id: msg.sender_id,
+                sender_username: sender.username.clone(),
+                recipient_id: msg.recipient_id,
+                content: msg.content,
+                created_at: msg.created_at,
+                delivered_at: msg.delivered_at,
+                status: msg.status,
+            });
+        }
     }
 
     Ok(reply::with_status(

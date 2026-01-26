@@ -442,7 +442,8 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
     let connection = websocket::ClientConnection::new(user_id.clone(), username);
 
     // Channel used by other parts of the system to push frames to this socket
-    let (tx, mut rx) = mpsc::unbounded_channel::<warp::ws::Message>();
+    const MAX_QUEUED_MESSAGES: usize = 100;
+    let (tx, mut rx) = mpsc::channel::<warp::ws::Message>(MAX_QUEUED_MESSAGES);
     let connection_id = state
         .connection_manager
         .register(connection.clone(), tx.clone())
