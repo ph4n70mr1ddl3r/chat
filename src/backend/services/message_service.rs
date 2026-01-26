@@ -133,7 +133,8 @@ impl MessageService {
             );
             Ok((message, true))
         } else {
-            let existing = queries::find_message_by_id(&self.pool, &message_id).await?
+            let existing = queries::find_message_by_id(&self.pool, &message_id)
+                .await?
                 .ok_or("Message should exist after failed insert".to_string())?;
             info!(
                 target: "message",

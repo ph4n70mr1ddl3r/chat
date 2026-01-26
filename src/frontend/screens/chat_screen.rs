@@ -181,8 +181,12 @@ impl ChatScreen {
                 .find(|c| c.conversation_id == conv_id)
                 .cloned()
             {
-                *selected_conv.lock().expect("selected_conv mutex poisoned") = Some(conv_id.clone());
-                *selected_participant.lock().expect("selected_participant mutex poisoned") = Some(conv.participant_id.clone());
+                *selected_conv.lock().expect("selected_conv mutex poisoned") =
+                    Some(conv_id.clone());
+                *selected_participant
+                    .lock()
+                    .expect("selected_participant mutex poisoned") =
+                    Some(conv.participant_id.clone());
 
                 slint::invoke_from_event_loop({
                     let conv_id = conv_id.clone();
@@ -319,7 +323,7 @@ impl ChatScreen {
         let ws_for_typing = websocket_client.clone();
         let typing_state_for_cb = typing_state.clone();
         let selected_participant_for_typing = selected_participant_id.clone();
-            ui.on_typing(move |is_typing| {
+        ui.on_typing(move |is_typing| {
             let ui_weak = ui_weak_typing.clone();
             let ws_client = ws_for_typing.clone();
             let typing_state = typing_state_for_cb.clone();
@@ -455,7 +459,9 @@ impl ChatScreen {
                         .collect();
 
                     {
-                        let mut cache = conversations_init.lock().expect("conversations mutex poisoned");
+                        let mut cache = conversations_init
+                            .lock()
+                            .expect("conversations mutex poisoned");
                         *cache = conversations;
                     }
 
@@ -575,7 +581,9 @@ fn spawn_event_listener(
                             runtime_refresh.spawn(async move {
                                 if let Ok(fresh_conversations) = load_conversations().await {
                                     {
-                                        let mut cache = conversations_refresh.lock().expect("conversations mutex poisoned");
+                                        let mut cache = conversations_refresh
+                                            .lock()
+                                            .expect("conversations mutex poisoned");
                                         *cache = fresh_conversations.clone();
                                     }
                                     render_conversations(
@@ -584,12 +592,19 @@ fn spawn_event_listener(
                                     );
                                 }
 
-                                let active_conv = { selected_conv_refresh.lock().expect("selected_conv mutex poisoned").clone() };
+                                let active_conv = {
+                                    selected_conv_refresh
+                                        .lock()
+                                        .expect("selected_conv mutex poisoned")
+                                        .clone()
+                                };
 
                                 if let Some(active_conv) = active_conv {
                                     if let Ok(fresh_messages) = load_messages(&active_conv).await {
                                         {
-                                            let mut cache = messages_refresh.lock().expect("messages mutex poisoned");
+                                            let mut cache = messages_refresh
+                                                .lock()
+                                                .expect("messages mutex poisoned");
                                             *cache = fresh_messages.clone();
                                         }
                                         render_messages_for_conversation(
@@ -652,7 +667,10 @@ fn spawn_event_listener(
                     }
 
                     // Update selected conversation status
-                    let selected_participant = selected_participant_id.lock().expect("selected_participant_id mutex poisoned").clone();
+                    let selected_participant = selected_participant_id
+                        .lock()
+                        .expect("selected_participant_id mutex poisoned")
+                        .clone();
                     if let Some(active_user_id) = selected_participant {
                         if active_user_id == user_id {
                             let ui_weak_update = ui_weak.clone();
@@ -673,7 +691,11 @@ fn spawn_event_listener(
                     status,
                     timestamp,
                 } => {
-                    if selected_conversation_id.lock().expect("selected_conversation_id mutex poisoned").as_deref() != Some(&conversation_id)
+                    if selected_conversation_id
+                        .lock()
+                        .expect("selected_conversation_id mutex poisoned")
+                        .as_deref()
+                        != Some(&conversation_id)
                     {
                         continue;
                     }
@@ -719,7 +741,10 @@ fn spawn_event_listener(
                         }
                     }
 
-                    let selected = selected_conversation_id.lock().expect("selected_conversation_id mutex poisoned").clone();
+                    let selected = selected_conversation_id
+                        .lock()
+                        .expect("selected_conversation_id mutex poisoned")
+                        .clone();
                     if let Some(selected_id) = selected {
                         let is_searching = ui_weak
                             .upgrade()
@@ -744,7 +769,9 @@ fn spawn_event_listener(
                     }
 
                     let participant_match = {
-                        let selected = selected_participant_id.lock().expect("selected_participant_id mutex poisoned");
+                        let selected = selected_participant_id
+                            .lock()
+                            .expect("selected_participant_id mutex poisoned");
                         match (sender_id.as_ref(), selected.as_ref()) {
                             (Some(sender), Some(active)) => sender == active,
                             _ => true,
@@ -763,7 +790,9 @@ fn spawn_event_listener(
 
                     let token = Uuid::new_v4().to_string();
                     {
-                        let mut guard = typing_indicator_token.lock().expect("typing_indicator_token mutex poisoned");
+                        let mut guard = typing_indicator_token
+                            .lock()
+                            .expect("typing_indicator_token mutex poisoned");
                         *guard = token.clone();
                     }
 
@@ -785,7 +814,9 @@ fn spawn_event_listener(
                         let handle = runtime.spawn(async move {
                             tokio::time::sleep(Duration::from_millis(2000)).await;
                             let should_clear = {
-                                let guard = typing_indicator_token.lock().expect("typing_indicator_token mutex poisoned");
+                                let guard = typing_indicator_token
+                                    .lock()
+                                    .expect("typing_indicator_token mutex poisoned");
                                 *guard == token
                             };
                             if should_clear {
@@ -856,7 +887,10 @@ fn render_conversations(
     ui_weak: slint::Weak<ChatScreenComponent>,
     conversations: Arc<Mutex<Vec<ConversationData>>>,
 ) {
-    let snapshot = conversations.lock().expect("conversations mutex poisoned").clone();
+    let snapshot = conversations
+        .lock()
+        .expect("conversations mutex poisoned")
+        .clone();
     let slint_conversations: Vec<ConversationItem> = snapshot
         .into_iter()
         .map(|c| ConversationItem {

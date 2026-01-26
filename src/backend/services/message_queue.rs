@@ -110,14 +110,17 @@ impl MessageQueueService {
                             queued_messages,
                         )
                         .await;
-            } else {
-                // Recipient still offline - requeue all with backoff
-                for msg in queued_messages {
-                    if !Self::requeue_message(queue.clone(), msg).await {
-                        tracing::warn!("Dropped message for recipient {} due to queue overflow", recipient_id);
+                    } else {
+                        // Recipient still offline - requeue all with backoff
+                        for msg in queued_messages {
+                            if !Self::requeue_message(queue.clone(), msg).await {
+                                tracing::warn!(
+                                    "Dropped message for recipient {} due to queue overflow",
+                                    recipient_id
+                                );
+                            }
+                        }
                     }
-                }
-            }
                 }
             }
         });

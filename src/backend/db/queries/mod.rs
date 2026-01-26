@@ -380,7 +380,10 @@ pub async fn get_user_conversations(
 // ============================================================================
 
 /// Insert a new message (returns true if inserted, false if already existed)
-pub async fn insert_message_or_ignore(pool: &SqlitePool, message: &Message) -> Result<bool, String> {
+pub async fn insert_message_or_ignore(
+    pool: &SqlitePool,
+    message: &Message,
+) -> Result<bool, String> {
     let result = sqlx::query(
         "INSERT OR IGNORE INTO messages (id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, read_at, status, is_anonymized)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"

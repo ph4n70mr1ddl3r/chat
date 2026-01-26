@@ -36,20 +36,6 @@ pub struct AuthResponse {
     pub expires_in: u64,
 }
 
-/// Unified HTTP response that can be either success or error
-pub struct HttpResponse {
-    pub status: u16,
-    pub body: String,
-}
-
-impl Reply for HttpResponse {
-    fn into_response(self) -> warp::reply::Response {
-        let status = warp::http::StatusCode::from_u16(self.status)
-            .unwrap_or(warp::http::StatusCode::INTERNAL_SERVER_ERROR);
-        reply::with_status(self.body, status).into_response()
-    }
-}
-
 /// Handle POST /auth/logout
 pub async fn logout_handler(
     user_id: String,

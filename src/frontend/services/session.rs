@@ -160,7 +160,10 @@ impl SessionManager {
 
     /// Get current session from memory
     pub fn get_current_session(&self) -> Option<SessionData> {
-        self.current_session.lock().expect("session mutex poisoned").clone()
+        self.current_session
+            .lock()
+            .expect("session mutex poisoned")
+            .clone()
     }
 
     /// Get session (synchronous version that loads from disk if not in memory)
