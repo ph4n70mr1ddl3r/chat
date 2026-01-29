@@ -121,6 +121,9 @@ impl SessionManager {
     }
 
     /// Load session from disk
+    ///
+    /// Note: Currently unused in production code but maintained for future use
+    /// in session restoration functionality. May be needed for auto-login features.
     #[allow(dead_code)]
     pub async fn load_session(&self) -> Result<Option<SessionData>, String> {
         // Check if file exists
@@ -234,6 +237,9 @@ pub fn get_token() -> Option<String> {
 }
 
 /// Helper function to check if logged in
+///
+/// Note: Currently unused in production code but maintained for potential
+/// use in session state checks throughout the application.
 #[allow(dead_code)]
 pub fn is_logged_in() -> bool {
     get_session_manager().is_logged_in()

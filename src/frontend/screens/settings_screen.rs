@@ -16,8 +16,8 @@ impl SettingsScreen {
         on_back: Box<dyn Fn() + Send + Sync>,
         on_account_deleted: Box<dyn Fn() + Send + Sync>,
     ) -> Self {
-        let ui = SettingsScreenComponent::new().unwrap();
-        let runtime = Arc::new(Runtime::new().unwrap());
+        let ui = SettingsScreenComponent::new().expect("Failed to create settings screen UI");
+        let runtime = Arc::new(Runtime::new().expect("Failed to create async runtime"));
 
         ui.set_username(username.into());
 
@@ -29,7 +29,7 @@ impl SettingsScreen {
         let ui_weak = ui.as_weak();
         let runtime_clone = runtime.clone();
         ui.on_change_password(move || {
-            let ui = ui_weak.unwrap();
+            let ui = ui_weak.upgrade().expect("Failed to upgrade weak UI reference in change_password handler");
             let current = ui.get_current_password().to_string();
             let new = ui.get_new_password().to_string();
 
@@ -69,7 +69,7 @@ impl SettingsScreen {
         let runtime_clone = runtime.clone();
         let deleted_cb = Arc::new(on_account_deleted);
         ui.on_delete_account(move || {
-            let ui = ui_weak.unwrap();
+            let ui = ui_weak.upgrade().expect("Failed to upgrade weak UI reference in delete_account handler");
             let password = ui.get_delete_password().to_string();
 
             ui.set_is_loading(true);
@@ -108,7 +108,7 @@ impl SettingsScreen {
     }
 
     pub fn show(&self) {
-        self.ui.show().unwrap();
+        self.ui.show().expect("Failed to show settings screen");
     }
 }
 

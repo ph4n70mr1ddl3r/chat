@@ -29,9 +29,11 @@ pub struct LoginRequest {
 
 /// Error response from server
 #[derive(Debug, Deserialize)]
-pub struct ErrorResponse {
+struct ErrorResponse {
+    /// Error code from server (currently unused, only message field is used)
     #[allow(dead_code)]
     pub error: String,
+    /// Human-readable error message
     pub message: String,
 }
 

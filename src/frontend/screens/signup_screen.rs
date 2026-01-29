@@ -47,7 +47,7 @@ impl SignupScreen {
         on_signup_success: Box<dyn Fn(String) + Send + Sync>,
         on_navigate_to_login: Box<dyn Fn() + Send + Sync>,
     ) -> Self {
-        let ui = SignupScreenComponent::new().unwrap();
+        let ui = SignupScreenComponent::new().expect("Failed to create signup screen UI");
         let http_client = Arc::new(HttpClient::new(base_url));
         let session_manager = Arc::new(SessionManager::new());
 
@@ -170,6 +170,6 @@ impl SignupScreen {
     }
 
     pub fn show(&self) {
-        self.ui.show().unwrap();
+        self.ui.show().expect("Failed to show signup screen");
     }
 }

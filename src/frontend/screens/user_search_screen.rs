@@ -1,4 +1,7 @@
 //! User search screen logic
+//!
+//! This screen allows users to search for other users by username and view their online status.
+//! The screen includes debounced search functionality to reduce API calls.
 
 use crate::ui::{UserSearchResult, UserSearchScreenComponent};
 use slint::{ComponentHandle, ModelRc, VecModel};
@@ -123,7 +126,7 @@ impl UserSearchScreen {
     }
 
     pub fn show(&self) {
-        self.ui.show().unwrap();
+        self.ui.show().expect("Failed to show user search screen");
     }
 
     pub fn as_weak(&self) -> slint::Weak<UserSearchScreenComponent> {

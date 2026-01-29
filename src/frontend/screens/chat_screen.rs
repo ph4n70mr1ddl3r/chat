@@ -31,6 +31,12 @@ pub struct MessageData {
     pub status: String,
 }
 
+/// Main chat screen controller
+///
+/// Manages the chat UI including conversation list, message display,
+/// real-time updates via WebSocket, and user interactions.
+/// Marked as allow(dead_code) because the struct fields are only accessed
+/// through methods, which triggers clippy warnings for unused fields.
 #[allow(dead_code)]
 pub struct ChatScreen {
     ui: ChatScreenComponent,
