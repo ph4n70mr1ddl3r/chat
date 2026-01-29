@@ -7,7 +7,7 @@
 use crate::db::queries;
 use crate::handlers::websocket::{ClientConnection, ConnectionManager, ErrorResponse};
 use crate::models::MAX_MESSAGE_LENGTH;
-use crate::services::{message_queue::MessageQueueService, message_service::MessageService};
+use crate::services::{conversation_service::ConversationService, message_queue::MessageQueueService, message_service::MessageService};
 use chat_shared::protocol::{MessageEnvelope, TextMessageData};
 use serde_json::json;
 use sqlx::SqlitePool;
@@ -33,6 +33,7 @@ pub struct MessageHandler {
     message_service: MessageService,
     connection_manager: Arc<ConnectionManager>,
     message_queue: MessageQueueService,
+    conversation_service: ConversationService,
 }
 
 impl MessageHandler {
@@ -42,11 +43,13 @@ impl MessageHandler {
         message_queue: MessageQueueService,
     ) -> Self {
         let message_service = MessageService::new(pool.clone());
+        let conversation_service = ConversationService::new(pool.clone());
         Self {
             pool,
             message_service,
             connection_manager,
             message_queue,
+            conversation_service,
         }
     }
 
@@ -124,6 +127,7 @@ impl MessageHandler {
         } else {
             // Look up or create conversation between sender and recipient
             let (conversation, _) = self
+                .conversation_service
                 .create_or_get_conversation(sender.user_id.clone(), data.recipient_id.clone())
                 .await?;
             conversation.id
@@ -208,31 +212,6 @@ impl MessageHandler {
         ));
 
         Ok(responses)
-    }
-
-    /// Create or get conversation between two users
-    async fn create_or_get_conversation(
-        &self,
-        user1_id: String,
-        user2_id: String,
-    ) -> Result<(crate::models::Conversation, bool), String> {
-        // Ensure ordering (user1_id < user2_id)
-        let (u1, u2) = if user1_id < user2_id {
-            (user1_id, user2_id)
-        } else {
-            (user2_id, user1_id)
-        };
-
-        // Check if conversation exists
-        if let Some(conversation) = queries::get_conversation_by_users(&self.pool, &u1, &u2).await?
-        {
-            return Ok((conversation, false));
-        }
-
-        // Create new conversation
-        let conversation = crate::models::Conversation::new(u1, u2);
-        let created = queries::insert_conversation(&self.pool, &conversation).await?;
-        Ok((created, true))
     }
 
     /// Build message envelope for delivery

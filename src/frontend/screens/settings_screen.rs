@@ -5,7 +5,6 @@ use slint::ComponentHandle;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
-#[allow(dead_code)]
 pub struct SettingsScreen {
     ui: SettingsScreenComponent,
     runtime: Arc<Runtime>,
