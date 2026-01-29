@@ -1,7 +1,7 @@
 //! WebSocket message handlers
 //!
 //! Handles incoming text messages from WebSocket connections, validates them,
-//! stores them in the database, and routes them to online recipients or queues
+//! stores them in database, and routes them to online recipients or queues
 //! them for offline delivery.
 
 use crate::db::queries;
@@ -14,6 +14,18 @@ use sqlx::SqlitePool;
 use std::sync::Arc;
 use tracing::warn;
 use warp::ws::Message as WsMessage;
+
+/// Parameters for building a message envelope
+#[derive(Debug, Clone)]
+struct MessageParams<'a> {
+    message_id: &'a str,
+    sender_id: &'a str,
+    sender_username: &'a str,
+    recipient_id: &'a str,
+    content: &'a str,
+    conversation_id: &'a str,
+    status: &'a str,
+}
 
 /// Message handler for processing incoming messages
 pub struct MessageHandler {
@@ -140,15 +152,15 @@ impl MessageHandler {
                 .await
             {
                 // Deliver to recipient immediately
-                let delivery_message = self.build_message_envelope(
-                    &message.id,
-                    &sender.user_id,
-                    &sender.username,
-                    &data.recipient_id,
-                    &data.content,
-                    &conversation_id,
-                    "delivered",
-                );
+                let delivery_message = self.build_message_envelope(MessageParams {
+                    message_id: &message.id,
+                    sender_id: &sender.user_id,
+                    sender_username: &sender.username,
+                    recipient_id: &data.recipient_id,
+                    content: &data.content,
+                    conversation_id: &conversation_id,
+                    status: "delivered",
+                });
 
                 let delivery_count = self
                     .connection_manager
@@ -224,28 +236,27 @@ impl MessageHandler {
     }
 
     /// Build message envelope for delivery
-    #[allow(clippy::too_many_arguments)]
-    fn build_message_envelope(
-        &self,
-        message_id: &str,
-        sender_id: &str,
-        sender_username: &str,
-        recipient_id: &str,
-        content: &str,
-        conversation_id: &str,
-        status: &str,
-    ) -> MessageEnvelope {
+    ///
+    /// # Arguments
+    /// * `message_id` - Unique message identifier
+    /// * `sender_id` - Sender's user ID
+    /// * `sender_username` - Sender's username
+    /// * `recipient_id` - Recipient's user ID
+    /// * `content` - Message text content
+    /// * `conversation_id` - Conversation identifier
+    /// * `status` - Message delivery status (e.g., "delivered", "sent")
+    fn build_message_envelope(&self, params: MessageParams<'_>) -> MessageEnvelope {
         MessageEnvelope {
-            id: message_id.to_string(),
+            id: params.message_id.to_string(),
             msg_type: "message".to_string(),
             timestamp: chrono::Utc::now().timestamp_millis() as u64,
             data: json!({
-                "senderId": sender_id,
-                "senderUsername": sender_username,
-                "recipientId": recipient_id,
-                "content": content,
-                "conversationId": conversation_id,
-                "status": status,
+                "senderId": params.sender_id,
+                "senderUsername": params.sender_username,
+                "recipientId": params.recipient_id,
+                "content": params.content,
+                "conversationId": params.conversation_id,
+                "status": params.status,
             }),
         }
     }

@@ -38,7 +38,11 @@ pub async fn init_db_with_pool_settings(
 
     // Create connection options with WAL mode for better concurrency.
     // NOTE: MVP stores SQLite files in plaintext; production deployments should place
-    // the database on an encrypted volume (LUKS/BitLocker) or enable SQLCipher.
+    // database on an encrypted volume (LUKS/BitLocker) or enable SQLCipher.
+    // The following pragmas are set:
+    // - journal_mode=WAL: Write-Ahead Logging for better concurrent access
+    // - foreign_keys=ON: Enable foreign key constraints
+    // - synchronous=NORMAL: Balance between safety and performance
     let connect_options = SqliteConnectOptions::from_str(&db_url)?
         .create_if_missing(true)
         .pragma("journal_mode", "WAL")

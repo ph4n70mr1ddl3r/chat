@@ -12,6 +12,9 @@ use warp::{self, addr::remote, reject, Filter, Rejection};
 const MAX_RATE_LIMIT_ENTRIES: usize = 100_000;
 
 /// Rate limit entry tracking attempts and reset time
+///
+/// Stores the number of failed attempts within the current time window
+/// for a given IP address or identifier.
 #[derive(Debug, Clone)]
 struct RateLimitEntry {
     attempts: u32,
@@ -19,6 +22,9 @@ struct RateLimitEntry {
 }
 
 /// Rate limiter for authentication endpoints
+///
+/// Implements token-bucket rate limiting to prevent brute force attacks
+/// and API abuse. Uses in-memory storage with periodic cleanup.
 #[derive(Clone)]
 pub struct RateLimiter {
     /// Map of IP addresses to rate limit entries
@@ -208,7 +214,11 @@ impl RateLimiter {
     }
 
     /// Start a background task that periodically cleans up expired entries
-    pub fn start_periodic_cleanup(&self) {
+    ///
+    /// This spawns a Tokio task that runs indefinitely. The task should not be
+    /// cancelled unless the rate limiter is being dropped.
+    #[must_use]
+    pub fn start_periodic_cleanup(&self) -> tokio::task::JoinHandle<()> {
         let limiter = self.clone();
         let interval = self.window_duration;
 
@@ -220,7 +230,7 @@ impl RateLimiter {
                 interval.tick().await;
                 limiter.cleanup_expired().await;
             }
-        });
+        })
     }
 }
 

@@ -64,6 +64,12 @@ impl ConnectionManager {
     }
 
     /// Register a new connection for a user
+    ///
+    /// Adds a new WebSocket connection to the user's connection list.
+    /// A single user can have multiple concurrent connections.
+    ///
+    /// # Returns
+    /// The unique connection ID that can be used to unregister this connection.
     pub async fn register(
         &self,
         client: ClientConnection,
@@ -81,6 +87,9 @@ impl ConnectionManager {
     }
 
     /// Unregister a connection
+    ///
+    /// Removes a specific connection for a user. If this was the last
+    /// connection for the user, the user is removed from the connection map.
     pub async fn unregister(&self, user_id: &str, connection_id: &str) {
         let mut conns = self.connections.write().await;
 
@@ -95,12 +104,18 @@ impl ConnectionManager {
     }
 
     /// Disconnect all sessions for a user
+    ///
+    /// Removes all active WebSocket connections for the given user ID.
+    /// This is called during logout or when a user account is deleted.
     pub async fn disconnect_user(&self, user_id: &str) {
         let mut conns = self.connections.write().await;
         conns.remove(user_id);
     }
 
     /// Get all connections for a user
+    ///
+    /// Returns a list of all active WebSocket connections for the specified user.
+    /// This is useful for logging or when a user needs to be disconnected from all sessions.
     pub async fn get_user_connections(&self, user_id: &str) -> Vec<ClientConnection> {
         let conns = self.connections.read().await;
         conns
@@ -110,19 +125,25 @@ impl ConnectionManager {
     }
 
     /// Check if user is online (has any active connections)
+    ///
+    /// Returns true if the user has at least one active WebSocket connection.
     pub async fn is_user_online(&self, user_id: &str) -> bool {
         let conns = self.connections.read().await;
         conns.contains_key(user_id)
     }
 
     /// Get all online users
+    ///
+    /// Returns a list of user IDs that have at least one active connection.
     pub async fn get_online_users(&self) -> Vec<String> {
         let conns = self.connections.read().await;
         conns.keys().cloned().collect()
     }
 
     /// Send a WebSocket message to all active connections for a user.
-    /// Returns number of connections message was sent to.
+    ///
+    /// # Returns
+    /// The number of connections the message was successfully delivered to.
     pub async fn send_to_user(&self, user_id: &str, message: WsMessage) -> usize {
         let conns = self.connections.read().await;
         if let Some(entries) = conns.get(user_id) {
@@ -139,6 +160,9 @@ impl ConnectionManager {
     }
 
     /// Broadcast a message to multiple user IDs.
+    ///
+    /// Sends the same message to all specified users. Each user receives
+    /// the message on all their active connections.
     pub async fn broadcast_to_users<I>(&self, user_ids: I, message: WsMessage)
     where
         I: IntoIterator,

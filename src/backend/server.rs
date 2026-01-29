@@ -77,6 +77,7 @@ impl Default for ServerConfig {
             tracing::warn!("SECURITY WARNING: JWT_SECRET not set, generating cryptographically secure secret for development.");
             tracing::warn!("For production deployments, ALWAYS set the JWT_SECRET environment variable.");
             tracing::warn!("Generated secrets are not persisted between restarts and will invalidate all existing tokens.");
+            tracing::warn!("To avoid this warning, set a JWT_SECRET environment variable with at least 32 random characters.");
             use rand::RngCore;
             let mut secret = [0u8; 64];
             rand::rngs::OsRng.fill_bytes(&mut secret);
@@ -113,8 +114,9 @@ impl ServerState {
         let auth_rate_limiter = Arc::new(rate_limit::RateLimiter::new(5, 900));
         let user_service = Arc::new(crate::services::UserService::new(pool.clone()));
 
-        global_rate_limiter.start_periodic_cleanup();
-        auth_rate_limiter.start_periodic_cleanup();
+        // Start periodic cleanup tasks for rate limiters
+        let _global_cleanup_handle = global_rate_limiter.start_periodic_cleanup();
+        let _auth_cleanup_handle = auth_rate_limiter.start_periodic_cleanup();
 
         Self {
             pool,

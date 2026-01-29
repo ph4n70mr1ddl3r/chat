@@ -144,26 +144,36 @@ impl SessionManager {
     }
 
     /// Clear session (logout)
+    ///
+    /// Removes session from both memory and persistent storage. This is called
+    /// when a user explicitly logs out or during session cleanup.
     pub async fn clear_session(&self) -> Result<(), String> {
         // Remove from memory
-        *self.current_session.lock().expect("session mutex poisoned") = None;
+        *self.current_session.lock().map_err(|e| format!("Failed to clear session from memory: {e}")? = None;
 
         // Delete file if it exists
         if self.session_file.exists() {
             fs::remove_file(&self.session_file)
                 .await
-                .map_err(|e| format!("Failed to delete session file: {e}"))?;
+                .map_err(|e| format!("Failed to delete session file '{:?}': {e}", self.session_file))?;
         }
 
         Ok(())
     }
 
     /// Get current session from memory
+    ///
+    /// Returns the in-memory session data if available, None otherwise.
+    /// This does not load from disk - use `get_session()` for that.
     pub fn get_current_session(&self) -> Option<SessionData> {
         self.current_session
             .lock()
-            .expect("session mutex poisoned")
-            .clone()
+            .map_err(|e| {
+                tracing::error!("Failed to lock session mutex: {}", e);
+                e
+            })
+            .ok()
+            .and_then(|guard| guard.clone())
     }
 
     /// Get session (synchronous version that loads from disk if not in memory)
@@ -190,7 +200,9 @@ impl SessionManager {
         Ok(Some(session))
     }
 
-    /// Check if user is logged in with valid token
+    /// Check if user is logged in with valid (non-expired) token
+    ///
+    /// Returns true if a session exists and has not yet expired.
     pub fn is_logged_in(&self) -> bool {
         if let Some(session) = self.get_current_session() {
             let now = chrono::Utc::now().timestamp();

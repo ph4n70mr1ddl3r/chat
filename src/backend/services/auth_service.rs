@@ -40,8 +40,12 @@ impl AuthService {
 
     /// Hash a password with bcrypt + salt
     ///
-    /// Returns (password_hash, password_salt) tuple
-    /// Note: Bcrypt handles salt internally, so we return the hash as both fields for compatibility
+    /// Returns (password_hash, password_salt) tuple where both values are the same
+    /// because bcrypt includes salt internally. The password_salt field is kept for
+    /// backward compatibility with existing database records.
+    ///
+    /// # Errors
+    /// Returns error if password validation fails or bcrypt hashing encounters an error.
     pub fn hash_password(password: &str) -> Result<(String, String), String> {
         // Validate password first
         Self::validate_password(password).map_err(|e| e.to_string())?;
@@ -50,7 +54,7 @@ impl AuthService {
         let hashed =
             hash(password, DEFAULT_COST).map_err(|e| format!("Failed to hash password: {}", e))?;
 
-        // Bcrypt includes the salt in the hash, so we use the hash for both
+        // Bcrypt includes salt in hash, so we use hash for both
         Ok((hashed.clone(), hashed))
     }
 

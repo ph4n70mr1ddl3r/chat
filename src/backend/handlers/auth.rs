@@ -275,7 +275,7 @@ pub async fn login_handler(
             ));
         }
         Err(e) => {
-            warn!("Password verification code: {}", e);
+            warn!("Password verification error for user '{}': {}", req.username, e);
             return Ok(reply::with_status(
                 reply::json(&ErrorBody {
                     code: "AUTH_ERROR".to_string(),
