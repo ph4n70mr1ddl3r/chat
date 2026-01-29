@@ -67,6 +67,7 @@ pub async fn insert_auth_log(
 }
 
 /// Get failed login attempts for an IP address within a time window
+#[must_use]
 pub async fn get_failed_attempts(
     pool: &SqlitePool,
     ip_address: &str,
@@ -113,7 +114,8 @@ pub async fn insert_user(pool: &SqlitePool, user: &User) -> Result<User, String>
 
 /// Find a user by username
 ///
-/// Returns the user if found, None if not found
+/// Returns user if found, None if not found
+#[must_use]
 pub async fn find_user_by_username(
     pool: &SqlitePool,
     username: &str,

@@ -64,6 +64,7 @@ impl AuthService {
     }
 
     /// Create a new user with validated password
+    #[must_use]
     pub async fn create_user(&self, username: String, password: String) -> Result<User, String> {
         // Validate password
         Self::validate_password(&password).map_err(|e| e.to_string())?;

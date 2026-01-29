@@ -61,7 +61,7 @@ impl User {
     pub fn is_deleted(&self) -> bool {
         if let Some(deleted_at) = self.deleted_at {
             let now = chrono::Utc::now().timestamp_millis();
-            deleted_at < now
+            now.saturating_sub(deleted_at) > 0
         } else {
             false
         }

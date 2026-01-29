@@ -251,8 +251,8 @@ pub fn rate_limit_filter(
         .and(warp::any().map(move || limiter.clone()))
         .and_then(
             |remote_ip: Option<std::net::SocketAddr>,
-             forwarded_header: Option<String>,
-             limiter: Arc<RateLimiter>| async move {
+              forwarded_header: Option<String>,
+              limiter: Arc<RateLimiter>| async move {
                 let ip = if let Some(header) = forwarded_header {
                     if let Ok(parsed_ip) = header
                         .split(',')
@@ -261,11 +261,11 @@ pub fn rate_limit_filter(
                         .trim()
                         .parse::<IpAddr>()
                     {
-                        let is_trusted = match parsed_ip {
-                            IpAddr::V4(ipv4) => ipv4.is_loopback(),
+                        let is_trusted_proxy = match parsed_ip {
+                            IpAddr::V4(ipv4) => ipv4.is_private() || ipv4.is_loopback(),
                             IpAddr::V6(ipv6) => ipv6.is_loopback(),
                         };
-                        if is_trusted {
+                        if is_trusted_proxy && remote_ip.is_some() {
                             remote_ip
                                 .map(|a| a.ip().to_string())
                                 .unwrap_or_else(|| "unknown".to_string())

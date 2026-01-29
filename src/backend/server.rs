@@ -71,8 +71,7 @@ impl Default for ServerConfig {
             if is_production {
                 tracing::error!("CRITICAL SECURITY ERROR: JWT_SECRET must be set in production environment.");
                 tracing::error!("Set the JWT_SECRET environment variable before starting the server.");
-                tracing::error!("Exiting to prevent insecure operation.");
-                std::process::exit(1);
+                panic!("JWT_SECRET must be set in production environment to prevent insecure operation");
             }
             tracing::warn!("SECURITY WARNING: JWT_SECRET not set, generating cryptographically secure secret for development.");
             tracing::warn!("For production deployments, ALWAYS set the JWT_SECRET environment variable.");
@@ -374,7 +373,7 @@ fn build_cors(config: &ServerConfig) -> Cors {
                 tracing::error!(
                     "Wildcard CORS origin (*) is not allowed. Remove it from CORS_ALLOWED_ORIGINS."
                 );
-                std::process::exit(1);
+                panic!("Wildcard CORS origin (*) is not allowed for security reasons");
             }
             cors = cors.allow_origin(origin.as_str());
         }
