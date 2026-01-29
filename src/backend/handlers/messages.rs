@@ -7,7 +7,10 @@
 use crate::db::queries;
 use crate::handlers::websocket::{ClientConnection, ConnectionManager, ErrorResponse};
 use crate::models::MAX_MESSAGE_LENGTH;
-use crate::services::{conversation_service::ConversationService, message_queue::MessageQueueService, message_service::MessageService};
+use crate::services::{
+    conversation_service::ConversationService, message_queue::MessageQueueService,
+    message_service::MessageService,
+};
 use chat_shared::protocol::{MessageEnvelope, TextMessageData};
 use serde_json::json;
 use sqlx::SqlitePool;
@@ -202,9 +205,9 @@ impl MessageHandler {
                 .is_user_online(&data.recipient_id)
                 .await
         {
-            "delivered"
+            crate::models::status::DELIVERED
         } else {
-            "sent"
+            crate::models::status::SENT
         };
         let ack = self.build_ack_envelope(&envelope.id, &conversation_id, &message.id, ack_status);
         responses.push(WsMessage::text(
@@ -294,24 +297,26 @@ impl MessageHandler {
             }
 
             // Check if update is valid (don't downgrade status)
-            let current_weight = crate::services::message_service::MessageService::status_weight(&current.status);
-            let new_weight = crate::services::message_service::MessageService::status_weight(&update.status);
+            let current_weight =
+                crate::services::message_service::MessageService::status_weight(&current.status);
+            let new_weight =
+                crate::services::message_service::MessageService::status_weight(&update.status);
 
             if new_weight >= current_weight {
                 // Update is valid - apply idempotent upgrade
                 let now = chrono::Utc::now().timestamp_millis();
                 let update_result = match update.status.as_str() {
-                    "read" => {
+                    crate::models::status::READ => {
                         sqlx::query("UPDATE messages SET status = ?, read_at = ? WHERE id = ?")
-                            .bind("read")
+                            .bind(crate::models::status::READ)
                             .bind(now)
                             .bind(&update.message_id)
                             .execute(&self.pool)
                             .await
                     }
-                    "delivered" => {
+                    crate::models::status::DELIVERED => {
                         sqlx::query("UPDATE messages SET status = ?, delivered_at = ? WHERE id = ?")
-                            .bind("delivered")
+                            .bind(crate::models::status::DELIVERED)
                             .bind(now)
                             .bind(&update.message_id)
                             .execute(&self.pool)
@@ -413,10 +418,7 @@ mod tests {
         let handler = MessageHandler::new(pool.clone(), conn_mgr.clone(), queue);
 
         // Create users
-        let user1 = User::new(
-            "alice".to_string(),
-            "hash1".to_string(),
-        );
+        let user1 = User::new("alice".to_string(), "hash1".to_string());
         let user2 = User::new("bob".to_string(), "hash2".to_string());
 
         queries::insert_user(&pool, &user1).await.unwrap();
@@ -451,10 +453,7 @@ mod tests {
         let handler = MessageHandler::new(pool.clone(), conn_mgr.clone(), queue);
 
         // Create users
-        let user1 = User::new(
-            "alice".to_string(),
-            "hash1".to_string(),
-        );
+        let user1 = User::new("alice".to_string(), "hash1".to_string());
         let user2 = User::new("bob".to_string(), "hash2".to_string());
 
         queries::insert_user(&pool, &user1).await.unwrap();
@@ -494,10 +493,7 @@ mod tests {
         let handler = MessageHandler::new(pool.clone(), conn_mgr.clone(), queue);
 
         // Create users
-        let user1 = User::new(
-            "alice".to_string(),
-            "hash1".to_string(),
-        );
+        let user1 = User::new("alice".to_string(), "hash1".to_string());
         let user2 = User::new("bob".to_string(), "hash2".to_string());
 
         queries::insert_user(&pool, &user1).await.unwrap();

@@ -187,7 +187,12 @@ impl MessageValidator {
 
         // Check message type is valid
         match envelope.msg_type.as_str() {
-            "message" | "typing" | "presence" | "ack" | "error" | "heartbeat" => {}
+            crate::models::msg_type::MESSAGE
+            | crate::models::msg_type::TYPING
+            | crate::models::msg_type::PRESENCE
+            | crate::models::msg_type::ACK
+            | crate::models::msg_type::ERROR
+            | crate::models::msg_type::HEARTBEAT => {}
             _ => return Err(format!("Invalid message type: {}", envelope.msg_type)),
         }
 

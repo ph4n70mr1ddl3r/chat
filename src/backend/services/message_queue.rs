@@ -385,10 +385,7 @@ mod tests {
         let queue_service = MessageQueueService::new(pool.clone(), conn_mgr);
 
         // Create users and conversation
-        let user1 = User::new(
-            "alice".to_string(),
-            "hash1".to_string(),
-        );
+        let user1 = User::new("alice".to_string(), "hash1".to_string());
         let user2 = User::new("bob".to_string(), "hash2".to_string());
 
         queries::insert_user(&pool, &user1).await.unwrap();

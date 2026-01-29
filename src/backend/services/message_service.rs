@@ -3,7 +3,7 @@
 //! Implements message validation, status tracking, and offline delivery logic
 
 use crate::db::queries;
-use crate::models::{Message, MAX_MESSAGE_LENGTH};
+use crate::models::{status, Message, MAX_MESSAGE_LENGTH};
 use chat_shared::protocol::MessageStatus;
 use sqlx::SqlitePool;
 use tracing::{info, warn};
@@ -46,8 +46,7 @@ impl MessageService {
             return Err(format!(
                 "Message content must be between 1 and {} characters",
                 MAX_MESSAGE_LENGTH
-            )
-            .to_string());
+            ));
         }
 
         // Verify recipient exists and is not deleted
@@ -114,7 +113,7 @@ impl MessageService {
             created_at: now,
             delivered_at: None,
             read_at: None,
-            status: "pending".to_string(),
+            status: status::PENDING.to_string(),
             is_anonymized: false,
         };
 
@@ -266,11 +265,11 @@ impl MessageService {
     /// Status hierarchy: pending < sent < delivered < read
     pub fn status_weight(status: &str) -> u32 {
         match status {
-            "pending" => 0,
-            "sent" => 1,
-            "delivered" => 2,
-            "read" => 3,
-            "failed" => 99,
+            status::PENDING => 0,
+            status::SENT => 1,
+            status::DELIVERED => 2,
+            status::READ => 3,
+            status::FAILED => 99,
             _ => 0,
         }
     }
@@ -309,20 +308,20 @@ impl MessageService {
                 let now = chrono::Utc::now().timestamp_millis();
 
                 match new_status.as_str() {
-                    "read" => {
+                    status::READ => {
                         sqlx::query("UPDATE messages SET status = ?, read_at = ? WHERE id = ?")
-                            .bind("read")
+                            .bind(status::READ)
                             .bind(now)
                             .bind(&message_id)
                             .execute(&self.pool)
                             .await
                             .map_err(|e| format!("Failed to update message: {}", e))?;
                     }
-                    "delivered" => {
+                    status::DELIVERED => {
                         sqlx::query(
                             "UPDATE messages SET status = ?, delivered_at = ? WHERE id = ?",
                         )
-                        .bind("delivered")
+                        .bind(status::DELIVERED)
                         .bind(now)
                         .bind(&message_id)
                         .execute(&self.pool)
@@ -365,6 +364,7 @@ impl MessageService {
     /// Validate message content
     ///
     /// Returns true if content is valid, false otherwise
+    #[must_use]
     pub fn validate_content(content: &str) -> bool {
         !content.is_empty()
             && content.len() <= MAX_MESSAGE_LENGTH
@@ -412,10 +412,7 @@ mod tests {
         let service = MessageService::new(pool.clone());
 
         // Create users and conversation
-        let user1 = User::new(
-            "alice".to_string(),
-            "hash1".to_string(),
-        );
+        let user1 = User::new("alice".to_string(), "hash1".to_string());
         let user2 = User::new("bob".to_string(), "hash2".to_string());
 
         queries::insert_user(&pool, &user1).await.unwrap();
@@ -457,10 +454,7 @@ mod tests {
         let pool = setup_test_db().await;
         let service = MessageService::new(pool.clone());
 
-        let user1 = User::new(
-            "alice".to_string(),
-            "hash1".to_string(),
-        );
+        let user1 = User::new("alice".to_string(), "hash1".to_string());
         let user2 = User::new("bob".to_string(), "hash2".to_string());
 
         queries::insert_user(&pool, &user1).await.unwrap();

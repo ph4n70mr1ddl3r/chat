@@ -108,7 +108,7 @@ impl RateLimiter {
             // Only add if we're under capacity after cleanup
             if entries.len() < MAX_RATE_LIMIT_ENTRIES {
                 entries.insert(
-                    ip.to_string(),
+                    ip.to_owned(),
                     RateLimitEntry {
                         attempts: 1,
                         window_start: now,
@@ -195,7 +195,7 @@ impl RateLimiter {
 
         if entries.len() < MAX_RATE_LIMIT_ENTRIES {
             entries.insert(
-                ip.to_string(),
+                ip.to_owned(),
                 RateLimitEntry {
                     attempts: 1,
                     window_start: now,
@@ -253,11 +253,11 @@ pub fn rate_limit_filter(
             |remote_ip: Option<std::net::SocketAddr>,
              forwarded_header: Option<String>,
              limiter: Arc<RateLimiter>| async move {
-                let ip = if let Some(ref header) = forwarded_header {
+                let ip = if let Some(header) = forwarded_header {
                     if let Ok(parsed_ip) = header
                         .split(',')
                         .next()
-                        .unwrap_or(header)
+                        .unwrap_or(&header)
                         .trim()
                         .parse::<IpAddr>()
                     {

@@ -6,6 +6,25 @@ use uuid::Uuid;
 /// Maximum length for message content
 pub const MAX_MESSAGE_LENGTH: usize = 5000;
 
+/// Message status constants
+pub mod status {
+    pub const PENDING: &str = "pending";
+    pub const SENT: &str = "sent";
+    pub const DELIVERED: &str = "delivered";
+    pub const READ: &str = "read";
+    pub const FAILED: &str = "failed";
+}
+
+/// Message type constants
+pub mod msg_type {
+    pub const MESSAGE: &str = "message";
+    pub const TYPING: &str = "typing";
+    pub const PRESENCE: &str = "presence";
+    pub const ACK: &str = "ack";
+    pub const ERROR: &str = "error";
+    pub const HEARTBEAT: &str = "heartbeat";
+}
+
 /// User account
 ///
 /// Represents a registered user in the chat system.
@@ -81,6 +100,7 @@ impl Conversation {
     }
 
     /// Validate that conversation is between different users and ordered correctly
+    #[must_use]
     pub fn validate(&self) -> Result<(), String> {
         if self.user1_id == self.user2_id {
             return Err("Cannot create conversation with self".to_string());
@@ -124,12 +144,13 @@ impl Message {
             created_at: now,
             delivered_at: None,
             read_at: None,
-            status: "pending".to_string(),
+            status: status::PENDING.to_string(),
             is_anonymized: false,
         }
     }
 
     /// Validate message content
+    #[must_use]
     pub fn validate(&self) -> Result<(), String> {
         let len = self.content.len();
         if len < 1 {
@@ -150,24 +171,24 @@ impl Message {
     /// Check if message is pending delivery
     #[must_use]
     pub fn is_pending(&self) -> bool {
-        self.status == "pending"
+        self.status == status::PENDING
     }
 
     /// Check if message is delivered
     #[must_use]
     pub fn is_delivered(&self) -> bool {
-        self.status == "delivered"
+        self.status == status::DELIVERED
     }
 
     /// Check if message is read
     #[must_use]
     pub fn is_read(&self) -> bool {
-        self.status == "read"
+        self.status == status::READ
     }
 
     /// Check if message failed
     #[must_use]
     pub fn is_failed(&self) -> bool {
-        self.status == "failed"
+        self.status == status::FAILED
     }
 }

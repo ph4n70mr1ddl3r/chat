@@ -9,6 +9,7 @@
 /// - Must start with alphanumeric or underscore
 /// - Can contain alphanumeric, underscore, hyphen, dot, and Unicode letters
 /// - Case-sensitive
+#[must_use]
 pub fn validate_username(username: &str) -> Result<(), String> {
     if username.is_empty() || username.len() > 50 {
         return Err("Username must be between 1 and 50 characters".to_string());
@@ -40,6 +41,7 @@ pub fn validate_username(username: &str) -> Result<(), String> {
 /// - At least 1 lowercase letter
 /// - At least 1 digit
 /// - At least 1 special character (non-alphanumeric)
+#[must_use]
 pub fn validate_password(password: &str) -> Result<(), String> {
     let len = password.len();
 
@@ -71,6 +73,7 @@ pub fn validate_password(password: &str) -> Result<(), String> {
 }
 
 /// Validate email address (optional, for future use)
+#[must_use]
 pub fn validate_email(email: &str) -> Result<(), String> {
     if email.is_empty() {
         return Err("Email cannot be empty".to_string());

@@ -221,15 +221,13 @@ pub async fn update_password(
 ) -> Result<(), String> {
     let now = chrono::Utc::now().timestamp_millis();
 
-    sqlx::query(
-        "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?",
-    )
-    .bind(password_hash)
-    .bind(now)
-    .bind(user_id)
-    .execute(pool)
-    .await
-    .map_err(|e| format!("Failed to update password: {}", e))?;
+    sqlx::query("UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?")
+        .bind(password_hash)
+        .bind(now)
+        .bind(user_id)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Failed to update password: {}", e))?;
 
     Ok(())
 }
@@ -581,10 +579,7 @@ mod tests {
         }
 
         // Create and insert user
-        let user = User::new(
-            "alice".to_string(),
-            "hash123".to_string(),
-        );
+        let user = User::new("alice".to_string(), "hash123".to_string());
 
         insert_user(&pool, &user).await?;
 
@@ -615,10 +610,7 @@ mod tests {
         }
 
         // Insert a benign user
-        let user = User::new(
-            "alice".to_string(),
-            "hash123".to_string(),
-        );
+        let user = User::new("alice".to_string(), "hash123".to_string());
         insert_user(&pool, &user).await?;
 
         // Attempt an injection payload in the search query

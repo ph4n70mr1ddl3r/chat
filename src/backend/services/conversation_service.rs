@@ -118,10 +118,7 @@ mod tests {
         let service = ConversationService::new(pool.clone());
 
         // Create test users
-        let user1 = User::new(
-            "alice".to_string(),
-            "hash1".to_string(),
-        );
+        let user1 = User::new("alice".to_string(), "hash1".to_string());
         let user2 = User::new("bob".to_string(), "hash2".to_string());
 
         queries::insert_user(&pool, &user1).await.unwrap();
@@ -142,10 +139,7 @@ mod tests {
         let pool = setup_test_db().await;
         let service = ConversationService::new(pool.clone());
 
-        let user1 = User::new(
-            "alice".to_string(),
-            "hash1".to_string(),
-        );
+        let user1 = User::new("alice".to_string(), "hash1".to_string());
         let user2 = User::new("bob".to_string(), "hash2".to_string());
 
         queries::insert_user(&pool, &user1).await.unwrap();
@@ -174,10 +168,7 @@ mod tests {
         let pool = setup_test_db().await;
         let service = ConversationService::new(pool.clone());
 
-        let user1 = User::new(
-            "alice".to_string(),
-            "hash1".to_string(),
-        );
+        let user1 = User::new("alice".to_string(), "hash1".to_string());
         queries::insert_user(&pool, &user1).await.unwrap();
 
         // Try to create conversation with self
@@ -196,10 +187,7 @@ mod tests {
         let pool = setup_test_db().await;
         let service = ConversationService::new(pool.clone());
 
-        let user1 = User::new(
-            "alice".to_string(),
-            "hash1".to_string(),
-        );
+        let user1 = User::new("alice".to_string(), "hash1".to_string());
         let user2 = User::new("bob".to_string(), "hash2".to_string());
 
         queries::insert_user(&pool, &user1).await.unwrap();

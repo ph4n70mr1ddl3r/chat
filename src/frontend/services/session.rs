@@ -149,13 +149,19 @@ impl SessionManager {
     /// when a user explicitly logs out or during session cleanup.
     pub async fn clear_session(&self) -> Result<(), String> {
         // Remove from memory
-        *self.current_session.lock().map_err(|e| format!("Failed to clear session from memory: {e}")? = None;
+        *self
+            .current_session
+            .lock()
+            .map_err(|e| format!("Failed to clear session from memory: {e}"))? = None;
 
         // Delete file if it exists
         if self.session_file.exists() {
-            fs::remove_file(&self.session_file)
-                .await
-                .map_err(|e| format!("Failed to delete session file '{:?}': {e}", self.session_file))?;
+            fs::remove_file(&self.session_file).await.map_err(|e| {
+                format!(
+                    "Failed to delete session file '{:?}': {e}",
+                    self.session_file
+                )
+            })?;
         }
 
         Ok(())
