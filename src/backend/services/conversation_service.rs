@@ -99,7 +99,7 @@ mod tests {
             .unwrap();
 
         // Run migrations
-        let schema_sql = include_str!("../../backend/db/migrations/001_initial_schema.sql");
+        let schema_sql = include_str!("../db/migrations/001_initial_schema.sql");
         for statement in schema_sql.split(';').filter(|s| !s.trim().is_empty()) {
             sqlx::query(statement).execute(&pool).await.unwrap();
         }

@@ -41,7 +41,7 @@ impl CsrfService {
     }
 
     pub async fn generate_token(&self, user_id: &str) -> String {
-        let token = Uuid::new_v4().to_string() + &rand::thread_rng().gen::<u32>().to_string();
+        let token = Uuid::new_v4().to_string();
         let csrf_token = CsrfToken {
             token: token.clone(),
             user_id: user_id.to_string(),
