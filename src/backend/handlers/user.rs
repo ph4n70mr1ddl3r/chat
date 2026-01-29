@@ -303,10 +303,8 @@ pub async fn change_password(
     }
 
     // 3. Validate and hash new password
-    // Using AuthService directly requires jwt_secret, but hash_password is static?
-    // AuthService::hash_password is static method.
-    let (new_hash, new_salt) = match AuthService::hash_password(&request.new_password) {
-        Ok(pair) => pair,
+    let new_hash = match AuthService::hash_password(&request.new_password) {
+        Ok(hash) => hash,
         Err(e) => {
             return Ok(reply::with_status(
                 reply::json(&ErrorBody {
@@ -320,7 +318,7 @@ pub async fn change_password(
     };
 
     // 4. Update password in database
-    if let Err(e) = queries::update_password(&pool, &user_id, &new_hash, &new_salt).await {
+    if let Err(e) = queries::update_password(&pool, &user_id, &new_hash).await {
         warn!("Failed to update password: {}", e);
         return Ok(reply::with_status(
             reply::json(&ErrorBody {

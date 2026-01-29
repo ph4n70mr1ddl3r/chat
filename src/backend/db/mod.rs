@@ -75,6 +75,12 @@ async fn run_migrations(pool: &SqlitePool) -> Result<()> {
         sqlx::query(statement).execute(pool).await?;
     }
 
+    // Run the password_salt removal migration
+    let migration_sql = include_str!("migrations/002_remove_password_salt.sql");
+    for statement in migration_sql.split(';').filter(|s| !s.trim().is_empty()) {
+        sqlx::query(statement).execute(pool).await?;
+    }
+
     info!("Migrations completed");
     Ok(())
 }

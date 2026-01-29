@@ -38,15 +38,13 @@ impl AuthService {
         validators::validate_password(password)
     }
 
-    /// Hash a password with bcrypt + salt
+    /// Hash a password with bcrypt
     ///
-    /// Returns (password_hash, password_salt) tuple where both values are the same
-    /// because bcrypt includes salt internally. The password_salt field is kept for
-    /// backward compatibility with existing database records.
+    /// Returns the password_hash which includes salt internally.
     ///
     /// # Errors
     /// Returns error if password validation fails or bcrypt hashing encounters an error.
-    pub fn hash_password(password: &str) -> Result<(String, String), String> {
+    pub fn hash_password(password: &str) -> Result<String, String> {
         // Validate password first
         Self::validate_password(password).map_err(|e| e.to_string())?;
 
@@ -54,8 +52,7 @@ impl AuthService {
         let hashed =
             hash(password, DEFAULT_COST).map_err(|e| format!("Failed to hash password: {}", e))?;
 
-        // Bcrypt includes salt in hash, so we use hash for both
-        Ok((hashed.clone(), hashed))
+        Ok(hashed)
     }
 
     /// Verify a password against a hash
@@ -69,10 +66,10 @@ impl AuthService {
         Self::validate_password(&password).map_err(|e| e.to_string())?;
 
         // Hash password
-        let (password_hash, password_salt) = Self::hash_password(&password)?;
+        let password_hash = Self::hash_password(&password)?;
 
         // Create user (note: actual DB save happens in the handler)
-        let user = User::new(username, password_hash, password_salt);
+        let user = User::new(username, password_hash);
         info!(
             target: "auth",
             event = "auth.signup",
@@ -188,22 +185,20 @@ mod tests {
 
     #[test]
     fn test_hash_password() {
-        let (hash, salt) = AuthService::hash_password("TestPass123!").unwrap();
+        let hash = AuthService::hash_password("TestPass123!").unwrap();
 
         assert_ne!(hash, "TestPass123!");
-
-        assert_eq!(hash, salt);
     }
 
     #[test]
     fn test_verify_password_correct() {
-        let (hash, _) = AuthService::hash_password("TestPass123!").unwrap();
+        let hash = AuthService::hash_password("TestPass123!").unwrap();
         assert!(AuthService::verify_password("TestPass123!", &hash).unwrap());
     }
 
     #[test]
     fn test_verify_password_incorrect() {
-        let (hash, _) = AuthService::hash_password("TestPass123!").unwrap();
+        let hash = AuthService::hash_password("TestPass123!").unwrap();
         assert!(!AuthService::verify_password("WrongPassword123!", &hash).unwrap());
     }
 

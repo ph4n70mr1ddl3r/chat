@@ -104,6 +104,11 @@ mod tests {
             sqlx::query(statement).execute(&pool).await.unwrap();
         }
 
+        let migration_sql = include_str!("../db/migrations/002_remove_password_salt.sql");
+        for statement in migration_sql.split(';').filter(|s| !s.trim().is_empty()) {
+            sqlx::query(statement).execute(&pool).await.unwrap();
+        }
+
         pool
     }
 
@@ -116,9 +121,8 @@ mod tests {
         let user1 = User::new(
             "alice".to_string(),
             "hash1".to_string(),
-            "salt1".to_string(),
         );
-        let user2 = User::new("bob".to_string(), "hash2".to_string(), "salt2".to_string());
+        let user2 = User::new("bob".to_string(), "hash2".to_string());
 
         queries::insert_user(&pool, &user1).await.unwrap();
         queries::insert_user(&pool, &user2).await.unwrap();
@@ -141,9 +145,8 @@ mod tests {
         let user1 = User::new(
             "alice".to_string(),
             "hash1".to_string(),
-            "salt1".to_string(),
         );
-        let user2 = User::new("bob".to_string(), "hash2".to_string(), "salt2".to_string());
+        let user2 = User::new("bob".to_string(), "hash2".to_string());
 
         queries::insert_user(&pool, &user1).await.unwrap();
         queries::insert_user(&pool, &user2).await.unwrap();
@@ -174,7 +177,6 @@ mod tests {
         let user1 = User::new(
             "alice".to_string(),
             "hash1".to_string(),
-            "salt1".to_string(),
         );
         queries::insert_user(&pool, &user1).await.unwrap();
 
@@ -197,9 +199,8 @@ mod tests {
         let user1 = User::new(
             "alice".to_string(),
             "hash1".to_string(),
-            "salt1".to_string(),
         );
-        let user2 = User::new("bob".to_string(), "hash2".to_string(), "salt2".to_string());
+        let user2 = User::new("bob".to_string(), "hash2".to_string());
 
         queries::insert_user(&pool, &user1).await.unwrap();
         queries::insert_user(&pool, &user2).await.unwrap();

@@ -4,7 +4,6 @@
 //! This is a security measure to prevent cross-site request forgery attacks.
 
 use chrono::{DateTime, Utc};
-use rand::Rng;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;

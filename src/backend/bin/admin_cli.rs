@@ -81,9 +81,9 @@ async fn main() -> anyhow::Result<()> {
         Commands::Users { subcommand } => match subcommand {
             UsersSubcommand::List { deleted } => {
                 let query = if deleted {
-                    "SELECT id, username, password_hash, password_salt, created_at, updated_at, deleted_at, is_online, last_seen_at FROM users"
+                    "SELECT id, username, password_hash, created_at, updated_at, deleted_at, is_online, last_seen_at FROM users"
                 } else {
-                    "SELECT id, username, password_hash, password_salt, created_at, updated_at, deleted_at, is_online, last_seen_at FROM users WHERE deleted_at IS NULL"
+                    "SELECT id, username, password_hash, created_at, updated_at, deleted_at, is_online, last_seen_at FROM users WHERE deleted_at IS NULL"
                 };
                 let users: Vec<chat_backend::models::User> = sqlx::query_as(query)
                     .fetch_all(&pool)
@@ -97,7 +97,7 @@ async fn main() -> anyhow::Result<()> {
             UsersSubcommand::Delete { username } => {
                 // Find user by username
                 let user: Option<chat_backend::models::User> = sqlx::query_as(
-                    "SELECT id, username, password_hash, password_salt, created_at, updated_at, deleted_at, is_online, last_seen_at FROM users WHERE username = ?"
+                    "SELECT id, username, password_hash, created_at, updated_at, deleted_at, is_online, last_seen_at FROM users WHERE username = ?"
                 )
                     .bind(&username)
                     .fetch_optional(&pool)

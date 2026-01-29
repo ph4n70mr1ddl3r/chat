@@ -8,18 +8,14 @@ pub const MAX_MESSAGE_LENGTH: usize = 5000;
 
 /// User account
 ///
-/// Represents a registered user in the chat system. The password_salt field
-/// is deprecated as bcrypt includes salt in the password_hash internally.
-/// It is kept for backward compatibility with existing database records.
+/// Represents a registered user in the chat system.
+/// bcrypt includes salt internally in the password_hash.
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct User {
     pub id: String,
     pub username: String,
     /// bcrypt hash which includes salt internally
     pub password_hash: String,
-    /// Deprecated: bcrypt includes salt in password_hash, kept for backward compatibility only
-    #[deprecated(since = "0.1.0", note = "Bcrypt includes salt in password_hash")]
-    pub password_salt: String,
     pub created_at: i64,
     pub updated_at: i64,
     pub deleted_at: Option<i64>,
@@ -28,13 +24,12 @@ pub struct User {
 }
 
 impl User {
-    pub fn new(username: String, password_hash: String, password_salt: String) -> Self {
+    pub fn new(username: String, password_hash: String) -> Self {
         let now = chrono::Utc::now().timestamp_millis();
         Self {
             id: Uuid::new_v4().to_string(),
             username,
             password_hash,
-            password_salt,
             created_at: now,
             updated_at: now,
             deleted_at: None,

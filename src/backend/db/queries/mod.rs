@@ -28,7 +28,7 @@ impl AuthEventType {
 }
 
 const SQL_SELECT_USER_FIELDS: &str =
-    "SELECT id, username, password_hash, password_salt, created_at, updated_at, deleted_at, is_online, last_seen_at";
+    "SELECT id, username, password_hash, created_at, updated_at, deleted_at, is_online, last_seen_at";
 
 const SQL_SELECT_MESSAGE_FIELDS: &str =
     "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, read_at, status, is_anonymized";
@@ -93,13 +93,12 @@ pub async fn get_failed_attempts(
 /// Returns the user if successful
 pub async fn insert_user(pool: &SqlitePool, user: &User) -> Result<User, String> {
     sqlx::query(
-        "INSERT INTO users (id, username, password_hash, password_salt, created_at, updated_at, is_online, deleted_at, last_seen_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO users (id, username, password_hash, created_at, updated_at, is_online, deleted_at, last_seen_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(&user.id)
     .bind(&user.username)
     .bind(&user.password_hash)
-    .bind(&user.password_salt)
     .bind(user.created_at)
     .bind(user.updated_at)
     .bind(user.is_online)
@@ -219,15 +218,13 @@ pub async fn update_password(
     pool: &SqlitePool,
     user_id: &str,
     password_hash: &str,
-    password_salt: &str,
 ) -> Result<(), String> {
     let now = chrono::Utc::now().timestamp_millis();
 
     sqlx::query(
-        "UPDATE users SET password_hash = ?, password_salt = ?, updated_at = ? WHERE id = ?",
+        "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?",
     )
     .bind(password_hash)
-    .bind(password_salt)
     .bind(now)
     .bind(user_id)
     .execute(pool)
@@ -578,11 +575,15 @@ mod tests {
             sqlx::query(statement).execute(&pool).await?;
         }
 
+        let migration_sql = include_str!("../migrations/002_remove_password_salt.sql");
+        for statement in migration_sql.split(';').filter(|s| !s.trim().is_empty()) {
+            sqlx::query(statement).execute(&pool).await?;
+        }
+
         // Create and insert user
         let user = User::new(
             "alice".to_string(),
             "hash123".to_string(),
-            "salt456".to_string(),
         );
 
         insert_user(&pool, &user).await?;
@@ -608,11 +609,15 @@ mod tests {
             sqlx::query(statement).execute(&pool).await?;
         }
 
+        let migration_sql = include_str!("../migrations/002_remove_password_salt.sql");
+        for statement in migration_sql.split(';').filter(|s| !s.trim().is_empty()) {
+            sqlx::query(statement).execute(&pool).await?;
+        }
+
         // Insert a benign user
         let user = User::new(
             "alice".to_string(),
             "hash123".to_string(),
-            "salt456".to_string(),
         );
         insert_user(&pool, &user).await?;
 

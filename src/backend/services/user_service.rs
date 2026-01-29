@@ -155,6 +155,11 @@ mod tests {
             sqlx::query(statement).execute(&pool).await.unwrap();
         }
 
+        let migration_sql = include_str!("../db/migrations/002_remove_password_salt.sql");
+        for statement in migration_sql.split(';').filter(|s| !s.trim().is_empty()) {
+            sqlx::query(statement).execute(&pool).await.unwrap();
+        }
+
         pool
     }
 
@@ -164,8 +169,8 @@ mod tests {
         let service = UserService::new_with_ttl(pool.clone(), Duration::from_millis(50));
 
         // Seed users
-        let requester = User::new("alice".into(), "hash".into(), "salt".into());
-        let initial_result = User::new("bob".into(), "hash2".into(), "salt2".into());
+        let requester = User::new("alice".into(), "hash".into());
+        let initial_result = User::new("bob".into(), "hash2".into());
         queries::insert_user(&pool, &requester).await.unwrap();
         queries::insert_user(&pool, &initial_result).await.unwrap();
 
@@ -174,7 +179,7 @@ mod tests {
         assert_eq!(first.len(), 1);
 
         // Add another user matching query
-        let new_user = User::new("ben".into(), "hash3".into(), "salt3".into());
+        let new_user = User::new("ben".into(), "hash3".into());
         queries::insert_user(&pool, &new_user).await.unwrap();
 
         // Second search before TTL expiry should still return cached single result
