@@ -386,29 +386,11 @@ impl IsAllowedChar for char {
 mod tests {
     use super::*;
     use crate::models::User;
-
-    async fn setup_test_db() -> SqlitePool {
-        let pool = sqlx::sqlite::SqlitePoolOptions::new()
-            .connect("sqlite::memory:")
-            .await
-            .unwrap();
-
-        let schema_sql = include_str!("../db/migrations/001_initial_schema.sql");
-        for statement in schema_sql.split(';').filter(|s| !s.trim().is_empty()) {
-            sqlx::query(statement).execute(&pool).await.unwrap();
-        }
-
-        let migration_sql = include_str!("../db/migrations/002_remove_password_salt.sql");
-        for statement in migration_sql.split(';').filter(|s| !s.trim().is_empty()) {
-            sqlx::query(statement).execute(&pool).await.unwrap();
-        }
-
-        pool
-    }
+    use crate::test_utils;
 
     #[tokio::test]
     async fn test_send_message_valid() {
-        let pool = setup_test_db().await;
+        let pool = test_utils::setup_test_db().await;
         let service = MessageService::new(pool.clone());
 
         // Create users and conversation
@@ -451,7 +433,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_prevent_send_to_deleted_user() {
-        let pool = setup_test_db().await;
+        let pool = test_utils::setup_test_db().await;
         let service = MessageService::new(pool.clone());
 
         let user1 = User::new("alice".to_string(), "hash1".to_string());

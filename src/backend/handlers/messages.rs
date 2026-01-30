@@ -389,30 +389,12 @@ mod tests {
     use crate::handlers::websocket::ConnectionManager;
     use crate::models::User;
     use crate::services::MessageQueueService;
+    use crate::test_utils;
     use tokio::sync::mpsc;
-
-    async fn setup_test_db() -> SqlitePool {
-        let pool = sqlx::sqlite::SqlitePoolOptions::new()
-            .connect("sqlite::memory:")
-            .await
-            .unwrap();
-
-        let schema_sql = include_str!("../db/migrations/001_initial_schema.sql");
-        for statement in schema_sql.split(';').filter(|s| !s.trim().is_empty()) {
-            sqlx::query(statement).execute(&pool).await.unwrap();
-        }
-
-        let migration_sql = include_str!("../db/migrations/002_remove_password_salt.sql");
-        for statement in migration_sql.split(';').filter(|s| !s.trim().is_empty()) {
-            sqlx::query(statement).execute(&pool).await.unwrap();
-        }
-
-        pool
-    }
 
     #[tokio::test]
     async fn test_handle_message_creates_conversation() {
-        let pool = setup_test_db().await;
+        let pool = test_utils::setup_test_db().await;
         let conn_mgr = Arc::new(ConnectionManager::new());
         let queue = MessageQueueService::new(pool.clone(), conn_mgr.clone());
         let handler = MessageHandler::new(pool.clone(), conn_mgr.clone(), queue);
@@ -447,7 +429,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_message_to_online_recipient() {
-        let pool = setup_test_db().await;
+        let pool = test_utils::setup_test_db().await;
         let conn_mgr = Arc::new(ConnectionManager::new());
         let queue = MessageQueueService::new(pool.clone(), conn_mgr.clone());
         let handler = MessageHandler::new(pool.clone(), conn_mgr.clone(), queue);
@@ -487,7 +469,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_message_idempotency() {
-        let pool = setup_test_db().await;
+        let pool = test_utils::setup_test_db().await;
         let conn_mgr = Arc::new(ConnectionManager::new());
         let queue = MessageQueueService::new(pool.clone(), conn_mgr.clone());
         let handler = MessageHandler::new(pool.clone(), conn_mgr.clone(), queue);

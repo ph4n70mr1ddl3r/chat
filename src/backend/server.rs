@@ -103,10 +103,12 @@ pub struct ServerState {
     pub user_service: Arc<crate::services::UserService>,
     pub global_rate_limiter: Arc<rate_limit::RateLimiter>,
     pub auth_rate_limiter: Arc<rate_limit::RateLimiter>,
+    _global_cleanup_handle: tokio::task::JoinHandle<()>,
+    _auth_cleanup_handle: tokio::task::JoinHandle<()>,
     pub start_time: Instant,
 }
 
-impl ServerState {
+    impl ServerState {
     pub fn new(pool: SqlitePool, config: ServerConfig) -> Self {
         let connection_manager = Arc::new(websocket::ConnectionManager::new());
         let pool_for_services = pool.clone();
@@ -115,8 +117,8 @@ impl ServerState {
         let user_service = Arc::new(crate::services::UserService::new(pool.clone()));
 
         // Start periodic cleanup tasks for rate limiters
-        let _global_cleanup_handle = global_rate_limiter.start_periodic_cleanup();
-        let _auth_cleanup_handle = auth_rate_limiter.start_periodic_cleanup();
+        let global_cleanup_handle = global_rate_limiter.start_periodic_cleanup();
+        let auth_cleanup_handle = auth_rate_limiter.start_periodic_cleanup();
 
         Self {
             pool,
@@ -130,6 +132,8 @@ impl ServerState {
             user_service,
             global_rate_limiter,
             auth_rate_limiter,
+            _global_cleanup_handle: global_cleanup_handle,
+            _auth_cleanup_handle: auth_cleanup_handle,
             start_time: Instant::now(),
         }
     }
@@ -777,6 +781,7 @@ pub async fn start_server(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils;
     use sqlx::SqlitePool;
     use std::sync::Arc;
     use warp::http::header::CONTENT_TYPE;
@@ -1014,18 +1019,6 @@ mod tests {
     }
 
     async fn init_test_pool() -> SqlitePool {
-        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-            .await
-            .expect("Failed to create test pool");
-
-        let schema_sql = include_str!("db/migrations/001_initial_schema.sql");
-        for statement in schema_sql.split(';').filter(|s| !s.trim().is_empty()) {
-            sqlx::query(statement)
-                .execute(&pool)
-                .await
-                .expect("Failed to run schema statement");
-        }
-
-        pool
+        test_utils::setup_test_db().await
     }
 }

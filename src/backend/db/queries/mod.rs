@@ -567,23 +567,11 @@ pub async fn soft_delete_user(pool: &SqlitePool, user_id: &str) -> Result<(), St
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils;
 
     #[tokio::test]
     async fn test_insert_and_find_user() -> Result<(), Box<dyn std::error::Error>> {
-        let pool = sqlx::sqlite::SqlitePoolOptions::new()
-            .connect("sqlite::memory:")
-            .await?;
-
-        // Run migrations
-        let schema_sql = include_str!("../migrations/001_initial_schema.sql");
-        for statement in schema_sql.split(';').filter(|s| !s.trim().is_empty()) {
-            sqlx::query(statement).execute(&pool).await?;
-        }
-
-        let migration_sql = include_str!("../migrations/002_remove_password_salt.sql");
-        for statement in migration_sql.split(';').filter(|s| !s.trim().is_empty()) {
-            sqlx::query(statement).execute(&pool).await?;
-        }
+        let pool = test_utils::setup_test_db().await;
 
         // Create and insert user
         let user = User::new("alice".to_string(), "hash123".to_string());
@@ -601,20 +589,7 @@ mod tests {
     #[tokio::test]
     async fn test_search_users_is_safe_against_sql_injection(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let pool = sqlx::sqlite::SqlitePoolOptions::new()
-            .connect("sqlite::memory:")
-            .await?;
-
-        // Run migrations
-        let schema_sql = include_str!("../migrations/001_initial_schema.sql");
-        for statement in schema_sql.split(';').filter(|s| !s.trim().is_empty()) {
-            sqlx::query(statement).execute(&pool).await?;
-        }
-
-        let migration_sql = include_str!("../migrations/002_remove_password_salt.sql");
-        for statement in migration_sql.split(';').filter(|s| !s.trim().is_empty()) {
-            sqlx::query(statement).execute(&pool).await?;
-        }
+        let pool = test_utils::setup_test_db().await;
 
         // Insert a benign user
         let user = User::new("alice".to_string(), "hash123".to_string());

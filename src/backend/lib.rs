@@ -8,6 +8,7 @@ pub mod middleware;
 pub mod models;
 pub mod server;
 pub mod services;
+pub mod test_utils;
 pub mod validators;
 
 use std::sync::OnceLock;

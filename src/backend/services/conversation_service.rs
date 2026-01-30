@@ -91,30 +91,11 @@ impl ConversationService {
 mod tests {
     use super::*;
     use crate::models::User;
-
-    async fn setup_test_db() -> SqlitePool {
-        let pool = sqlx::sqlite::SqlitePoolOptions::new()
-            .connect("sqlite::memory:")
-            .await
-            .unwrap();
-
-        // Run migrations
-        let schema_sql = include_str!("../db/migrations/001_initial_schema.sql");
-        for statement in schema_sql.split(';').filter(|s| !s.trim().is_empty()) {
-            sqlx::query(statement).execute(&pool).await.unwrap();
-        }
-
-        let migration_sql = include_str!("../db/migrations/002_remove_password_salt.sql");
-        for statement in migration_sql.split(';').filter(|s| !s.trim().is_empty()) {
-            sqlx::query(statement).execute(&pool).await.unwrap();
-        }
-
-        pool
-    }
+    use crate::test_utils;
 
     #[tokio::test]
     async fn test_create_conversation() {
-        let pool = setup_test_db().await;
+        let pool = test_utils::setup_test_db().await;
         let service = ConversationService::new(pool.clone());
 
         // Create test users
@@ -136,7 +117,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_prevent_duplicate_conversation() {
-        let pool = setup_test_db().await;
+        let pool = test_utils::setup_test_db().await;
         let service = ConversationService::new(pool.clone());
 
         let user1 = User::new("alice".to_string(), "hash1".to_string());
@@ -165,7 +146,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_prevent_self_chat() {
-        let pool = setup_test_db().await;
+        let pool = test_utils::setup_test_db().await;
         let service = ConversationService::new(pool.clone());
 
         let user1 = User::new("alice".to_string(), "hash1".to_string());
@@ -184,7 +165,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_conversation_ordering_independence() {
-        let pool = setup_test_db().await;
+        let pool = test_utils::setup_test_db().await;
         let service = ConversationService::new(pool.clone());
 
         let user1 = User::new("alice".to_string(), "hash1".to_string());
