@@ -67,7 +67,6 @@ pub async fn insert_auth_log(
 }
 
 /// Get failed login attempts for an IP address within a time window
-#[must_use]
 pub async fn get_failed_attempts(
     pool: &SqlitePool,
     ip_address: &str,
@@ -115,7 +114,6 @@ pub async fn insert_user(pool: &SqlitePool, user: &User) -> Result<User, String>
 /// Find a user by username
 ///
 /// Returns user if found, None if not found
-#[must_use]
 pub async fn find_user_by_username(
     pool: &SqlitePool,
     username: &str,
@@ -169,7 +167,7 @@ pub async fn find_users_by_ids(
     let mut query = sqlx::query_as::<_, User>(&query);
 
     for user_id in user_ids {
-        if !uuid::Uuid::parse_str(user_id).is_ok() {
+        if uuid::Uuid::parse_str(user_id).is_err() {
             return Err(format!("Invalid UUID format: {}", user_id));
         }
         query = query.bind(user_id);

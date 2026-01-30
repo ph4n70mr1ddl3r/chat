@@ -34,7 +34,6 @@ impl AuthService {
     /// - At least 1 lowercase letter
     /// - At least 1 digit
     /// - At least 1 special character
-    #[must_use]
     pub fn validate_password(password: &str) -> Result<(), String> {
         validators::validate_password(password)
     }
@@ -45,7 +44,6 @@ impl AuthService {
     ///
     /// # Errors
     /// Returns error if password validation fails or bcrypt hashing encounters an error.
-    #[must_use]
     pub fn hash_password(password: &str) -> Result<String, String> {
         // Validate password first
         Self::validate_password(password).map_err(|e| e.to_string())?;
@@ -58,13 +56,11 @@ impl AuthService {
     }
 
     /// Verify a password against a hash
-    #[must_use]
     pub fn verify_password(password: &str, hash: &str) -> Result<bool, String> {
         verify(password, hash).map_err(|e| format!("Failed to verify password: {}", e))
     }
 
     /// Create a new user with validated password
-    #[must_use]
     pub async fn create_user(&self, username: String, password: String) -> Result<User, String> {
         // Validate password
         Self::validate_password(&password).map_err(|e| e.to_string())?;

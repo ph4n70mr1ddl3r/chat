@@ -100,7 +100,6 @@ impl Conversation {
     }
 
     /// Validate that conversation is between different users and ordered correctly
-    #[must_use]
     pub fn validate(&self) -> Result<(), String> {
         if self.user1_id == self.user2_id {
             return Err("Cannot create conversation with self".to_string());
@@ -150,7 +149,6 @@ impl Message {
     }
 
     /// Validate message content
-    #[must_use]
     pub fn validate(&self) -> Result<(), String> {
         let len = self.content.len();
         if len < 1 {
