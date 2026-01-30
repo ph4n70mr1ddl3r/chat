@@ -71,7 +71,7 @@ pub async fn get_current_user(user_id: String, pool: SqlitePool) -> Result<impl 
             ));
         }
         Err(e) => {
-            warn!("Database code: {}", e);
+            warn!("Database error: {}", e);
             return Ok(reply::with_status(
                 reply::json(&ErrorBody {
                     code: "DATABASE_ERROR".to_string(),
@@ -184,7 +184,7 @@ pub async fn delete_account(
             ));
         }
         Err(e) => {
-            warn!("Database code: {}", e);
+            warn!("Database error: {}", e);
             return Ok(reply::with_status(
                 reply::json(&ErrorBody {
                     code: "DATABASE_ERROR".to_string(),
@@ -212,7 +212,7 @@ pub async fn delete_account(
             ));
         }
         Err(e) => {
-            warn!("Password verification code: {}", e);
+            warn!("Password verification error: {}", e);
             return Ok(reply::with_status(
                 reply::json(&ErrorBody {
                     code: "AUTH_ERROR".to_string(),
@@ -264,7 +264,7 @@ pub async fn change_password(
             ));
         }
         Err(e) => {
-            warn!("Database code: {}", e);
+            warn!("Database error: {}", e);
             return Ok(reply::with_status(
                 reply::json(&ErrorBody {
                     code: "DATABASE_ERROR".to_string(),
@@ -290,7 +290,7 @@ pub async fn change_password(
             ));
         }
         Err(e) => {
-            warn!("Password verification code: {}", e);
+            warn!("Password verification error: {}", e);
             return Ok(reply::with_status(
                 reply::json(&ErrorBody {
                     code: "AUTH_ERROR".to_string(),

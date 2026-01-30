@@ -28,16 +28,6 @@ impl AuthService {
         Self { jwt_secret }
     }
 
-    /// Validate password strength according to spec:
-    /// - Minimum 8 characters
-    /// - At least 1 uppercase letter
-    /// - At least 1 lowercase letter
-    /// - At least 1 digit
-    /// - At least 1 special character
-    pub fn validate_password(password: &str) -> Result<(), String> {
-        validators::validate_password(password)
-    }
-
     /// Hash a password with bcrypt
     ///
     /// Returns the password_hash which includes salt internally.
@@ -46,7 +36,7 @@ impl AuthService {
     /// Returns error if password validation fails or bcrypt hashing encounters an error.
     pub fn hash_password(password: &str) -> Result<String, String> {
         // Validate password first
-        Self::validate_password(password).map_err(|e| e.to_string())?;
+        validators::validate_password(password).map_err(|e| e.to_string())?;
 
         // Hash with bcrypt (DEFAULT_COST = 12)
         let hashed =
@@ -63,7 +53,7 @@ impl AuthService {
     /// Create a new user with validated password
     pub async fn create_user(&self, username: String, password: String) -> Result<User, String> {
         // Validate password
-        Self::validate_password(&password).map_err(|e| e.to_string())?;
+        validators::validate_password(&password).map_err(|e| e.to_string())?;
 
         // Hash password
         let password_hash = Self::hash_password(&password)?;
@@ -154,33 +144,33 @@ mod tests {
 
     #[test]
     fn test_validate_password_valid() {
-        assert!(AuthService::validate_password("TestPass123!").is_ok());
-        assert!(AuthService::validate_password("AnotherPassword456@").is_ok());
+        assert!(validators::validate_password("TestPass123!").is_ok());
+        assert!(validators::validate_password("AnotherPassword456@").is_ok());
     }
 
     #[test]
     fn test_validate_password_too_short() {
-        assert!(AuthService::validate_password("Test1!").is_err());
+        assert!(validators::validate_password("Test1!").is_err());
     }
 
     #[test]
     fn test_validate_password_no_uppercase() {
-        assert!(AuthService::validate_password("testpass123!").is_err());
+        assert!(validators::validate_password("testpass123!").is_err());
     }
 
     #[test]
     fn test_validate_password_no_lowercase() {
-        assert!(AuthService::validate_password("TESTPASS123!").is_err());
+        assert!(validators::validate_password("TESTPASS123!").is_err());
     }
 
     #[test]
     fn test_validate_password_no_digit() {
-        assert!(AuthService::validate_password("TestPass!!").is_err());
+        assert!(validators::validate_password("TestPass!!").is_err());
     }
 
     #[test]
     fn test_validate_password_no_special_char() {
-        assert!(AuthService::validate_password("TestPass123").is_err());
+        assert!(validators::validate_password("TestPass123").is_err());
     }
 
     #[test]

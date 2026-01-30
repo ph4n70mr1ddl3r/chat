@@ -9,7 +9,9 @@
 //! - GET /conversations/* - conversation management (stubs for Phase 3+)
 
 use anyhow::Error;
+use base64::prelude::*;
 use futures::{SinkExt, StreamExt};
+use rand::RngCore;
 use sqlx::SqlitePool;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -77,8 +79,6 @@ impl Default for ServerConfig {
             tracing::warn!("For production deployments, ALWAYS set the JWT_SECRET environment variable.");
             tracing::warn!("Generated secrets are not persisted between restarts and will invalidate all existing tokens.");
             tracing::warn!("To avoid this warning, set a JWT_SECRET environment variable with at least 32 random characters.");
-            use rand::RngCore;
-            use base64::prelude::*;
             let mut secret = [0u8; 64];
             rand::rngs::OsRng.fill_bytes(&mut secret);
             BASE64_STANDARD.encode(secret)
@@ -108,7 +108,7 @@ pub struct ServerState {
     pub start_time: Instant,
 }
 
-    impl ServerState {
+impl ServerState {
     pub fn new(pool: SqlitePool, config: ServerConfig) -> Self {
         let connection_manager = Arc::new(websocket::ConnectionManager::new());
         let pool_for_services = pool.clone();
