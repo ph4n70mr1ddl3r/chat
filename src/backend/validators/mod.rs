@@ -53,19 +53,36 @@ pub fn validate_password(password: &str) -> Result<(), String> {
         return Err("Password must be at most 128 characters".to_string());
     }
 
-    if !password.chars().any(|c| c.is_uppercase()) {
+    let mut has_upper = false;
+    let mut has_lower = false;
+    let mut has_digit = false;
+    let mut has_special = false;
+
+    for c in password.chars() {
+        if c.is_uppercase() {
+            has_upper = true;
+        } else if c.is_lowercase() {
+            has_lower = true;
+        } else if c.is_numeric() {
+            has_digit = true;
+        } else if !c.is_alphanumeric() {
+            has_special = true;
+        }
+    }
+
+    if !has_upper {
         return Err("Password must contain at least one uppercase letter".to_string());
     }
 
-    if !password.chars().any(|c| c.is_lowercase()) {
+    if !has_lower {
         return Err("Password must contain at least one lowercase letter".to_string());
     }
 
-    if !password.chars().any(|c| c.is_numeric()) {
+    if !has_digit {
         return Err("Password must contain at least one digit".to_string());
     }
 
-    if !password.chars().any(|c| !c.is_alphanumeric()) {
+    if !has_special {
         return Err("Password must contain at least one special character".to_string());
     }
 

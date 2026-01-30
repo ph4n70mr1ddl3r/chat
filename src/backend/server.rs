@@ -70,17 +70,18 @@ impl Default for ServerConfig {
             let is_production = std::env::var("RUST_ENV").as_deref().unwrap_or("development") == "production";
             if is_production {
                 tracing::error!("CRITICAL SECURITY ERROR: JWT_SECRET must be set in production environment.");
-                tracing::error!("Set the JWT_SECRET environment variable before starting the server.");
-                panic!("JWT_SECRET must be set in production environment to prevent insecure operation");
+                tracing::error!("Set JWT_SECRET environment variable before starting the server.");
+                std::process::exit(1);
             }
             tracing::warn!("SECURITY WARNING: JWT_SECRET not set, generating cryptographically secure secret for development.");
             tracing::warn!("For production deployments, ALWAYS set the JWT_SECRET environment variable.");
             tracing::warn!("Generated secrets are not persisted between restarts and will invalidate all existing tokens.");
             tracing::warn!("To avoid this warning, set a JWT_SECRET environment variable with at least 32 random characters.");
             use rand::RngCore;
+            use base64::prelude::*;
             let mut secret = [0u8; 64];
             rand::rngs::OsRng.fill_bytes(&mut secret);
-            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, secret)
+            BASE64_STANDARD.encode(secret)
         });
 
         Self {

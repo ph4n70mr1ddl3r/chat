@@ -28,7 +28,7 @@ log = { workspace = true }
 jsonschema = { workspace = true }
 rand = { workspace = true }
 hex = { workspace = true }
-base64 = "0.22"
+base64 = { workspace = true, features = ["std"] }
 
 # Internal dependencies
 chat-shared = { path = "../shared" }

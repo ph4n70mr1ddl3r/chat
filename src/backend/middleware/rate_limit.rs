@@ -178,8 +178,9 @@ impl RateLimiter {
 
             // Check if limit exceeded
             if entry.attempts >= self.max_attempts {
+                let remaining = self.window_duration.saturating_sub(elapsed);
                 return Err(RateLimitExceeded {
-                    retry_after_secs: (self.window_duration - elapsed).as_secs().max(1),
+                    retry_after_secs: remaining.as_secs().max(1),
                 });
             }
 

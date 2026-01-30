@@ -20,14 +20,12 @@ struct AppState {
 }
 
 thread_local! {
-    static APP_STATE: RefCell<AppState> = const {
-        RefCell::new(AppState {
-            login_screen: None,
-            chat_screen: None,
-            settings_screen: None,
-            signup_screen: None,
-        })
-    };
+    static APP_STATE: RefCell<AppState> = RefCell::new(AppState {
+        login_screen: None,
+        chat_screen: None,
+        settings_screen: None,
+        signup_screen: None,
+    });
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -50,9 +48,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs() as i64)
-            .unwrap_or(0);
+            .unwrap_or_else(|_| 0);
 
-        if now >= session.expires_at {
+        if session.expires_at > 0 && now >= session.expires_at {
             tracing::warn!("Session expired, showing login screen");
             show_login(base_url);
         } else {

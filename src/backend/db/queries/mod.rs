@@ -155,6 +155,10 @@ pub async fn find_users_by_ids(
         return Ok(std::collections::HashMap::new());
     }
 
+    if user_ids.len() > 1000 {
+        return Err("Too many user IDs requested (max 1000)".to_string());
+    }
+
     let placeholders: String = user_ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
     let query = format!(
         "{} FROM users WHERE id IN ({})",
@@ -165,6 +169,9 @@ pub async fn find_users_by_ids(
     let mut query = sqlx::query_as::<_, User>(&query);
 
     for user_id in user_ids {
+        if !uuid::Uuid::parse_str(user_id).is_ok() {
+            return Err(format!("Invalid UUID format: {}", user_id));
+        }
         query = query.bind(user_id);
     }
 
