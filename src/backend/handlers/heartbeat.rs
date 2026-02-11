@@ -92,7 +92,7 @@ impl HeartbeatManager {
 
     /// Generate a PING message
     pub fn generate_ping() -> WsMessage {
-        WsMessage::Ping(vec![])
+        WsMessage::Ping(Vec::new().into())
     }
 
     /// Handle incoming PONG message

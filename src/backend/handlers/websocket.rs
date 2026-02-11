@@ -196,11 +196,11 @@ impl MessageValidator {
             _ => return Err(format!("Invalid message type: {}", envelope.msg_type)),
         }
 
-        // Check timestamp is reasonable (not far in future/past)
+        // Check timestamp is reasonable (not far in future/past).
+        // Allow 5 minutes (300,000ms) tolerance to account for clock skew between clients and server.
         let now = chrono::Utc::now().timestamp_millis();
         let time_diff = (envelope.timestamp as i64).saturating_sub(now).abs();
         if time_diff > 300_000 {
-            // Allow 5 minutes skew
             return Err("Timestamp out of reasonable range".to_string());
         }
 

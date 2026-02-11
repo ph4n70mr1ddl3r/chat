@@ -114,7 +114,9 @@ impl WebSocketClient {
                 }
 
                 let token_to_use = session::get_token().unwrap_or_else(|| token.clone());
-                let _ = event_tx.send(WebSocketEvent::ConnectionState(ConnectionStatus::Connecting));
+                if let Err(e) = event_tx.send(WebSocketEvent::ConnectionState(ConnectionStatus::Connecting)) {
+                    tracing::error!("Failed to send connecting state: {}", e);
+                }
 
                 let request = match Request::builder()
                     .uri(&websocket_url)
@@ -133,18 +135,21 @@ impl WebSocketClient {
                 match tokio_tungstenite::connect_async(request).await {
                     Ok((ws_stream, _)) => {
                         attempt = 0;
-                        let _ = event_tx
-                            .send(WebSocketEvent::ConnectionState(ConnectionStatus::Connected));
+                        if let Err(e) = event_tx.send(WebSocketEvent::ConnectionState(ConnectionStatus::Connected)) {
+                            tracing::error!("Failed to send connected state: {}", e);
+                        }
                         let (mut ws_write, mut ws_read) = ws_stream.split();
 
                         if let Err(e) =
                             flush_queue(&mut ws_write, &mut pending, &event_tx).await
                         {
-                            let _ = event_tx.send(WebSocketEvent::ConnectionState(
+                            if let Err(send_err) = event_tx.send(WebSocketEvent::ConnectionState(
                                 ConnectionStatus::Disconnected {
                                     reason: format!("Send failed: {e}"),
                                 },
-                            ));
+                            )) {
+                                tracing::error!("Failed to send disconnected state: {}", send_err);
+                            }
                             continue;
                         }
 
@@ -158,7 +163,9 @@ impl WebSocketClient {
                                     }
                                     pending.push_back(cmd);
                                     if let Err(e) = flush_queue(&mut ws_write, &mut pending, &event_tx).await {
-                                        let _ = event_tx.send(WebSocketEvent::ConnectionState(ConnectionStatus::Disconnected { reason: format!("Send failed: {e}") }));
+                                        if let Err(send_err) = event_tx.send(WebSocketEvent::ConnectionState(ConnectionStatus::Disconnected { reason: format!("Send failed: {e}") })) {
+                                            tracing::error!("Failed to send disconnected state: {}", send_err);
+                                        }
                                         break;
                                     }
                                 }
@@ -168,21 +175,31 @@ impl WebSocketClient {
                                             handle_incoming_text(&text, &event_tx);
                                         }
                                         Some(Ok(Message::Ping(p))) => {
-                                            let _ = ws_write.send(Message::Pong(p)).await;
+                                            if let Err(e) = ws_write.send(Message::Pong(p)).await {
+                                                tracing::error!("Failed to send pong: {}", e);
+                                            }
                                         }
                                         Some(Ok(Message::Pong(_))) => {
-                                            let _ = event_tx.send(WebSocketEvent::HeartbeatReceived);
+                                            if let Err(e) = event_tx.send(WebSocketEvent::HeartbeatReceived) {
+                                                tracing::error!("Failed to send heartbeat received event: {}", e);
+                                            }
                                         }
                                         Some(Ok(Message::Close(_))) => {
-                                            let _ = event_tx.send(WebSocketEvent::ConnectionState(ConnectionStatus::Disconnected { reason: "Server closed connection".to_string() }));
+                                            if let Err(e) = event_tx.send(WebSocketEvent::ConnectionState(ConnectionStatus::Disconnected { reason: "Server closed connection".to_string() })) {
+                                                tracing::error!("Failed to send disconnected state: {}", e);
+                                            }
                                             break;
                                         }
                                         Some(Err(e)) => {
-                                            let _ = event_tx.send(WebSocketEvent::ConnectionState(ConnectionStatus::Disconnected { reason: format!("WebSocket error: {e}") }));
+                                            if let Err(send_err) = event_tx.send(WebSocketEvent::ConnectionState(ConnectionStatus::Disconnected { reason: format!("WebSocket error: {e}") })) {
+                                                tracing::error!("Failed to send disconnected state: {}", send_err);
+                                            }
                                             break;
                                         }
                                         None => {
-                                            let _ = event_tx.send(WebSocketEvent::ConnectionState(ConnectionStatus::Disconnected { reason: "Connection dropped".to_string() }));
+                                            if let Err(e) = event_tx.send(WebSocketEvent::ConnectionState(ConnectionStatus::Disconnected { reason: "Connection dropped".to_string() })) {
+                                                tracing::error!("Failed to send disconnected state: {}", e);
+                                            }
                                             break
                                         },
                                         _ => {}
@@ -192,33 +209,41 @@ impl WebSocketClient {
                         }
                     }
                     Err(e) => {
-                        let _ = event_tx.send(WebSocketEvent::ConnectionState(
+                        if let Err(send_err) = event_tx.send(WebSocketEvent::ConnectionState(
                             ConnectionStatus::Disconnected {
                                 reason: format!("Connect failed: {e}"),
                             },
-                        ));
+                        )) {
+                            tracing::error!("Failed to send disconnected state: {}", send_err);
+                        }
                     }
                 }
 
                 // Exponential backoff on reconnect attempts.
                 attempt += 1;
                 if attempt >= max_reconnect_attempts() {
-                    let _ = event_tx.send(WebSocketEvent::Error(
+                    if let Err(e) = event_tx.send(WebSocketEvent::Error(
                         "Max reconnect attempts reached".to_string(),
-                    ));
-                    let _ = event_tx.send(WebSocketEvent::ConnectionState(
+                    )) {
+                        tracing::error!("Failed to send error event: {}", e);
+                    }
+                    if let Err(e) = event_tx.send(WebSocketEvent::ConnectionState(
                         ConnectionStatus::Disconnected {
                             reason: "Max reconnect attempts exceeded".to_string(),
                         },
-                    ));
+                    )) {
+                        tracing::error!("Failed to send disconnected state: {}", e);
+                    }
                     return;
                 }
                 let backoff = calculate_backoff(attempt);
-                let _ = event_tx.send(WebSocketEvent::ConnectionState(
+                if let Err(e) = event_tx.send(WebSocketEvent::ConnectionState(
                     ConnectionStatus::Reconnecting {
                         retry_in_ms: backoff.as_millis() as u64,
                     },
-                ));
+                )) {
+                    tracing::error!("Failed to send reconnecting state: {}", e);
+                }
                 tokio::time::sleep(backoff).await;
             }
         });
@@ -286,14 +311,19 @@ where
                 Ok(envelope) => match serde_json::to_string(&envelope) {
                     Ok(p) => p,
                     Err(e) => {
-                        let _ =
-                            event_tx.send(WebSocketEvent::Error(format!("Serialize error: {e}")));
+                        tracing::error!("Serialize error: {e}");
+                        if let Err(send_err) = event_tx.send(WebSocketEvent::Error(format!("Serialize error: {e}"))) {
+                            tracing::error!("Failed to send error event: {}", send_err);
+                        }
                         pending.pop_front();
                         continue;
                     }
                 },
                 Err(e) => {
-                    let _ = event_tx.send(WebSocketEvent::Error(e));
+                    tracing::error!("Build envelope error: {e}");
+                    if let Err(send_err) = event_tx.send(WebSocketEvent::Error(e)) {
+                        tracing::error!("Failed to send error event: {}", send_err);
+                    }
                     pending.pop_front();
                     continue;
                 }
@@ -305,21 +335,28 @@ where
                 Ok(envelope) => match serde_json::to_string(&envelope) {
                     Ok(p) => p,
                     Err(e) => {
-                        let _ =
-                            event_tx.send(WebSocketEvent::Error(format!("Serialize error: {e}")));
+                        tracing::error!("Serialize error: {e}");
+                        if let Err(send_err) = event_tx.send(WebSocketEvent::Error(format!("Serialize error: {e}"))) {
+                            tracing::error!("Failed to send error event: {}", send_err);
+                        }
                         pending.pop_front();
                         continue;
                     }
                 },
                 Err(e) => {
-                    let _ = event_tx.send(WebSocketEvent::Error(e));
+                    tracing::error!("Build typing envelope error: {e}");
+                    if let Err(send_err) = event_tx.send(WebSocketEvent::Error(e)) {
+                        tracing::error!("Failed to send error event: {}", send_err);
+                    }
                     pending.pop_front();
                     continue;
                 }
             },
             WebSocketCommand::Disconnect => {
                 pending.pop_front();
-                let _ = ws_write.send(Message::Close(None)).await;
+                if let Err(e) = ws_write.send(Message::Close(None)).await {
+                    tracing::error!("Failed to send close message: {}", e);
+                }
                 return Ok(());
             }
         };
@@ -413,9 +450,12 @@ fn handle_incoming_text(text: &str, event_tx: &mpsc::UnboundedSender<WebSocketEv
     let envelope = match envelope {
         Ok(v) => v,
         Err(e) => {
-            let _ = event_tx.send(WebSocketEvent::Error(format!(
+            tracing::error!("Invalid message payload: {e}");
+            if let Err(send_err) = event_tx.send(WebSocketEvent::Error(format!(
                 "Invalid message payload: {e}"
-            )));
+            ))) {
+                tracing::error!("Failed to send error event: {}", send_err);
+            }
             return;
         }
     };
@@ -425,15 +465,19 @@ fn handle_incoming_text(text: &str, event_tx: &mpsc::UnboundedSender<WebSocketEv
             let ack: Result<AckData, _> = serde_json::from_value(envelope.data.clone());
             match ack {
                 Ok(ack) => {
-                    let _ = event_tx.send(WebSocketEvent::Ack {
+                    if let Err(e) = event_tx.send(WebSocketEvent::Ack {
                         message_id: ack.message_id,
                         status: ack.status,
                         conversation_id: ack.conversation_id,
-                    });
+                    }) {
+                        tracing::error!("Failed to send ack event: {}", e);
+                    }
                 }
                 Err(e) => {
-                    let _ =
-                        event_tx.send(WebSocketEvent::Error(format!("Failed to parse ack: {e}")));
+                    tracing::error!("Failed to parse ack: {e}");
+                    if let Err(send_err) = event_tx.send(WebSocketEvent::Error(format!("Failed to parse ack: {e}"))) {
+                        tracing::error!("Failed to send error event: {}", send_err);
+                    }
                 }
             }
         }
@@ -441,7 +485,7 @@ fn handle_incoming_text(text: &str, event_tx: &mpsc::UnboundedSender<WebSocketEv
             let msg: Result<TextMessageData, _> = serde_json::from_value(envelope.data.clone());
             match msg {
                 Ok(msg) => {
-                    let _ = event_tx.send(WebSocketEvent::Message {
+                    if let Err(e) = event_tx.send(WebSocketEvent::Message {
                         conversation_id: msg
                             .conversation_id
                             .unwrap_or_else(|| "unknown".to_string()),
@@ -452,12 +496,17 @@ fn handle_incoming_text(text: &str, event_tx: &mpsc::UnboundedSender<WebSocketEv
                         content: msg.content,
                         status: msg.status.unwrap_or_else(|| "sent".to_string()),
                         timestamp: envelope.timestamp,
-                    });
+                    }) {
+                        tracing::error!("Failed to send message event: {}", e);
+                    }
                 }
                 Err(e) => {
-                    let _ = event_tx.send(WebSocketEvent::Error(format!(
+                    tracing::error!("Failed to parse message: {e}");
+                    if let Err(send_err) = event_tx.send(WebSocketEvent::Error(format!(
                         "Failed to parse message: {e}"
-                    )));
+                    ))) {
+                        tracing::error!("Failed to send error event: {}", send_err);
+                    }
                 }
             }
         }
@@ -465,19 +514,24 @@ fn handle_incoming_text(text: &str, event_tx: &mpsc::UnboundedSender<WebSocketEv
             let typing: Result<TypingData, _> = serde_json::from_value(envelope.data.clone());
             match typing {
                 Ok(typing) => {
-                    let _ = event_tx.send(WebSocketEvent::Typing {
+                    if let Err(e) = event_tx.send(WebSocketEvent::Typing {
                         sender_id: typing.sender_id,
                         sender_username: typing
                             .sender_username
                             .unwrap_or_else(|| "Unknown".to_string()),
                         recipient_id: typing.recipient_id,
                         is_typing: typing.is_typing,
-                    });
+                    }) {
+                        tracing::error!("Failed to send typing event: {}", e);
+                    }
                 }
                 Err(e) => {
-                    let _ = event_tx.send(WebSocketEvent::Error(format!(
+                    tracing::error!("Failed to parse typing: {e}");
+                    if let Err(send_err) = event_tx.send(WebSocketEvent::Error(format!(
                         "Failed to parse typing: {e}"
-                    )));
+                    ))) {
+                        tracing::error!("Failed to send error event: {}", send_err);
+                    }
                 }
             }
         }
@@ -485,25 +539,33 @@ fn handle_incoming_text(text: &str, event_tx: &mpsc::UnboundedSender<WebSocketEv
             let presence: Result<PresenceData, _> = serde_json::from_value(envelope.data.clone());
             match presence {
                 Ok(presence) => {
-                    let _ = event_tx.send(WebSocketEvent::Presence {
+                    if let Err(e) = event_tx.send(WebSocketEvent::Presence {
                         user_id: presence.user_id,
                         username: presence.username,
                         is_online: presence.is_online,
                         last_seen_at: presence.last_seen_at,
-                    });
+                    }) {
+                        tracing::error!("Failed to send presence event: {}", e);
+                    }
                 }
                 Err(e) => {
-                    let _ = event_tx.send(WebSocketEvent::Error(format!(
+                    tracing::error!("Failed to parse presence: {e}");
+                    if let Err(send_err) = event_tx.send(WebSocketEvent::Error(format!(
                         "Failed to parse presence: {e}"
-                    )));
+                    ))) {
+                        tracing::error!("Failed to send error event: {}", send_err);
+                    }
                 }
             }
         }
         _ => {
-            let _ = event_tx.send(WebSocketEvent::Error(format!(
+            tracing::error!("Unknown message type: {}", envelope.msg_type);
+            if let Err(e) = event_tx.send(WebSocketEvent::Error(format!(
                 "Unknown message type: {}",
                 envelope.msg_type
-            )));
+            ))) {
+                tracing::error!("Failed to send error event: {}", e);
+            }
         }
     }
 }

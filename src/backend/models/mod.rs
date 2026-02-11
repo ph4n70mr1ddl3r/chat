@@ -58,11 +58,13 @@ impl User {
     }
 
     /// Check if user is deleted (soft delete with timestamp in the past)
+    #[must_use]
     pub fn is_deleted(&self) -> bool {
         self.deleted_at.is_some()
     }
 
     /// Check if user is active
+    #[must_use]
     pub fn is_active(&self) -> bool {
         !self.is_deleted()
     }

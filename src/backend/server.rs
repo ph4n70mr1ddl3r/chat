@@ -11,7 +11,6 @@
 use anyhow::Error;
 use base64::prelude::*;
 use futures::{SinkExt, StreamExt};
-use rand::RngCore;
 use sqlx::SqlitePool;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -79,8 +78,7 @@ impl Default for ServerConfig {
             tracing::warn!("For production deployments, ALWAYS set the JWT_SECRET environment variable.");
             tracing::warn!("Generated secrets are not persisted between restarts and will invalidate all existing tokens.");
             tracing::warn!("To avoid this warning, set a JWT_SECRET environment variable with at least 32 random characters.");
-            let mut secret = [0u8; 64];
-            rand::rngs::OsRng.fill_bytes(&mut secret);
+            let secret: [u8; 64] = rand::random();
             BASE64_STANDARD.encode(secret)
         });
 
@@ -103,8 +101,8 @@ pub struct ServerState {
     pub user_service: Arc<crate::services::UserService>,
     pub global_rate_limiter: Arc<rate_limit::RateLimiter>,
     pub auth_rate_limiter: Arc<rate_limit::RateLimiter>,
-    _global_cleanup_handle: tokio::task::JoinHandle<()>,
-    _auth_cleanup_handle: tokio::task::JoinHandle<()>,
+    _global_cleanup_handle: Arc<tokio::task::JoinHandle<()>>,
+    _auth_cleanup_handle: Arc<tokio::task::JoinHandle<()>>,
     pub start_time: Instant,
 }
 
@@ -132,8 +130,8 @@ impl ServerState {
             user_service,
             global_rate_limiter,
             auth_rate_limiter,
-            _global_cleanup_handle: global_cleanup_handle,
-            _auth_cleanup_handle: auth_cleanup_handle,
+            _global_cleanup_handle: Arc::new(global_cleanup_handle),
+            _auth_cleanup_handle: Arc::new(auth_cleanup_handle),
             start_time: Instant::now(),
         }
     }
