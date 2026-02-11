@@ -161,22 +161,22 @@ impl RateLimiter {
     ///
     /// This operation is atomic within a single lock acquisition to prevent
     /// race conditions where multiple concurrent requests could bypass the limit
+    ///
+    /// Returns Ok(()) if the request is allowed and has been recorded,
+    /// Err(RateLimitExceeded) if the IP has exceeded the rate limit
     pub async fn check_and_record(&self, ip: &str) -> Result<(), RateLimitExceeded> {
         let mut entries = self.entries.lock().await;
 
-        // Check current state atomically
         let now = Instant::now();
         if let Some(entry) = entries.get_mut(ip) {
             let elapsed = entry.window_start.elapsed();
 
-            // If window has expired, reset and allow
             if elapsed > self.window_duration {
                 entry.attempts = 1;
                 entry.window_start = now;
                 return Ok(());
             }
 
-            // Check if limit exceeded
             if entry.attempts >= self.max_attempts {
                 let remaining = self.window_duration.saturating_sub(elapsed);
                 return Err(RateLimitExceeded {
@@ -184,25 +184,27 @@ impl RateLimiter {
                 });
             }
 
-            // Increment attempts
             entry.attempts += 1;
             return Ok(());
         }
 
-        // First attempt - check capacity
         if entries.len() >= MAX_RATE_LIMIT_ENTRIES {
             entries.retain(|_, entry| entry.window_start.elapsed() <= self.window_duration);
+
+            if entries.len() >= MAX_RATE_LIMIT_ENTRIES {
+                return Err(RateLimitExceeded {
+                    retry_after_secs: self.window_duration.as_secs().max(1),
+                });
+            }
         }
 
-        if entries.len() < MAX_RATE_LIMIT_ENTRIES {
-            entries.insert(
-                ip.to_owned(),
-                RateLimitEntry {
-                    attempts: 1,
-                    window_start: now,
-                },
-            );
-        }
+        entries.insert(
+            ip.to_owned(),
+            RateLimitEntry {
+                attempts: 1,
+                window_start: now,
+            },
+        );
 
         Ok(())
     }
@@ -293,12 +295,10 @@ mod tests {
         let limiter = RateLimiter::new(3, 60);
         let ip = "192.168.1.2";
 
-        // Record 3 failed attempts
         for _ in 0..3 {
             limiter.record_attempt(ip).await;
         }
 
-        // Should now be rate limited
         assert!(limiter.is_rate_limited(ip).await);
         assert_eq!(limiter.get_remaining_attempts(ip).await, 0);
     }
@@ -308,36 +308,52 @@ mod tests {
         let limiter = RateLimiter::new(3, 60);
         let ip = "192.168.1.3";
 
-        // Record attempts and get rate limited
         for _ in 0..3 {
             limiter.record_attempt(ip).await;
         }
         assert!(limiter.is_rate_limited(ip).await);
 
-        // Reset
         limiter.reset(ip).await;
 
-        // Should no longer be rate limited
         assert!(!limiter.is_rate_limited(ip).await);
         assert_eq!(limiter.get_remaining_attempts(ip).await, 3);
     }
 
     #[tokio::test]
     async fn test_rate_limiter_window_expiry() {
-        let limiter = RateLimiter::new(3, 1); // 1 second window
+        let limiter = RateLimiter::new(3, 1);
         let ip = "192.168.1.4";
 
-        // Record attempts
         limiter.record_attempt(ip).await;
         limiter.record_attempt(ip).await;
 
         assert_eq!(limiter.get_remaining_attempts(ip).await, 1);
 
-        // Wait for window to expire
         tokio::time::sleep(Duration::from_secs(2)).await;
 
-        // Should be reset
         assert!(!limiter.is_rate_limited(ip).await);
         assert_eq!(limiter.get_remaining_attempts(ip).await, 3);
+    }
+
+    #[tokio::test]
+    async fn test_check_and_record_atomic() {
+        let limiter = RateLimiter::new(2, 60);
+
+        assert!(limiter.check_and_record("192.168.1.5").await.is_ok());
+        assert!(limiter.check_and_record("192.168.1.5").await.is_ok());
+        assert!(limiter.check_and_record("192.168.1.5").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_check_and_record_reset_on_window_expiry() {
+        let limiter = RateLimiter::new(2, 1);
+
+        assert!(limiter.check_and_record("192.168.1.6").await.is_ok());
+        assert!(limiter.check_and_record("192.168.1.6").await.is_ok());
+        assert!(limiter.check_and_record("192.168.1.6").await.is_err());
+
+        tokio::time::sleep(Duration::from_secs(2)).await;
+
+        assert!(limiter.check_and_record("192.168.1.6").await.is_ok());
     }
 }

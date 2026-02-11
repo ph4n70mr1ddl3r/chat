@@ -6,6 +6,24 @@ use crate::models::{Conversation, Message, User};
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
+/// Helper function to format database errors with context
+#[allow(dead_code)]
+fn db_error(context: &str, entity_id: Option<&str>) -> String {
+    match entity_id {
+        Some(id) => format!("{} (id: {})", context, id),
+        None => context.to_string(),
+    }
+}
+
+/// Helper function to wrap database query errors with context
+#[allow(dead_code)]
+async fn map_db_error<T, F>(context: &str, entity_id: Option<&str>, f: F) -> Result<T, String>
+where
+    F: std::future::Future<Output = Result<T, sqlx::Error>>,
+{
+    f.await.map_err(|e| format!("{}: {}", db_error(context, entity_id), e))
+}
+
 /// Auth event types
 #[derive(Debug, Clone)]
 pub enum AuthEventType {
@@ -561,7 +579,48 @@ pub async fn search_messages_in_conversation(
 pub async fn soft_delete_user(pool: &SqlitePool, user_id: &str) -> Result<(), String> {
     delete_user(pool, user_id).await?;
     anonymize_user_messages(pool, user_id).await?;
+    delete_user_conversations(pool, user_id).await?;
     Ok(())
+}
+
+/// Delete all conversations for a user
+pub async fn delete_user_conversations(pool: &SqlitePool, user_id: &str) -> Result<(), String> {
+    sqlx::query("DELETE FROM conversations WHERE user1_id = ? OR user2_id = ?")
+        .bind(user_id)
+        .bind(user_id)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Failed to delete user conversations: {}", e))?;
+
+    Ok(())
+}
+
+/// Execute a database transaction
+pub async fn execute_transaction<F, T>(pool: &SqlitePool, f: F) -> Result<T, String>
+where
+    F: for<'a> FnOnce(&'a mut sqlx::sqlite::SqliteConnection) -> futures::future::BoxFuture<'a, Result<T, String>>,
+{
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| format!("Failed to begin transaction: {}", e))?;
+
+    let result = f(&mut tx).await;
+
+    match result {
+        Ok(value) => {
+            tx.commit()
+                .await
+                .map_err(|e| format!("Failed to commit transaction: {}", e))?;
+            Ok(value)
+        }
+        Err(e) => {
+            tx.rollback()
+                .await
+                .map_err(|err| format!("Failed to rollback transaction: {}. Original error: {}", err, e))?;
+            Err(e)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -573,12 +632,10 @@ mod tests {
     async fn test_insert_and_find_user() -> Result<(), Box<dyn std::error::Error>> {
         let pool = test_utils::setup_test_db().await;
 
-        // Create and insert user
         let user = User::new("alice".to_string(), "hash123".to_string());
 
         insert_user(&pool, &user).await?;
 
-        // Find user
         let found = find_user_by_username(&pool, "alice").await?;
         assert!(found.is_some());
         assert_eq!(found.unwrap().username, "alice");
@@ -591,20 +648,131 @@ mod tests {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let pool = test_utils::setup_test_db().await;
 
-        // Insert a benign user
         let user = User::new("alice".to_string(), "hash123".to_string());
         insert_user(&pool, &user).await?;
 
-        // Attempt an injection payload in the search query
         let malicious = "alice'; DROP TABLE users; --";
         let results = search_users_by_prefix(&pool, malicious, 10).await?;
         assert!(results.is_empty());
 
-        // Verify the table still exists and contains the original row
         let remaining: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users")
             .fetch_one(&pool)
             .await?;
         assert_eq!(remaining.0, 1);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_soft_delete_user_cleans_up_conversations(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let pool = test_utils::setup_test_db().await;
+
+        let user1 = User::new("alice".to_string(), "hash123".to_string());
+        let user2 = User::new("bob".to_string(), "hash456".to_string());
+
+        insert_user(&pool, &user1).await?;
+        insert_user(&pool, &user2).await?;
+
+        let (user1_id, user2_id) = if user1.id < user2.id {
+            (user1.id.clone(), user2.id.clone())
+        } else {
+            (user2.id.clone(), user1.id.clone())
+        };
+        let conv = Conversation::new(user1_id, user2_id);
+        insert_conversation(&pool, &conv).await?;
+
+        soft_delete_user(&pool, &user1.id).await?;
+
+        let remaining_convs: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM conversations")
+            .fetch_one(&pool)
+            .await?;
+        assert_eq!(remaining_convs.0, 0);
+
+        let remaining_messages: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM messages")
+            .fetch_one(&pool)
+            .await?;
+        assert_eq!(remaining_messages.0, 0);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_db_error_context() {
+        let err = db_error("Failed to update message", Some("msg123"));
+        assert!(err.contains("Failed to update message"));
+        assert!(err.contains("(id: msg123)"));
+
+        let err_no_id = db_error("Failed to update message", None);
+        assert_eq!(err_no_id, "Failed to update message");
+    }
+
+    #[tokio::test]
+    async fn test_execute_transaction_commit() -> Result<(), Box<dyn std::error::Error>> {
+        let pool = test_utils::setup_test_db().await;
+
+        let user: String = execute_transaction(&pool, |tx| {
+            Box::pin(async move {
+                let user = User::new("alice".to_string(), "hash123".to_string());
+                sqlx::query(
+                    "INSERT INTO users (id, username, password_hash, created_at, updated_at, is_online, deleted_at, last_seen_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                )
+                .bind(&user.id)
+                .bind(&user.username)
+                .bind(&user.password_hash)
+                .bind(user.created_at)
+                .bind(user.updated_at)
+                .bind(user.is_online)
+                .bind(user.deleted_at)
+                .bind(user.last_seen_at)
+                .execute(tx)
+                .await
+                .map_err(|e| format!("Insert failed: {}", e))?;
+
+                Ok(user.username)
+            })
+        }).await?;
+
+        assert_eq!(user, "alice");
+
+        let found = find_user_by_username(&pool, "alice").await?;
+        assert!(found.is_some());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_execute_transaction_rollback() -> Result<(), Box<dyn std::error::Error>> {
+        let pool = test_utils::setup_test_db().await;
+
+        let result: Result<String, String> = execute_transaction(&pool, |tx| {
+            Box::pin(async move {
+                let user = User::new("alice".to_string(), "hash123".to_string());
+                sqlx::query(
+                    "INSERT INTO users (id, username, password_hash, created_at, updated_at, is_online, deleted_at, last_seen_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                )
+                .bind(&user.id)
+                .bind(&user.username)
+                .bind(&user.password_hash)
+                .bind(user.created_at)
+                .bind(user.updated_at)
+                .bind(user.is_online)
+                .bind(user.deleted_at)
+                .bind(user.last_seen_at)
+                .execute(tx)
+                .await
+                .map_err(|e| format!("Insert failed: {}", e))?;
+
+                Err("Intentional rollback".to_string())
+            })
+        }).await;
+
+        assert!(result.is_err());
+
+        let found = find_user_by_username(&pool, "alice").await?;
+        assert!(found.is_none());
 
         Ok(())
     }

@@ -14,6 +14,16 @@ pub mod validators;
 use std::sync::OnceLock;
 use tracing_subscriber::{fmt, EnvFilter};
 
+/// Type alias for database operations that return String errors
+/// Using String for simplicity; consider migrating to thiserror for production
+pub type DbResult<T> = Result<T, String>;
+
+/// Type alias for service operations that return String errors
+pub type ServiceResult<T> = Result<T, String>;
+
+/// Type alias for handler operations that return String errors
+pub type HandlerResult<T> = Result<T, String>;
+
 /// Global tracing initializer to produce structured JSON logs across all binaries.
 ///
 /// Idempotent: calling multiple times is safe and will only initialize once.

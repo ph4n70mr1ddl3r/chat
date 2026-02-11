@@ -274,6 +274,46 @@ impl MessageService {
         }
     }
 
+    /// Helper: Update message status with appropriate timestamp
+    async fn update_message_status_with_timestamp(
+        &self,
+        message_id: &str,
+        new_status: &str,
+    ) -> Result<(), String> {
+        let now = chrono::Utc::now().timestamp_millis();
+
+        match new_status {
+            status::READ => {
+                sqlx::query("UPDATE messages SET status = ?, read_at = ? WHERE id = ?")
+                    .bind(status::READ)
+                    .bind(now)
+                    .bind(message_id)
+                    .execute(&self.pool)
+                    .await
+                    .map_err(|e| format!("Failed to update message {} to read: {}", message_id, e))?;
+            }
+            status::DELIVERED => {
+                sqlx::query("UPDATE messages SET status = ?, delivered_at = ? WHERE id = ?")
+                    .bind(status::DELIVERED)
+                    .bind(now)
+                    .bind(message_id)
+                    .execute(&self.pool)
+                    .await
+                    .map_err(|e| format!("Failed to update message {} to delivered: {}", message_id, e))?;
+            }
+            _ => {
+                sqlx::query("UPDATE messages SET status = ? WHERE id = ?")
+                    .bind(new_status)
+                    .bind(message_id)
+                    .execute(&self.pool)
+                    .await
+                    .map_err(|e| format!("Failed to update message {} status: {}", message_id, e))?;
+            }
+        }
+
+        Ok(())
+    }
+
     /// Sync delivery status updates (idempotent)
     ///
     /// Batch updates delivery status for multiple messages with idempotent logic.
@@ -288,57 +328,22 @@ impl MessageService {
         let mut updated_messages = Vec::new();
 
         for (message_id, new_status) in updates {
-            // Load current message
             let current = match queries::find_message_by_id(&self.pool, &message_id).await {
                 Ok(Some(msg)) => msg,
-                _ => continue, // Skip if not found
+                _ => continue,
             };
 
-            // Verify authorization
             if current.sender_id != user_id && current.recipient_id != user_id {
-                continue; // Skip unauthorized updates
+                continue;
             }
 
-            // Check if update is valid (idempotent - only upgrade)
             let current_weight = Self::status_weight(&current.status);
             let new_weight = Self::status_weight(&new_status);
 
             if new_weight >= current_weight {
-                // Apply idempotent update
-                let now = chrono::Utc::now().timestamp_millis();
+                self.update_message_status_with_timestamp(&message_id, &new_status)
+                    .await?;
 
-                match new_status.as_str() {
-                    status::READ => {
-                        sqlx::query("UPDATE messages SET status = ?, read_at = ? WHERE id = ?")
-                            .bind(status::READ)
-                            .bind(now)
-                            .bind(&message_id)
-                            .execute(&self.pool)
-                            .await
-                            .map_err(|e| format!("Failed to update message: {}", e))?;
-                    }
-                    status::DELIVERED => {
-                        sqlx::query(
-                            "UPDATE messages SET status = ?, delivered_at = ? WHERE id = ?",
-                        )
-                        .bind(status::DELIVERED)
-                        .bind(now)
-                        .bind(&message_id)
-                        .execute(&self.pool)
-                        .await
-                        .map_err(|e| format!("Failed to update message: {}", e))?;
-                    }
-                    _ => {
-                        sqlx::query("UPDATE messages SET status = ? WHERE id = ?")
-                            .bind(&new_status)
-                            .bind(&message_id)
-                            .execute(&self.pool)
-                            .await
-                            .map_err(|e| format!("Failed to update message: {}", e))?;
-                    }
-                }
-
-                // Fetch updated message and add to response
                 if let Ok(Some(updated)) =
                     queries::find_message_by_id(&self.pool, &message_id).await
                 {
@@ -353,7 +358,6 @@ impl MessageService {
                     );
                 }
             } else {
-                // Status would downgrade - skip idempotently
                 updated_messages.push(current);
             }
         }

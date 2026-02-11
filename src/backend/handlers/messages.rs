@@ -265,6 +265,46 @@ impl MessageHandler {
         }
     }
 
+    /// Helper: Update message status with appropriate timestamp
+    async fn update_message_status_with_timestamp(
+        &self,
+        message_id: &str,
+        new_status: &str,
+    ) -> Result<(), String> {
+        let now = chrono::Utc::now().timestamp_millis();
+
+        match new_status {
+            crate::models::status::READ => {
+                sqlx::query("UPDATE messages SET status = ?, read_at = ? WHERE id = ?")
+                    .bind(crate::models::status::READ)
+                    .bind(now)
+                    .bind(message_id)
+                    .execute(&self.pool)
+                    .await
+                    .map_err(|e| format!("Failed to update message {} to read: {}", message_id, e))?;
+            }
+            crate::models::status::DELIVERED => {
+                sqlx::query("UPDATE messages SET status = ?, delivered_at = ? WHERE id = ?")
+                    .bind(crate::models::status::DELIVERED)
+                    .bind(now)
+                    .bind(message_id)
+                    .execute(&self.pool)
+                    .await
+                    .map_err(|e| format!("Failed to update message {} to delivered: {}", message_id, e))?;
+            }
+            _ => {
+                sqlx::query("UPDATE messages SET status = ? WHERE id = ?")
+                    .bind(new_status)
+                    .bind(message_id)
+                    .execute(&self.pool)
+                    .await
+                    .map_err(|e| format!("Failed to update message {} status: {}", message_id, e))?;
+            }
+        }
+
+        Ok(())
+    }
+
     /// Sync delivery status updates from client
     ///
     /// Handles batch delivery status updates from a reconnected client.
@@ -285,60 +325,30 @@ impl MessageHandler {
         let mut synced_count = 0u32;
 
         for update in updates {
-            // Load current message
             let current = match queries::find_message_by_id(&self.pool, &update.message_id).await {
                 Ok(Some(msg)) => msg,
-                _ => continue, // Skip messages that don't exist
+                _ => continue,
             };
 
-            // Verify authorization: user must be sender or recipient
             if current.sender_id != user_id && current.recipient_id != user_id {
-                continue; // Skip unauthorized updates
+                continue;
             }
 
-            // Check if update is valid (don't downgrade status)
             let current_weight =
                 crate::services::message_service::MessageService::status_weight(&current.status);
             let new_weight =
                 crate::services::message_service::MessageService::status_weight(&update.status);
 
             if new_weight >= current_weight {
-                // Update is valid - apply idempotent upgrade
-                let now = chrono::Utc::now().timestamp_millis();
-                let update_result = match update.status.as_str() {
-                    crate::models::status::READ => {
-                        sqlx::query("UPDATE messages SET status = ?, read_at = ? WHERE id = ?")
-                            .bind(crate::models::status::READ)
-                            .bind(now)
-                            .bind(&update.message_id)
-                            .execute(&self.pool)
-                            .await
-                    }
-                    crate::models::status::DELIVERED => {
-                        sqlx::query("UPDATE messages SET status = ?, delivered_at = ? WHERE id = ?")
-                            .bind(crate::models::status::DELIVERED)
-                            .bind(now)
-                            .bind(&update.message_id)
-                            .execute(&self.pool)
-                            .await
-                    }
-                    _ => {
-                        sqlx::query("UPDATE messages SET status = ? WHERE id = ?")
-                            .bind(&update.status)
-                            .bind(&update.message_id)
-                            .execute(&self.pool)
-                            .await
-                    }
-                };
-
-                if let Err(e) = update_result {
-                    warn!("Failed to update message status: {}", e);
-                    continue;
-                }
+                self.update_message_status_with_timestamp(&update.message_id, &update.status)
+                    .await
+                    .map_err(|e| {
+                        warn!("Failed to update message status: {}", e);
+                        e
+                    })?;
 
                 synced_count += 1;
 
-                // Broadcast updated status to conversation participants
                 let conv_id = current.conversation_id.clone();
                 let event = MessageEnvelope {
                     id: uuid::Uuid::new_v4().to_string(),
@@ -352,7 +362,6 @@ impl MessageHandler {
                     }),
                 };
 
-                // Send to both sender and recipient
                 let event_json = serde_json::to_string(&event)
                     .map_err(|e| format!("Failed to serialize event: {}", e))?;
                 self.connection_manager
@@ -364,7 +373,6 @@ impl MessageHandler {
             }
         }
 
-        // Send completion event back to sender
         let completion = MessageEnvelope {
             id: uuid::Uuid::new_v4().to_string(),
             msg_type: "syncDeliveryStatusCompleted".to_string(),
