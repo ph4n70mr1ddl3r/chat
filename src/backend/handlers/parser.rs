@@ -189,8 +189,9 @@ mod tests {
 
     #[test]
     fn test_parse_text_message() {
+        let message_id = uuid::Uuid::new_v4().to_string();
         let json = json!({
-            "id": "msg-123",
+            "id": message_id,
             "type": "message",
             "timestamp": chrono::Utc::now().timestamp_millis(),
             "data": {
@@ -208,7 +209,7 @@ mod tests {
                 frame_type,
             } => {
                 assert_eq!(frame_type, FrameType::Text);
-                assert_eq!(envelope.id, "msg-123");
+                assert_eq!(envelope.id, message_id);
                 assert_eq!(envelope.msg_type, "message");
             }
             _ => panic!("Expected Parsed result"),
@@ -284,7 +285,7 @@ mod tests {
     #[test]
     fn test_parse_json_valid() {
         let json = json!({
-            "id": "msg-123",
+            "id": uuid::Uuid::new_v4().to_string(),
             "type": "message",
             "timestamp": chrono::Utc::now().timestamp_millis(),
             "data": {}
@@ -304,7 +305,7 @@ mod tests {
     #[test]
     fn test_extract_message_type() {
         let envelope = MessageEnvelope {
-            id: "msg-123".to_string(),
+            id: uuid::Uuid::new_v4().to_string(),
             msg_type: "message".to_string(),
             timestamp: 1234567890,
             data: json!({}),

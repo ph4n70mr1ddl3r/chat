@@ -16,6 +16,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::mpsc;
+use tokio::time::{timeout, Duration};
 use tracing::{info, warn};
 use warp::cors::Cors;
 use warp::filters::ws::{WebSocket, Ws};
@@ -34,6 +35,9 @@ use crate::middleware::{auth as auth_middleware, rate_limit};
 
 /// Maximum request body size in bytes (1KB for auth requests)
 const MAX_BODY_SIZE: u64 = 1024;
+
+/// WebSocket read timeout in seconds - prevents hanging connections
+const WS_READ_TIMEOUT_SECS: u64 = 300;
 #[derive(Clone)]
 pub struct ServerConfig {
     pub jwt_secret: String,
@@ -484,10 +488,11 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
         }
     });
 
-    // Process incoming messages
-    while let Some(result) = ws_rx.next().await {
+    // Process incoming messages with timeout
+    let read_timeout = Duration::from_secs(WS_READ_TIMEOUT_SECS);
+    while let Ok(result) = timeout(read_timeout, ws_rx.next()).await {
         match result {
-            Ok(msg) => {
+            Some(Ok(msg)) => {
                 info!(
                     "Received WebSocket message from user {}: {:?}",
                     user_id, msg
@@ -547,12 +552,19 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
                     }
                 }
             }
-            Err(e) => {
+            Some(Err(e)) => {
                 warn!("WebSocket error for user {}: {}", user_id, e);
+                break;
+            }
+            None => {
+                // Connection closed
+                info!("WebSocket stream ended for user: {}", user_id);
                 break;
             }
         }
     }
+    // Timeout occurred
+    info!("WebSocket read timeout for user: {}", user_id);
 
     // Unregister connection
     state

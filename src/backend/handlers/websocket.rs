@@ -149,7 +149,7 @@ impl ConnectionManager {
         if let Some(entries) = conns.get(user_id) {
             let mut delivered = 0;
             for conn in entries {
-                if conn.sender.send(message.clone()).await.is_ok() {
+                if conn.sender.try_send(message.clone()).is_ok() {
                     delivered += 1;
                 }
             }
@@ -183,6 +183,11 @@ impl MessageValidator {
         // Check ID is non-empty UUID
         if envelope.id.is_empty() {
             return Err("Message ID cannot be empty".to_string());
+        }
+
+        // Validate UUID format
+        if uuid::Uuid::parse_str(&envelope.id).is_err() {
+            return Err(format!("Message ID must be a valid UUID, got: {}", envelope.id));
         }
 
         // Check message type is valid
@@ -378,7 +383,7 @@ mod tests {
     #[test]
     fn test_message_validator_valid_envelope() {
         let envelope = MessageEnvelope {
-            id: "msg-123".to_string(),
+            id: uuid::Uuid::new_v4().to_string(),
             msg_type: "message".to_string(),
             timestamp: chrono::Utc::now().timestamp_millis() as u64,
             data: serde_json::json!({}),

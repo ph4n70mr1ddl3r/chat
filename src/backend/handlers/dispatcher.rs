@@ -187,8 +187,9 @@ mod tests {
 
     #[test]
     fn test_dispatcher_parse_text_message() {
+        let message_id = uuid::Uuid::new_v4().to_string();
         let json = json!({
-            "id": "msg-123",
+            "id": message_id,
             "type": "message",
             "timestamp": chrono::Utc::now().timestamp_millis(),
             "data": {
@@ -206,7 +207,7 @@ mod tests {
                 msg_type,
                 ..
             } => {
-                assert_eq!(message_id, "msg-123");
+                assert_eq!(message_id, message_id);
                 assert_eq!(msg_type, "message");
             }
             _ => panic!("Expected RequiresAck"),
@@ -216,7 +217,7 @@ mod tests {
     #[test]
     fn test_dispatcher_parse_typing() {
         let json = json!({
-            "id": "typing-123",
+            "id": uuid::Uuid::new_v4().to_string(),
             "type": "typing",
             "timestamp": chrono::Utc::now().timestamp_millis(),
             "data": {
@@ -251,7 +252,7 @@ mod tests {
     fn test_dispatcher_message_too_long() {
         let long_content = "a".repeat(5001);
         let json = json!({
-            "id": "msg-123",
+            "id": uuid::Uuid::new_v4().to_string(),
             "type": "message",
             "timestamp": chrono::Utc::now().timestamp_millis(),
             "data": {
@@ -318,7 +319,7 @@ mod tests {
     #[test]
     fn test_dispatcher_heartbeat() {
         let json = json!({
-            "id": "hb-123",
+            "id": uuid::Uuid::new_v4().to_string(),
             "type": "heartbeat",
             "timestamp": chrono::Utc::now().timestamp_millis(),
             "data": {}

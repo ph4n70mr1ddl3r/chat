@@ -2,6 +2,24 @@
 //!
 //! Provides reusable validators for usernames, passwords, emails, and other inputs
 
+/// Minimum username length
+const MIN_USERNAME_LENGTH: usize = 1;
+
+/// Maximum username length
+const MAX_USERNAME_LENGTH: usize = 50;
+
+/// Minimum password length
+const MIN_PASSWORD_LENGTH: usize = 8;
+
+/// Maximum password length
+const MAX_PASSWORD_LENGTH: usize = 128;
+
+/// Maximum email local part length
+const MAX_EMAIL_LOCAL_LENGTH: usize = 64;
+
+/// Maximum email domain length
+const MAX_EMAIL_DOMAIN_LENGTH: usize = 255;
+
 /// Validate username
 ///
 /// Rules:
@@ -10,8 +28,11 @@
 /// - Can contain alphanumeric, underscore, hyphen, dot, and Unicode letters
 /// - Case-sensitive
 pub fn validate_username(username: &str) -> Result<(), String> {
-    if username.is_empty() || username.len() > 50 {
-        return Err("Username must be between 1 and 50 characters".to_string());
+    if username.is_empty() || username.len() > MAX_USERNAME_LENGTH {
+        return Err(format!(
+            "Username must be between {} and {} characters",
+            MIN_USERNAME_LENGTH, MAX_USERNAME_LENGTH
+        ));
     }
 
     let first_char = username.chars().next().expect("username is not empty");
@@ -43,12 +64,18 @@ pub fn validate_username(username: &str) -> Result<(), String> {
 pub fn validate_password(password: &str) -> Result<(), String> {
     let len = password.len();
 
-    if len < 8 {
-        return Err("Password must be at least 8 characters".to_string());
+    if len < MIN_PASSWORD_LENGTH {
+        return Err(format!(
+            "Password must be at least {} characters",
+            MIN_PASSWORD_LENGTH
+        ));
     }
 
-    if len > 128 {
-        return Err("Password must be at most 128 characters".to_string());
+    if len > MAX_PASSWORD_LENGTH {
+        return Err(format!(
+            "Password must be at most {} characters",
+            MAX_PASSWORD_LENGTH
+        ));
     }
 
     let mut has_upper = false;
@@ -105,12 +132,18 @@ pub fn validate_email(email: &str) -> Result<(), String> {
     let local_part = parts[0];
     let domain = parts[1];
 
-    if local_part.len() > 64 {
-        return Err("Email local part is too long (max 64 characters)".to_string());
+    if local_part.len() > MAX_EMAIL_LOCAL_LENGTH {
+        return Err(format!(
+            "Email local part is too long (max {} characters)",
+            MAX_EMAIL_LOCAL_LENGTH
+        ));
     }
 
-    if domain.len() > 255 {
-        return Err("Email domain is too long (max 255 characters)".to_string());
+    if domain.len() > MAX_EMAIL_DOMAIN_LENGTH {
+        return Err(format!(
+            "Email domain is too long (max {} characters)",
+            MAX_EMAIL_DOMAIN_LENGTH
+        ));
     }
 
     if !domain.contains('.') {
