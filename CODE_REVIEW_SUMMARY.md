@@ -117,11 +117,13 @@ Rust chat application with backend (Warp + SQLite) and frontend (Slint UI). ~13k
 ### ✅ Actions Taken (Latest Review)
 1. Improved error messaging in session.rs (5 instances of lock().unwrap() → lock().expect("..."))
 2. Improved error messaging in chat_screen.rs (21 instances of lock().unwrap() → lock().expect("..."))
-3. Total additional mutex lock error messaging improvements: 26 instances across 2 files
-4. Reduced mutex unwrap() calls from 29 to 3 (remaining 3 are in test code)
-5. All clippy warnings resolved: zero warnings
-6. All tests passing: 142 passed, 0 failed, 1 ignored
-7. Total unwrap() reduction across all reviews: ~180 → ~124 (31% improvement)
+3. Improved error messaging in chat_screen.rs (line 185: .lock().unwrap() → .lock().expect("conversations mutex poisoned"))
+4. Improved error messaging in settings_screen.rs (line 87: .hide().unwrap() → .hide().expect("failed to hide settings window"))
+5. Total additional mutex lock error messaging improvements: 28 instances across 3 files
+6. Reduced mutex unwrap() calls from 29 to 2 (remaining 2 are in test code)
+7. All clippy warnings resolved: zero warnings
+8. All tests passing: 142 passed, 0 failed, 1 ignored
+9. Total unwrap() reduction across all reviews: ~180 → ~122 (32% improvement)
 
 ### 🔄 Next Steps
 1. Continue monitoring dependency updates for security fixes

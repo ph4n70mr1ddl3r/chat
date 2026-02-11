@@ -182,7 +182,7 @@ impl ChatScreen {
             // Update selected conversation metadata
             if let Some(conv) = conversations
                 .lock()
-                .unwrap()
+                .expect("conversations mutex poisoned")
                 .iter()
                 .find(|c| c.conversation_id == conv_id)
                 .cloned()

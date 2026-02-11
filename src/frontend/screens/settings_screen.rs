@@ -84,7 +84,7 @@ impl SettingsScreen {
                         slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_weak_inner.upgrade() {
                                 ui.set_is_loading(false);
-                                ui.hide().unwrap();
+                                ui.hide().expect("failed to hide settings window");
                                 deleted_cb_inner();
                             }
                         })
