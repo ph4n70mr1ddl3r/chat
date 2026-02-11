@@ -27,29 +27,44 @@ pub fn extract_token_from_query(query: &str) -> Result<String, String> {
 /// Basic percent-decoding for URL-encoded tokens
 fn percent_decode(s: &str) -> String {
     let mut result = String::new();
-    let mut chars = s.chars().peekable();
+    let mut bytes = s.bytes().peekable();
 
-    while let Some(ch) = chars.next() {
-        if ch == '%' {
-            // Try to read two hex digits
-            if let Some(&next1) = chars.peek() {
-                chars.next();
-                if let Some(next2) = chars.next() {
-                    if let Ok(byte) = u8::from_str_radix(&format!("{}{}", next1, next2), 16) {
-                        result.push(byte as char);
-                        continue;
+    while let Some(byte) = bytes.next() {
+        if byte == b'%' {
+            let mut hex_buf = [0u8; 2];
+            let mut hex_idx = 0;
+
+            while hex_idx < 2 {
+                if let Some(&next_byte) = bytes.peek() {
+                    let next_char = char::from(next_byte);
+                    if next_char.is_ascii_hexdigit() {
+                        hex_buf[hex_idx] = next_byte;
+                        hex_idx += 1;
+                        bytes.next();
+                    } else {
+                        break;
                     }
+                } else {
+                    break;
                 }
-                // If decode fails, include literal percent and char
-                result.push('%');
-                result.push(next1);
-            } else {
-                result.push('%');
             }
-        } else if ch == '+' {
+
+            if hex_idx == 2 {
+                if let Ok(decoded) = u8::from_str_radix(std::str::from_utf8(&hex_buf).unwrap(), 16)
+                {
+                    result.push(decoded as char);
+                    continue;
+                }
+            }
+
+            result.push('%');
+            for &byte in hex_buf.iter().take(hex_idx) {
+                result.push(byte as char);
+            }
+        } else if byte == b'+' {
             result.push(' ');
         } else {
-            result.push(ch);
+            result.push(byte as char);
         }
     }
 

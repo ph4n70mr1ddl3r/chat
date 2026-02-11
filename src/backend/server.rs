@@ -650,9 +650,9 @@ fn client_ip(remote_addr: Option<SocketAddr>) -> String {
         .map(|addr| addr.ip().to_string())
         .unwrap_or_else(|| {
             tracing::warn!(
-                "Request missing remote address, using request-scoped identifier for rate limiting"
+                "Request missing remote address, rate limiting may not work correctly"
             );
-            format!("anon-{}", uuid::Uuid::new_v4())
+            "unknown".to_string()
         })
 }
 

@@ -96,10 +96,22 @@ impl RateLimiter {
         }
     }
 
-    /// Check if user burst limit is exceeded (5 messages per second)
+    /// Check if user burst limit is exceeded (10 messages per second)
     pub async fn check_burst_limit(&self, user_id: &str) -> Result<(), RateLimitError> {
-        // This would require tracking per-second messages, simplified for now
-        self.check_limit(user_id).await
+        let mut buckets = self.buckets.write().await;
+
+        let bucket = buckets
+            .entry(user_id.to_string())
+            .or_insert_with(|| TokenBucket::new(10.0, 10.0));
+
+        if bucket.try_consume(1.0) {
+            Ok(())
+        } else {
+            let retry_after = bucket.get_tokens_until_full().ceil() as u64 + 1;
+            Err(RateLimitError::ExceededLimit {
+                retry_after_secs: retry_after,
+            })
+        }
     }
 
     /// Get remaining tokens for user

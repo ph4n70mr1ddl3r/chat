@@ -3,7 +3,6 @@
 //! Implements token-bucket rate limiting for authentication endpoints
 
 use std::collections::HashMap;
-use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use warp::{self, addr::remote, reject, Filter, Rejection};
@@ -255,29 +254,16 @@ pub fn rate_limit_filter(
               forwarded_header: Option<String>,
               limiter: Arc<RateLimiter>| async move {
                 let ip = if let Some(header) = forwarded_header {
-                    if let Ok(parsed_ip) = header
+                    header
                         .split(',')
                         .next()
-                        .unwrap_or(&header)
-                        .trim()
-                        .parse::<IpAddr>()
-                    {
-                        let is_trusted_proxy = match parsed_ip {
-                            IpAddr::V4(ipv4) => ipv4.is_private() || ipv4.is_loopback(),
-                            IpAddr::V6(ipv6) => ipv6.is_loopback(),
-                        };
-                        if is_trusted_proxy && remote_ip.is_some() {
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .unwrap_or_else(|| {
                             remote_ip
                                 .map(|a| a.ip().to_string())
                                 .unwrap_or_else(|| "unknown".to_string())
-                        } else {
-                            parsed_ip.to_string()
-                        }
-                    } else {
-                        remote_ip
-                            .map(|a| a.ip().to_string())
-                            .unwrap_or_else(|| "unknown".to_string())
-                    }
+                        })
                 } else {
                     remote_ip
                         .map(|a| a.ip().to_string())
