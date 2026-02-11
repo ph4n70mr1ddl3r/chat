@@ -242,7 +242,7 @@ impl MessageValidator {
 pub struct ErrorResponse;
 
 impl ErrorResponse {
-    fn create_error_response(
+    pub fn create_error_response(
         code: &str,
         message: &str,
         details: Option<serde_json::Value>,

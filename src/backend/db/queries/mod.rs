@@ -6,24 +6,6 @@ use crate::models::{Conversation, Message, User};
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
-/// Helper function to format database errors with context
-#[allow(dead_code)]
-fn db_error(context: &str, entity_id: Option<&str>) -> String {
-    match entity_id {
-        Some(id) => format!("{} (id: {})", context, id),
-        None => context.to_string(),
-    }
-}
-
-/// Helper function to wrap database query errors with context
-#[allow(dead_code)]
-async fn map_db_error<T, F>(context: &str, entity_id: Option<&str>, f: F) -> Result<T, String>
-where
-    F: std::future::Future<Output = Result<T, sqlx::Error>>,
-{
-    f.await.map_err(|e| format!("{}: {}", db_error(context, entity_id), e))
-}
-
 /// Auth event types
 #[derive(Debug, Clone)]
 pub enum AuthEventType {
@@ -569,7 +551,7 @@ pub async fn search_messages_in_conversation(
     )
     .bind(conversation_id)
     .bind(search_pattern)
-    .bind(limit as i64)
+    .bind(i64::from(limit))
     .fetch_all(pool)
     .await
     .map_err(|e| format!("Failed to search messages: {}", e))
@@ -697,15 +679,7 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_db_error_context() {
-        let err = db_error("Failed to update message", Some("msg123"));
-        assert!(err.contains("Failed to update message"));
-        assert!(err.contains("(id: msg123)"));
 
-        let err_no_id = db_error("Failed to update message", None);
-        assert_eq!(err_no_id, "Failed to update message");
-    }
 
     #[tokio::test]
     async fn test_execute_transaction_commit() -> Result<(), Box<dyn std::error::Error>> {

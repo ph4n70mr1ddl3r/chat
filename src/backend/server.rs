@@ -74,9 +74,10 @@ impl Default for ServerConfig {
         let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| {
             let is_production = std::env::var("RUST_ENV").as_deref().unwrap_or("development") == "production";
             if is_production {
-                tracing::error!("CRITICAL SECURITY ERROR: JWT_SECRET must be set in production environment.");
-                tracing::error!("Set JWT_SECRET environment variable before starting the server.");
-                std::process::exit(1);
+                panic!(
+                    "CRITICAL SECURITY ERROR: JWT_SECRET must be set in production environment. \
+                     Set JWT_SECRET environment variable before starting the server."
+                );
             }
             tracing::warn!("SECURITY WARNING: JWT_SECRET not set, generating cryptographically secure secret for development.");
             tracing::warn!("For production deployments, ALWAYS set the JWT_SECRET environment variable.");
@@ -377,11 +378,9 @@ fn build_cors(config: &ServerConfig) -> Cors {
     } else {
         for origin in &config.allowed_origins {
             if origin == "*" {
-                tracing::error!(
-                    "Wildcard CORS origin (*) is not allowed. Remove it from CORS_ALLOWED_ORIGINS."
+                panic!(
+                    "Wildcard CORS origin (*) is not allowed for security reasons. Remove it from CORS_ALLOWED_ORIGINS."
                 );
-                eprintln!("ERROR: Wildcard CORS origin (*) is not allowed for security reasons");
-                std::process::exit(1);
             }
             cors = cors.allow_origin(origin.as_str());
         }

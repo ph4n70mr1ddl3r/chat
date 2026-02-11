@@ -45,15 +45,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Ok(Some(session)) = session_manager.get_session() {
         tracing::info!("Found existing session for user: {}", session.username);
 
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs() as i64)
-            .unwrap_or_else(|e| {
-                tracing::error!("Failed to get system time: {}", e);
-                0
-            });
-
-        if session.expires_at > 0 && now >= session.expires_at {
+        if !session_manager.is_logged_in() {
             tracing::warn!("Session expired, showing login screen");
             show_login(base_url);
         } else {
