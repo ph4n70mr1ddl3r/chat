@@ -376,7 +376,8 @@ fn build_cors(config: &ServerConfig) -> Cors {
                 tracing::error!(
                     "Wildcard CORS origin (*) is not allowed. Remove it from CORS_ALLOWED_ORIGINS."
                 );
-                panic!("Wildcard CORS origin (*) is not allowed for security reasons");
+                eprintln!("ERROR: Wildcard CORS origin (*) is not allowed for security reasons");
+                std::process::exit(1);
             }
             cors = cors.allow_origin(origin.as_str());
         }
