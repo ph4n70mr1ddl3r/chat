@@ -250,7 +250,7 @@ pub fn create_routes(
 
     // User Search route (GET /users/search)
     // Note: This was separate in handlers/user.rs, likely mapped to /users/search
-    let users_routes = warp::path("users").and(
+    let user_search_routes = warp::path("users").and(
         warp::path("search")
             .and(warp::get())
             .and(with_auth.clone())
@@ -339,7 +339,7 @@ pub fn create_routes(
         .or(status_route)
         .or(auth_routes)
         .or(user_routes)
-        .or(users_routes)
+        .or(user_search_routes)
         .or(conversation_routes)
         .with(cors)
         .with(warp::reply::with::default_header(

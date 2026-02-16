@@ -19,6 +19,7 @@ pub enum MessageStatus {
 }
 
 impl MessageStatus {
+    #[must_use]
     pub fn as_str(&self) -> &str {
         match self {
             MessageStatus::Pending => "pending",
@@ -40,7 +41,7 @@ impl std::str::FromStr for MessageStatus {
             "delivered" => Ok(MessageStatus::Delivered),
             "read" => Ok(MessageStatus::Read),
             "failed" => Ok(MessageStatus::Failed),
-            _ => Err(format!("Unknown status: {}", s)),
+            _ => Err(format!("Unknown status: {s}")),
         }
     }
 }
