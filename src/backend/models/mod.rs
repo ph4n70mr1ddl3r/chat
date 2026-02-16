@@ -148,9 +148,6 @@ impl Message {
     /// Validate message content
     pub fn validate(&self) -> Result<(), String> {
         let len = self.content.len();
-        if len < 1 {
-            return Err("Message content cannot be empty".to_string());
-        }
         if len > MAX_MESSAGE_LENGTH {
             return Err(format!(
                 "Message content exceeds {} character limit",

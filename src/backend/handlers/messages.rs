@@ -180,16 +180,16 @@ impl MessageHandler {
                     )
                     .await;
 
-                if delivery_count == 0 {
+                if delivery_count > 0 {
+                    // Update message status to 'delivered' only if delivery succeeded
+                    self.message_service.mark_delivered(&message.id).await?;
+                } else {
                     tracing::warn!(
                         "Failed to deliver message {} to recipient {}",
                         message.id,
                         data.recipient_id
                     );
                 }
-
-                // Update message status to 'delivered'
-                self.message_service.mark_delivered(&message.id).await?;
             } else {
                 // Recipient offline - queue for retry
                 self.message_queue
