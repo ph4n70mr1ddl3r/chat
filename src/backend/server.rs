@@ -185,6 +185,7 @@ pub fn create_routes(
             .and(warp::path("signup"))
             .and(rate_limit_filter.clone())
             .and(warp::body::content_length_limit(MAX_BODY_SIZE))
+            .and(warp::header::exact("Content-Type", "application/json"))
             .and(warp::body::json())
             .and(warp::addr::remote())
             .and(state_filter.clone())
@@ -195,6 +196,7 @@ pub fn create_routes(
                     .and(warp::path("login"))
                     .and(rate_limit_filter.clone())
                     .and(warp::body::content_length_limit(MAX_BODY_SIZE))
+                    .and(warp::header::exact("Content-Type", "application/json"))
                     .and(warp::body::json())
                     .and(warp::addr::remote())
                     .and(state_filter.clone())
@@ -605,22 +607,18 @@ async fn handle_login(
     info!("Login request for username: {}", req.username);
     let ip = client_ip(remote_addr);
 
-    if state.auth_rate_limiter.is_rate_limited(&ip).await {
-        return Err(warp::reject::custom(rate_limit::RateLimitExceeded {
-            retry_after_secs: state.auth_rate_limiter.retry_after_seconds(&ip).await,
-        }));
-    }
+    state
+        .auth_rate_limiter
+        .check_and_record(&ip)
+        .await
+        .map_err(warp::reject::custom)?;
 
-    // Delegate to auth handler
     match auth::login_handler(req, state.pool.clone(), state.config.jwt_secret.clone()).await {
         Ok(response) => {
             state.auth_rate_limiter.reset(&ip).await;
             Ok(response)
         }
-        Err(err) => {
-            state.auth_rate_limiter.record_attempt(&ip).await;
-            Err(err)
-        }
+        Err(err) => Err(err),
     }
 }
 

@@ -130,8 +130,13 @@ pub async fn find_user_by_username(
 
 /// Find a user by ID
 ///
-/// Returns the user if found, None if not found
+/// Returns the user if found, None if not found.
+/// Returns an error if the user_id is not a valid UUID format.
 pub async fn find_user_by_id(pool: &SqlitePool, user_id: &str) -> Result<Option<User>, String> {
+    if Uuid::parse_str(user_id).is_err() {
+        return Err("Invalid user ID format".to_string());
+    }
+
     sqlx::query_as::<_, User>(&format!(
         "{} FROM users WHERE id = ?",
         SQL_SELECT_USER_FIELDS
@@ -139,7 +144,7 @@ pub async fn find_user_by_id(pool: &SqlitePool, user_id: &str) -> Result<Option<
     .bind(user_id)
     .fetch_optional(pool)
     .await
-    .map_err(|e| format!("Failed to find user by id: {}", e))
+    .map_err(|_| "Failed to find user".to_string())
 }
 
 /// Find multiple users by their IDs

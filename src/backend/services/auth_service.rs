@@ -46,8 +46,12 @@ impl AuthService {
     }
 
     /// Verify a password against a hash
+    ///
+    /// Returns Ok(true) if password matches, Ok(false) if not.
+    /// Returns Err for any error case to avoid timing attacks that could
+    /// distinguish between invalid hash format and password mismatch.
     pub fn verify_password(password: &str, hash: &str) -> Result<bool, String> {
-        verify(password, hash).map_err(|e| format!("Failed to verify password: {}", e))
+        verify(password, hash).map_err(|_| "Password verification failed".to_string())
     }
 
     /// Create a new user with validated password
