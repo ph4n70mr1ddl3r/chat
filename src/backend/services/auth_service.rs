@@ -90,7 +90,7 @@ impl AuthService {
         let key = EncodingKey::from_secret(self.jwt_secret.as_bytes());
 
         encode(&Header::default(), &claims, &key)
-            .map(|token| (token, expiration))
+            .map(|token| (token, TOKEN_EXPIRATION_SECONDS as u64))
             .map_err(|e| format!("Failed to generate token: {}", e))
     }
 
@@ -217,7 +217,7 @@ mod tests {
         assert!(result.is_ok());
         let (token, exp) = result.unwrap();
         assert!(!token.is_empty());
-        assert!(exp > Utc::now().timestamp_millis() as u64);
+        assert_eq!(exp, TOKEN_EXPIRATION_SECONDS as u64);
     }
 
     #[test]

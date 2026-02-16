@@ -245,6 +245,16 @@ pub struct RateLimitExceeded {
 
 impl reject::Reject for RateLimitExceeded {}
 
+impl RateLimiter {
+    fn parse_ip(s: &str) -> Option<String> {
+        if s.parse::<std::net::IpAddr>().is_ok() {
+            Some(s.to_string())
+        } else {
+            None
+        }
+    }
+}
+
 /// Warp filter to enforce rate limits based on remote IP address
 pub fn rate_limit_filter(
     limiter: Arc<RateLimiter>,
@@ -262,6 +272,7 @@ pub fn rate_limit_filter(
                         .next()
                         .map(|s| s.trim().to_string())
                         .filter(|s| !s.is_empty())
+                        .and_then(|s| RateLimiter::parse_ip(&s))
                         .unwrap_or_else(|| {
                             remote_ip
                                 .map(|a| a.ip().to_string())

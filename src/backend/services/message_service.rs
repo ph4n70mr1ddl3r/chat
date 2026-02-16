@@ -275,7 +275,7 @@ impl MessageService {
     }
 
     /// Helper: Update message status with appropriate timestamp
-    async fn update_message_status_with_timestamp(
+    pub async fn update_message_status_with_timestamp(
         &self,
         message_id: &str,
         new_status: &str,

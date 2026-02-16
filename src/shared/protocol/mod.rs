@@ -18,18 +18,6 @@ pub enum MessageStatus {
     Failed,
 }
 
-impl std::fmt::Display for MessageStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MessageStatus::Pending => write!(f, "pending"),
-            MessageStatus::Sent => write!(f, "sent"),
-            MessageStatus::Delivered => write!(f, "delivered"),
-            MessageStatus::Read => write!(f, "read"),
-            MessageStatus::Failed => write!(f, "failed"),
-        }
-    }
-}
-
 impl MessageStatus {
     pub fn as_str(&self) -> &str {
         match self {

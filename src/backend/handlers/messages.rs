@@ -265,46 +265,6 @@ impl MessageHandler {
         }
     }
 
-    /// Helper: Update message status with appropriate timestamp
-    async fn update_message_status_with_timestamp(
-        &self,
-        message_id: &str,
-        new_status: &str,
-    ) -> Result<(), String> {
-        let now = chrono::Utc::now().timestamp_millis();
-
-        match new_status {
-            crate::models::status::READ => {
-                sqlx::query("UPDATE messages SET status = ?, read_at = ? WHERE id = ?")
-                    .bind(crate::models::status::READ)
-                    .bind(now)
-                    .bind(message_id)
-                    .execute(&self.pool)
-                    .await
-                    .map_err(|e| format!("Failed to update message {} to read: {}", message_id, e))?;
-            }
-            crate::models::status::DELIVERED => {
-                sqlx::query("UPDATE messages SET status = ?, delivered_at = ? WHERE id = ?")
-                    .bind(crate::models::status::DELIVERED)
-                    .bind(now)
-                    .bind(message_id)
-                    .execute(&self.pool)
-                    .await
-                    .map_err(|e| format!("Failed to update message {} to delivered: {}", message_id, e))?;
-            }
-            _ => {
-                sqlx::query("UPDATE messages SET status = ? WHERE id = ?")
-                    .bind(new_status)
-                    .bind(message_id)
-                    .execute(&self.pool)
-                    .await
-                    .map_err(|e| format!("Failed to update message {} status: {}", message_id, e))?;
-            }
-        }
-
-        Ok(())
-    }
-
     /// Sync delivery status updates from client
     ///
     /// Handles batch delivery status updates from a reconnected client.
@@ -340,7 +300,8 @@ impl MessageHandler {
                 crate::services::message_service::MessageService::status_weight(&update.status);
 
             if new_weight >= current_weight {
-                self.update_message_status_with_timestamp(&update.message_id, &update.status)
+                self.message_service
+                    .update_message_status_with_timestamp(&update.message_id, &update.status)
                     .await
                     .map_err(|e| {
                         warn!("Failed to update message status: {}", e);
