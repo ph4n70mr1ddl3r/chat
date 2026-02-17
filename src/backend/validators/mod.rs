@@ -35,7 +35,7 @@ pub fn validate_username(username: &str) -> Result<(), String> {
         ));
     }
 
-    let first_char = username.chars().next().expect("username is not empty");
+    let first_char = username.chars().next().unwrap();
     if !first_char.is_alphanumeric() && first_char != '_' {
         return Err("Username must start with a letter or underscore".to_string());
     }
