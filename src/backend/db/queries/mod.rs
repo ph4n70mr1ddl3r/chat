@@ -34,7 +34,8 @@ const SQL_SELECT_MESSAGE_FIELDS: &str =
     "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, read_at, status, is_anonymized";
 
 const SQL_SELECT_CONVERSATION_FIELDS: &str =
-    "SELECT id, user1_id, user2_id, created_at, updated_at, last_message_at, message_count";
+    "SELECT c.id, c.user1_id, c.user2_id, c.created_at, c.updated_at, c.last_message_at, c.message_count,
+            (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message";
 
 /// Insert an auth log entry
 pub async fn insert_auth_log(
@@ -335,7 +336,7 @@ pub async fn get_conversation_by_users(
     user2_id: &str,
 ) -> Result<Option<Conversation>, String> {
     sqlx::query_as::<_, Conversation>(&format!(
-        "{} FROM conversations WHERE user1_id = ? AND user2_id = ?",
+        "{} FROM conversations c WHERE c.user1_id = ? AND c.user2_id = ?",
         SQL_SELECT_CONVERSATION_FIELDS
     ))
     .bind(user1_id)
@@ -351,7 +352,7 @@ pub async fn get_conversation_by_id(
     conversation_id: &str,
 ) -> Result<Option<Conversation>, String> {
     sqlx::query_as::<_, Conversation>(&format!(
-        "{} FROM conversations WHERE id = ?",
+        "{} FROM conversations c WHERE c.id = ?",
         SQL_SELECT_CONVERSATION_FIELDS
     ))
     .bind(conversation_id)
@@ -369,7 +370,7 @@ pub async fn get_user_conversations(
 ) -> Result<Vec<Conversation>, String> {
     sqlx::query_as::<_, Conversation>(
         &format!(
-            "{} FROM conversations WHERE user1_id = ? OR user2_id = ? ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+            "{} FROM conversations c WHERE c.user1_id = ? OR c.user2_id = ? ORDER BY c.updated_at DESC LIMIT ? OFFSET ?",
             SQL_SELECT_CONVERSATION_FIELDS
         ),
     )

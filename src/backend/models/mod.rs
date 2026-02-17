@@ -79,6 +79,7 @@ pub struct Conversation {
     pub created_at: i64,
     pub updated_at: i64,
     pub last_message_at: Option<i64>,
+    pub last_message: Option<String>,
     pub message_count: i32,
 }
 
@@ -92,6 +93,7 @@ impl Conversation {
             created_at: now,
             updated_at: now,
             last_message_at: None,
+            last_message: None,
             message_count: 0,
         }
     }

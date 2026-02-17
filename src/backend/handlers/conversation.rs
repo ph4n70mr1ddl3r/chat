@@ -25,6 +25,7 @@ pub struct ConversationResponse {
     pub participant_is_online: bool,
     pub created_at: i64,
     pub last_message_at: Option<i64>,
+    pub last_message: Option<String>,
     pub message_count: i32,
 }
 
@@ -174,6 +175,7 @@ pub async fn start_conversation(
             participant_is_online: other_user.is_online,
             created_at: conversation.created_at,
             last_message_at: conversation.last_message_at,
+            last_message: conversation.last_message,
             message_count: conversation.message_count,
         }),
         status_code,
@@ -258,6 +260,7 @@ pub async fn get_conversations(
                     participant_is_online: participant.is_online,
                     created_at: conv.created_at,
                     last_message_at: conv.last_message_at,
+                    last_message: conv.last_message,
                     message_count: conv.message_count,
                 })
         })

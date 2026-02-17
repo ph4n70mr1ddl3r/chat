@@ -997,6 +997,7 @@ async fn load_conversations() -> Result<Vec<ConversationData>, Box<dyn std::erro
         participant_username: String,
         participant_is_online: bool,
         last_message_at: Option<i64>,
+        last_message: Option<String>,
         message_count: i32,
     }
 
@@ -1021,7 +1022,7 @@ async fn load_conversations() -> Result<Vec<ConversationData>, Box<dyn std::erro
             participant_id: c.participant_id,
             participant_username: c.participant_username,
             participant_is_online: c.participant_is_online,
-            last_message: String::new(), // TODO: implement backend API endpoint for conversation history
+            last_message: c.last_message.unwrap_or_default(),
             last_message_time: format_timestamp(c.last_message_at),
             message_count: c.message_count,
         })
