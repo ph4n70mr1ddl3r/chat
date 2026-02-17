@@ -119,7 +119,7 @@ impl UserService {
 
         // Cache miss or expired — perform query
         let users =
-            queries::search_users_excluding_self(&self.pool, query, requester_id, limit).await?;
+            queries::search_users_excluding_self(&self.pool, &normalized_query, requester_id, limit).await?;
 
         // Insert into cache and periodically prune expired entries
         {

@@ -203,11 +203,11 @@ mod tests {
 
         match result {
             DispatchResult::RequiresAck {
-                message_id,
+                message_id: parsed_id,
                 msg_type,
                 ..
             } => {
-                assert_eq!(message_id, message_id);
+                assert_eq!(parsed_id, message_id);
                 assert_eq!(msg_type, "message");
             }
             _ => panic!("Expected RequiresAck"),

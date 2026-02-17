@@ -105,7 +105,7 @@ impl RateLimiter {
                 entries.retain(|_, entry| entry.window_start.elapsed() <= self.window_duration);
             }
 
-            // Only add if we're under capacity after cleanup
+            // Re-check capacity after cleanup - if still full, skip adding new entry
             if entries.len() < MAX_RATE_LIMIT_ENTRIES {
                 entries.insert(
                     ip.to_owned(),
