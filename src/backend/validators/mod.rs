@@ -35,10 +35,10 @@ pub fn validate_username(username: &str) -> Result<(), String> {
         ));
     }
 
-    let first_char = username
-        .chars()
-        .next()
-        .expect("Username should not be empty due to length check");
+    let first_char = username.chars().next();
+    let Some(first_char) = first_char else {
+        return Err("Username cannot be empty".to_string());
+    };
     if !first_char.is_alphanumeric() && first_char != '_' {
         return Err("Username must start with a letter or underscore".to_string());
     }

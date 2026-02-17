@@ -247,11 +247,7 @@ impl reject::Reject for RateLimitExceeded {}
 
 impl RateLimiter {
     fn parse_ip(s: &str) -> Option<String> {
-        if s.parse::<std::net::IpAddr>().is_ok() {
-            Some(s.to_string())
-        } else {
-            None
-        }
+        s.parse::<std::net::IpAddr>().ok().map(|ip| ip.to_string())
     }
 }
 
