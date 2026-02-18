@@ -69,16 +69,19 @@ impl UserService {
 
     /// Prune expired entries if enough time has passed since last prune
     async fn try_prune_cache(&self, now: Instant) {
-        let last_prune = *self.last_prune.read().await;
-        // Only prune if 30 seconds have passed since last prune
-        if now.duration_since(last_prune) < Duration::from_secs(30) {
-            return;
+        {
+            let last_prune = *self.last_prune.read().await;
+            if now.duration_since(last_prune) < Duration::from_secs(30) {
+                return;
+            }
         }
 
         let mut cache = self.cache.write().await;
-        // Double-check after acquiring write lock (but use the same last_prune value)
-        if now.duration_since(last_prune) < Duration::from_secs(30) {
-            return;
+        {
+            let last_prune = *self.last_prune.read().await;
+            if now.duration_since(last_prune) < Duration::from_secs(30) {
+                return;
+            }
         }
 
         let initial_size = cache.len();

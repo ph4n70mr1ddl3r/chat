@@ -173,18 +173,31 @@ pub async fn delete_account(
     csrf_service: CsrfService,
     pool: SqlitePool,
 ) -> Result<impl Reply, Rejection> {
-    if let Some(token) = &csrf_token {
-        if !csrf_service.validate_token(token, &user_id).await {
-            warn!("Invalid CSRF token for delete account request");
+    let csrf_token = match csrf_token {
+        Some(token) => token,
+        None => {
+            warn!("Missing CSRF token for delete account request");
             return Ok(reply::with_status(
                 reply::json(&ErrorBody {
                     code: "FORBIDDEN".to_string(),
-                    message: "Invalid CSRF token".to_string(),
+                    message: "CSRF token required".to_string(),
                     details: None,
                 }),
                 warp::http::StatusCode::FORBIDDEN,
             ));
         }
+    };
+
+    if !csrf_service.validate_token(&csrf_token, &user_id).await {
+        warn!("Invalid CSRF token for delete account request");
+        return Ok(reply::with_status(
+            reply::json(&ErrorBody {
+                code: "FORBIDDEN".to_string(),
+                message: "Invalid CSRF token".to_string(),
+                details: None,
+            }),
+            warp::http::StatusCode::FORBIDDEN,
+        ));
     }
 
     let user = match queries::find_user_by_id(&pool, &user_id).await {
@@ -249,9 +262,7 @@ pub async fn delete_account(
         ));
     }
 
-    if let Some(token) = csrf_token {
-        csrf_service.invalidate_token(&token).await;
-    }
+    csrf_service.invalidate_token(&csrf_token).await;
 
     Ok(reply::with_status(
         reply::json(&serde_json::json!({})),
@@ -267,18 +278,31 @@ pub async fn change_password(
     csrf_service: CsrfService,
     pool: SqlitePool,
 ) -> Result<impl Reply, Rejection> {
-    if let Some(token) = &csrf_token {
-        if !csrf_service.validate_token(token, &user_id).await {
-            warn!("Invalid CSRF token for change password request");
+    let csrf_token = match csrf_token {
+        Some(token) => token,
+        None => {
+            warn!("Missing CSRF token for change password request");
             return Ok(reply::with_status(
                 reply::json(&ErrorBody {
                     code: "FORBIDDEN".to_string(),
-                    message: "Invalid CSRF token".to_string(),
+                    message: "CSRF token required".to_string(),
                     details: None,
                 }),
                 warp::http::StatusCode::FORBIDDEN,
             ));
         }
+    };
+
+    if !csrf_service.validate_token(&csrf_token, &user_id).await {
+        warn!("Invalid CSRF token for change password request");
+        return Ok(reply::with_status(
+            reply::json(&ErrorBody {
+                code: "FORBIDDEN".to_string(),
+                message: "Invalid CSRF token".to_string(),
+                details: None,
+            }),
+            warp::http::StatusCode::FORBIDDEN,
+        ));
     }
 
     if let Err(e) = validators::validate_password(&request.new_password) {
@@ -369,9 +393,7 @@ pub async fn change_password(
         ));
     }
 
-    if let Some(token) = csrf_token {
-        csrf_service.invalidate_token(&token).await;
-    }
+    csrf_service.invalidate_token(&csrf_token).await;
 
     Ok(reply::with_status(
         reply::json(&serde_json::json!({ "message": "Password changed successfully" })),

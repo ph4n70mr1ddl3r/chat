@@ -307,8 +307,8 @@ mod tests {
     async fn test_rate_limiter_allows_initial_attempts() {
         let limiter = RateLimiter::new(5, 60);
 
-        assert!(!limiter.is_rate_limited("192.168.1.1").await);
-        assert_eq!(limiter.get_remaining_attempts("192.168.1.1").await, 5);
+        assert!(limiter.check_and_record("192.168.1.1").await.is_ok());
+        assert_eq!(limiter.get_remaining_attempts("192.168.1.1").await, 4);
     }
 
     #[tokio::test]
@@ -316,11 +316,11 @@ mod tests {
         let limiter = RateLimiter::new(3, 60);
         let ip = "192.168.1.2";
 
-        for _ in 0..3 {
-            limiter.record_attempt(ip).await;
-        }
+        assert!(limiter.check_and_record(ip).await.is_ok());
+        assert!(limiter.check_and_record(ip).await.is_ok());
+        assert!(limiter.check_and_record(ip).await.is_ok());
+        assert!(limiter.check_and_record(ip).await.is_err());
 
-        assert!(limiter.is_rate_limited(ip).await);
         assert_eq!(limiter.get_remaining_attempts(ip).await, 0);
     }
 
@@ -329,15 +329,15 @@ mod tests {
         let limiter = RateLimiter::new(3, 60);
         let ip = "192.168.1.3";
 
-        for _ in 0..3 {
-            limiter.record_attempt(ip).await;
-        }
-        assert!(limiter.is_rate_limited(ip).await);
+        assert!(limiter.check_and_record(ip).await.is_ok());
+        assert!(limiter.check_and_record(ip).await.is_ok());
+        assert!(limiter.check_and_record(ip).await.is_ok());
+        assert!(limiter.check_and_record(ip).await.is_err());
 
         limiter.reset(ip).await;
 
-        assert!(!limiter.is_rate_limited(ip).await);
-        assert_eq!(limiter.get_remaining_attempts(ip).await, 3);
+        assert!(limiter.check_and_record(ip).await.is_ok());
+        assert_eq!(limiter.get_remaining_attempts(ip).await, 2);
     }
 
     #[tokio::test]
@@ -345,15 +345,15 @@ mod tests {
         let limiter = RateLimiter::new(3, 1);
         let ip = "192.168.1.4";
 
-        limiter.record_attempt(ip).await;
-        limiter.record_attempt(ip).await;
+        assert!(limiter.check_and_record(ip).await.is_ok());
+        assert!(limiter.check_and_record(ip).await.is_ok());
 
         assert_eq!(limiter.get_remaining_attempts(ip).await, 1);
 
         tokio::time::sleep(Duration::from_secs(2)).await;
 
-        assert!(!limiter.is_rate_limited(ip).await);
-        assert_eq!(limiter.get_remaining_attempts(ip).await, 3);
+        assert!(limiter.check_and_record(ip).await.is_ok());
+        assert_eq!(limiter.get_remaining_attempts(ip).await, 2);
     }
 
     #[tokio::test]

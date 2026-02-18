@@ -8,7 +8,19 @@ use crate::services::{ConversationService, MessageService};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tracing::warn;
+use uuid::Uuid;
 use warp::{reply, Rejection, Reply};
+
+fn validate_uuid(id: &str, field_name: &str) -> Result<(), (String, String)> {
+    if Uuid::parse_str(id).is_err() {
+        Err((
+            "INVALID_ID".to_string(),
+            format!("Invalid {} format", field_name),
+        ))
+    } else {
+        Ok(())
+    }
+}
 
 /// Start conversation request
 #[derive(Debug, Deserialize)]
@@ -281,6 +293,17 @@ pub async fn get_conversation_messages(
     query: MessagesQuery,
     pool: SqlitePool,
 ) -> Result<impl Reply, Rejection> {
+    if let Err((code, message)) = validate_uuid(&conversation_id, "conversation ID") {
+        return Ok(reply::with_status(
+            reply::json(&ErrorBody {
+                code,
+                message,
+                details: None,
+            }),
+            warp::http::StatusCode::BAD_REQUEST,
+        ));
+    }
+
     // Cap limit at 100
     let limit = query.limit.min(100);
 
@@ -393,6 +416,17 @@ pub async fn search_messages(
     query: SearchMessagesQuery,
     pool: SqlitePool,
 ) -> Result<impl Reply, Rejection> {
+    if let Err((code, message)) = validate_uuid(&conversation_id, "conversation ID") {
+        return Ok(reply::with_status(
+            reply::json(&ErrorBody {
+                code,
+                message,
+                details: None,
+            }),
+            warp::http::StatusCode::BAD_REQUEST,
+        ));
+    }
+
     if query.q.trim().is_empty() {
         return Ok(reply::with_status(
             reply::json(&ErrorBody {
