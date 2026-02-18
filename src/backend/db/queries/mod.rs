@@ -145,7 +145,7 @@ pub async fn find_user_by_id(pool: &SqlitePool, user_id: &str) -> Result<Option<
     .bind(user_id)
     .fetch_optional(pool)
     .await
-    .map_err(|_| "Failed to find user".to_string())
+    .map_err(|e| format!("Failed to find user: {}", e))
 }
 
 /// Find multiple users by their IDs

@@ -50,10 +50,11 @@ fn percent_decode(s: &str) -> String {
             }
 
             if hex_idx == 2 {
-                if let Ok(decoded) = u8::from_str_radix(std::str::from_utf8(&hex_buf).unwrap(), 16)
-                {
-                    result.push(decoded as char);
-                    continue;
+                if let Ok(utf8_str) = std::str::from_utf8(&hex_buf) {
+                    if let Ok(decoded) = u8::from_str_radix(utf8_str, 16) {
+                        result.push(decoded as char);
+                        continue;
+                    }
                 }
             }
 

@@ -8,6 +8,7 @@ use chat_shared::protocol::{MessageEnvelope, PresenceData};
 use serde_json::json;
 use sqlx::SqlitePool;
 use std::sync::Arc;
+use tracing::warn;
 use warp::ws::Message as WsMessage;
 
 #[derive(Clone)]
@@ -40,7 +41,10 @@ impl PresenceService {
     async fn broadcast_presence(&self, user_id: &str, is_online: bool) -> Result<(), String> {
         let user = match queries::find_user_by_id(&self.pool, user_id).await? {
             Some(user) => user,
-            None => return Ok(()), // User removed; nothing to do
+            None => {
+                warn!(user_id, "User not found during presence broadcast");
+                return Ok(());
+            }
         };
 
         let conversations = queries::get_user_conversations(&self.pool, user_id, 200, 0).await?;
