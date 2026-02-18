@@ -12,7 +12,9 @@ use tokio::sync::mpsc::Sender;
 use tokio::sync::RwLock;
 use warp::ws::Message as WsMessage;
 
-/// WebSocket connection handle
+const MAX_TOTAL_CONNECTIONS: usize = 10_000;
+const MAX_CONNECTIONS_PER_USER: usize = 10;
+
 pub type ConnectionId = String;
 
 /// Client connection state
@@ -38,10 +40,19 @@ impl ClientConnection {
     }
 }
 
+/// Result of a connection registration attempt
+#[derive(Debug)]
+pub enum RegisterResult {
+    Success { connection_id: ConnectionId },
+    MaxConnectionsReached,
+    MaxUserConnectionsReached,
+}
+
 /// WebSocket connection manager
 pub struct ConnectionManager {
-    /// Map of user_id -> active connections
     connections: Arc<RwLock<HashMap<String, Vec<ManagedConnection>>>>,
+    max_total: usize,
+    max_per_user: usize,
 }
 
 #[derive(Clone)]
@@ -58,32 +69,50 @@ impl Default for ConnectionManager {
 
 impl ConnectionManager {
     pub fn new() -> Self {
+        Self::with_limits(MAX_TOTAL_CONNECTIONS, MAX_CONNECTIONS_PER_USER)
+    }
+
+    pub fn with_limits(max_total: usize, max_per_user: usize) -> Self {
         Self {
             connections: Arc::new(RwLock::new(HashMap::new())),
+            max_total,
+            max_per_user,
         }
     }
 
     /// Register a new connection for a user
     ///
     /// Adds a new WebSocket connection to the user's connection list.
-    /// A single user can have multiple concurrent connections.
+    /// A single user can have multiple concurrent connections (up to max_per_user).
+    /// Total connections are limited to max_total.
     ///
     /// # Returns
-    /// The unique connection ID that can be used to unregister this connection.
+    /// RegisterResult indicating success or the reason for failure.
     pub async fn register(
         &self,
         client: ClientConnection,
         sender: Sender<WsMessage>,
-    ) -> ConnectionId {
+    ) -> RegisterResult {
         let mut conns = self.connections.write().await;
-        let connection_id = client.connection_id.clone();
 
+        let total_count: usize = conns.values().map(|v| v.len()).sum();
+        if total_count >= self.max_total {
+            return RegisterResult::MaxConnectionsReached;
+        }
+
+        if let Some(user_conns) = conns.get(&client.user_id) {
+            if user_conns.len() >= self.max_per_user {
+                return RegisterResult::MaxUserConnectionsReached;
+            }
+        }
+
+        let connection_id = client.connection_id.clone();
         conns
             .entry(client.user_id.clone())
             .or_insert_with(Vec::new)
             .push(ManagedConnection { client, sender });
 
-        connection_id
+        RegisterResult::Success { connection_id }
     }
 
     /// Unregister a connection
@@ -333,8 +362,11 @@ mod tests {
         let connection_id = client.connection_id.clone();
 
         let (tx, _rx) = mpsc::channel(100);
-        let registered_id = manager.register(client, tx).await;
-        assert_eq!(registered_id, connection_id);
+        let result = manager.register(client, tx).await;
+        match result {
+            RegisterResult::Success { connection_id: id } => assert_eq!(id, connection_id),
+            _ => panic!("Expected Success"),
+        }
 
         assert!(manager.is_user_online("user123").await);
         let conns = manager.get_user_connections("user123").await;
@@ -378,6 +410,50 @@ mod tests {
 
         manager.unregister("user123", &conns[0].connection_id).await;
         assert!(!manager.is_user_online("user123").await);
+    }
+
+    #[tokio::test]
+    async fn test_connection_manager_max_per_user() {
+        let manager = ConnectionManager::with_limits(100, 2);
+
+        let (tx1, _rx1) = mpsc::channel(100);
+        let (tx2, _rx2) = mpsc::channel(100);
+        let (tx3, _rx3) = mpsc::channel(100);
+
+        let client1 = ClientConnection::new("user123".to_string(), "alice".to_string());
+        let client2 = ClientConnection::new("user123".to_string(), "alice".to_string());
+        let client3 = ClientConnection::new("user123".to_string(), "alice".to_string());
+
+        let result1 = manager.register(client1, tx1).await;
+        assert!(matches!(result1, RegisterResult::Success { .. }));
+
+        let result2 = manager.register(client2, tx2).await;
+        assert!(matches!(result2, RegisterResult::Success { .. }));
+
+        let result3 = manager.register(client3, tx3).await;
+        assert!(matches!(result3, RegisterResult::MaxUserConnectionsReached));
+    }
+
+    #[tokio::test]
+    async fn test_connection_manager_max_total() {
+        let manager = ConnectionManager::with_limits(2, 10);
+
+        let (tx1, _rx1) = mpsc::channel(100);
+        let (tx2, _rx2) = mpsc::channel(100);
+        let (tx3, _rx3) = mpsc::channel(100);
+
+        let client1 = ClientConnection::new("user1".to_string(), "alice".to_string());
+        let client2 = ClientConnection::new("user2".to_string(), "bob".to_string());
+        let client3 = ClientConnection::new("user3".to_string(), "charlie".to_string());
+
+        let result1 = manager.register(client1, tx1).await;
+        assert!(matches!(result1, RegisterResult::Success { .. }));
+
+        let result2 = manager.register(client2, tx2).await;
+        assert!(matches!(result2, RegisterResult::Success { .. }));
+
+        let result3 = manager.register(client3, tx3).await;
+        assert!(matches!(result3, RegisterResult::MaxConnectionsReached));
     }
 
     #[test]

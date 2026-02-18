@@ -9,7 +9,7 @@ use warp::{reply, Rejection, Reply};
 
 use crate::db::queries;
 use crate::handlers::{websocket::ConnectionManager, ErrorBody};
-use crate::services::AuthService;
+use crate::services::{AuthService, CsrfService};
 use crate::validators;
 use std::sync::Arc;
 
@@ -34,18 +34,34 @@ pub struct AuthResponse {
     pub username: String,
     pub token: String,
     pub expires_in: u64,
+    pub csrf_token: String,
 }
 
 /// Handle POST /auth/logout
 pub async fn logout_handler(
     user_id: String,
+    csrf_token: Option<String>,
     connection_manager: Arc<ConnectionManager>,
+    csrf_service: CsrfService,
     pool: SqlitePool,
 ) -> Result<impl Reply, Rejection> {
     info!("Logout request for user: {}", user_id);
 
-    // Log the event
-    // Note: IP address is not available in logout context without modifying the filter signature
+    if let Some(token) = csrf_token {
+        if !csrf_service.validate_token(&token, &user_id).await {
+            warn!("Invalid CSRF token for logout request");
+            return Ok(reply::with_status(
+                reply::json(&ErrorBody {
+                    code: "FORBIDDEN".to_string(),
+                    message: "Invalid CSRF token".to_string(),
+                    details: None,
+                }),
+                warp::http::StatusCode::FORBIDDEN,
+            ));
+        }
+        csrf_service.invalidate_token(&token).await;
+    }
+
     if let Err(e) = queries::insert_auth_log(
         &pool,
         "",
@@ -59,7 +75,6 @@ pub async fn logout_handler(
         warn!("Failed to log logout event: {}", e);
     }
 
-    // Disconnect active WebSocket connections
     connection_manager.disconnect_user(&user_id).await;
 
     Ok(reply::with_status(
@@ -73,8 +88,8 @@ pub async fn signup_handler(
     req: SignupRequest,
     pool: SqlitePool,
     jwt_secret: String,
+    csrf_service: CsrfService,
 ) -> Result<impl Reply, Rejection> {
-    // Validate username
     if let Err(e) = validators::validate_username(&req.username) {
         warn!("Invalid username: {}", e);
         return Ok(reply::with_status(
@@ -87,7 +102,6 @@ pub async fn signup_handler(
         ));
     }
 
-    // Validate password
     if let Err(e) = validators::validate_password(&req.password) {
         warn!("Invalid password: {}", e);
         return Ok(reply::with_status(
@@ -100,7 +114,6 @@ pub async fn signup_handler(
         ));
     }
 
-    // Check if username already exists
     match queries::find_user_by_username(&pool, &req.username).await {
         Ok(Some(_)) => {
             warn!("Username already exists: {}", req.username);
@@ -127,12 +140,9 @@ pub async fn signup_handler(
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
             ));
         }
-        Ok(None) => {
-            // Username is available, continue
-        }
+        Ok(None) => {}
     }
 
-    // Create user
     let auth_service = AuthService::new(jwt_secret);
     let user = match auth_service
         .create_user(req.username.clone(), req.password)
@@ -152,7 +162,6 @@ pub async fn signup_handler(
         }
     };
 
-    // Save user to database
     if let Err(e) = queries::insert_user(&pool, &user).await {
         warn!("Failed to save user '{}' to database: {}", user.username, e);
         return Ok(reply::with_status(
@@ -165,7 +174,6 @@ pub async fn signup_handler(
         ));
     }
 
-    // Generate JWT token
     let (token, expires_at) = match auth_service.generate_token(user.id.clone()) {
         Ok((token, expires_at)) => (token, expires_at),
         Err(e) => {
@@ -181,6 +189,8 @@ pub async fn signup_handler(
         }
     };
 
+    let csrf_token = csrf_service.generate_token(&user.id).await;
+
     info!("User signed up: {}", req.username);
 
     Ok(reply::with_status(
@@ -189,6 +199,7 @@ pub async fn signup_handler(
             username: user.username,
             token,
             expires_in: expires_at,
+            csrf_token,
         }),
         warp::http::StatusCode::CREATED,
     ))
@@ -199,8 +210,8 @@ pub async fn login_handler(
     req: LoginRequest,
     pool: SqlitePool,
     jwt_secret: String,
+    csrf_service: CsrfService,
 ) -> Result<impl Reply, Rejection> {
-    // Validate username using the same validator as signup
     if let Err(e) = validators::validate_username(&req.username) {
         warn!("Login failed: invalid username ({}) - {}", req.username, e);
         return Ok(reply::with_status(
@@ -215,7 +226,6 @@ pub async fn login_handler(
 
     let auth_service = AuthService::new(jwt_secret.clone());
 
-    // Find user by username
     let user = match queries::find_user_by_username(&pool, &req.username).await {
         Ok(Some(user)) => user,
         Ok(None) => {
@@ -245,7 +255,6 @@ pub async fn login_handler(
         }
     };
 
-    // Check if user is deleted
     if user.is_deleted() {
         warn!("Login failed: deleted account ({})", req.username);
         return Ok(reply::with_status(
@@ -258,11 +267,8 @@ pub async fn login_handler(
         ));
     }
 
-    // Verify password with structured logging
     match auth_service.verify_login(&req.username, &req.password, &user.password_hash) {
-        Ok(true) => {
-            // Password is correct
-        }
+        Ok(true) => {}
         Ok(false) => {
             warn!("Login failed: invalid password ({})", req.username);
             return Ok(reply::with_status(
@@ -290,7 +296,6 @@ pub async fn login_handler(
         }
     }
 
-    // Generate token
     let (token, expires_at) = match auth_service.generate_token(user.id.clone()) {
         Ok((token, expires_at)) => (token, expires_at),
         Err(e) => {
@@ -306,6 +311,8 @@ pub async fn login_handler(
         }
     };
 
+    let csrf_token = csrf_service.generate_token(&user.id).await;
+
     info!("User logged in: {}", req.username);
 
     Ok(reply::with_status(
@@ -314,6 +321,7 @@ pub async fn login_handler(
             username: user.username,
             token,
             expires_in: expires_at,
+            csrf_token,
         }),
         warp::http::StatusCode::OK,
     ))
@@ -330,10 +338,12 @@ mod tests {
             username: "alice".to_string(),
             token: "eyJhbGc...".to_string(),
             expires_in: 3600,
+            csrf_token: "csrf-token-123".to_string(),
         };
 
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("user123"));
         assert!(json.contains("alice"));
+        assert!(json.contains("csrf-token-123"));
     }
 }

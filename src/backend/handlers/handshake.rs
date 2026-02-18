@@ -1,7 +1,11 @@
 //! WebSocket handshake validation and authentication
 //!
-//! Validates JWT tokens from query parameters and manages the WebSocket upgrade process.
+//! Validates JWT tokens from query parameters or Sec-WebSocket-Protocol header and manages the WebSocket upgrade process.
 //! Ensures only authenticated users can establish WebSocket connections.
+//!
+//! # Token Sources (in order of preference)
+//! 1. Sec-WebSocket-Protocol header - recommended, avoids token exposure in logs
+//! 2. URL query parameter - supported for backwards compatibility
 
 use crate::services::AuthService;
 use chat_shared::protocol::TokenClaims;
@@ -9,19 +13,33 @@ use warp::http::StatusCode;
 
 /// Extract JWT token from WebSocket upgrade request query string
 pub fn extract_token_from_query(query: &str) -> Result<String, String> {
-    // Parse query string for ?token=<jwt>
     for param in query.split('&') {
         if let Some(value) = param.strip_prefix("token=") {
             if value.is_empty() {
                 return Err("Token parameter is empty".to_string());
             }
-            // Decode percent-encoded characters manually (basic implementation)
             let decoded = percent_decode(value);
             return Ok(decoded);
         }
     }
 
     Err("Token parameter not found in query string".to_string())
+}
+
+/// Extract JWT token from Sec-WebSocket-Protocol header
+///
+/// The token is expected as a subprotocol in the format: "jwt.<token>"
+/// This is the recommended approach as it avoids logging tokens in access logs.
+pub fn extract_token_from_protocol_header(header_value: &str) -> Option<String> {
+    for protocol in header_value.split(',') {
+        let protocol = protocol.trim();
+        if let Some(token) = protocol.strip_prefix("jwt.") {
+            if !token.is_empty() {
+                return Some(token.to_string());
+            }
+        }
+    }
+    None
 }
 
 /// Basic percent-decoding for URL-encoded tokens
@@ -85,11 +103,24 @@ impl HandshakeValidator {
     }
 
     /// Validate WebSocket upgrade request and extract user claims
-    pub fn validate_upgrade(&self, query: &str) -> Result<TokenClaims, (StatusCode, String)> {
-        // Extract token from query string
-        let token = extract_token_from_query(query).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    ///
+    /// Checks for token in Sec-WebSocket-Protocol header first (recommended),
+    /// falls back to URL query parameter for backwards compatibility.
+    pub fn validate_upgrade(
+        &self,
+        query: &str,
+        protocol_header: Option<&str>,
+    ) -> Result<TokenClaims, (StatusCode, String)> {
+        let token = if let Some(header) = protocol_header {
+            if let Some(t) = extract_token_from_protocol_header(header) {
+                t
+            } else {
+                extract_token_from_query(query).map_err(|e| (StatusCode::BAD_REQUEST, e))?
+            }
+        } else {
+            extract_token_from_query(query).map_err(|e| (StatusCode::BAD_REQUEST, e))?
+        };
 
-        // Verify token with auth service
         let claims = self.auth_service.verify_token(&token).map_err(|e| {
             if e.contains("expired") || e.contains("Expiration") {
                 (StatusCode::UNAUTHORIZED, "Token has expired".to_string())
@@ -101,7 +132,6 @@ impl HandshakeValidator {
             }
         })?;
 
-        // Validate required claims
         if claims.sub.is_empty() {
             return Err((
                 StatusCode::UNAUTHORIZED,
@@ -116,7 +146,6 @@ impl HandshakeValidator {
             ));
         }
 
-        // Check token expiration explicitly
         let now = chrono::Utc::now().timestamp_millis() as u64;
         if claims.exp <= now {
             return Err((StatusCode::UNAUTHORIZED, "Token has expired".to_string()));
@@ -192,7 +221,7 @@ mod tests {
             .unwrap();
 
         let query = format!("token={}", token);
-        let result = validator.validate_upgrade(&query);
+        let result = validator.validate_upgrade(&query, None);
 
         assert!(result.is_ok());
         let claims = result.unwrap();
@@ -204,7 +233,7 @@ mod tests {
     fn test_handshake_validator_missing_token() {
         let validator = HandshakeValidator::new("test_secret".to_string());
         let query = "foo=bar";
-        let result = validator.validate_upgrade(query);
+        let result = validator.validate_upgrade(query, None);
 
         assert!(result.is_err());
         let (status, msg) = result.unwrap_err();
@@ -216,7 +245,7 @@ mod tests {
     fn test_handshake_validator_invalid_token() {
         let validator = HandshakeValidator::new("test_secret".to_string());
         let query = "token=invalid.token.here";
-        let result = validator.validate_upgrade(query);
+        let result = validator.validate_upgrade(query, None);
 
         assert!(result.is_err());
         let (status, msg) = result.unwrap_err();
@@ -234,11 +263,74 @@ mod tests {
 
         let validator2 = HandshakeValidator::new("secret2".to_string());
         let query = format!("token={}", token);
-        let result = validator2.validate_upgrade(&query);
+        let result = validator2.validate_upgrade(&query, None);
 
         assert!(result.is_err());
         let (status, _) = result.unwrap_err();
         assert_eq!(status, StatusCode::UNAUTHORIZED);
+    }
+
+    #[test]
+    fn test_extract_token_from_protocol_header_valid() {
+        let header = "jwt.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9";
+        let result = extract_token_from_protocol_header(header);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9");
+    }
+
+    #[test]
+    fn test_extract_token_from_protocol_header_multiple_protocols() {
+        let header = "chat, jwt.mytoken, other";
+        let result = extract_token_from_protocol_header(header);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), "mytoken");
+    }
+
+    #[test]
+    fn test_extract_token_from_protocol_header_not_present() {
+        let header = "chat, other";
+        let result = extract_token_from_protocol_header(header);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_extract_token_from_protocol_header_empty_jwt() {
+        let header = "jwt.";
+        let result = extract_token_from_protocol_header(header);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_handshake_validator_token_from_protocol_header() {
+        let validator = HandshakeValidator::new("test_secret".to_string());
+        let (token, _) = validator
+            .auth_service
+            .generate_token("user123".to_string())
+            .unwrap();
+
+        let protocol_header = format!("jwt.{}", token);
+        let result = validator.validate_upgrade("", Some(&protocol_header));
+
+        assert!(result.is_ok());
+        let claims = result.unwrap();
+        assert_eq!(claims.sub, "user123");
+    }
+
+    #[test]
+    fn test_handshake_validator_protocol_header_preferred() {
+        let validator = HandshakeValidator::new("test_secret".to_string());
+        let (token, _) = validator
+            .auth_service
+            .generate_token("user_from_header".to_string())
+            .unwrap();
+
+        let protocol_header = format!("jwt.{}", token);
+        let query = "token=invalid.token.here";
+        let result = validator.validate_upgrade(query, Some(&protocol_header));
+
+        assert!(result.is_ok());
+        let claims = result.unwrap();
+        assert_eq!(claims.sub, "user_from_header");
     }
 
     #[test]

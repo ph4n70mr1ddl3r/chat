@@ -6,7 +6,7 @@ use crate::db::queries::{self, AuthEventType};
 use crate::handlers::auth::{AuthResponse, LoginRequest};
 use crate::handlers::ErrorBody;
 use crate::middleware::RateLimiter;
-use crate::services::AuthService;
+use crate::services::{AuthService, CsrfService};
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use tracing::{info, warn};
@@ -19,8 +19,8 @@ pub async fn login_with_rate_limit(
     jwt_secret: String,
     rate_limiter: Arc<RateLimiter>,
     ip_address: String,
+    csrf_service: CsrfService,
 ) -> Result<impl Reply, Rejection> {
-    // Check rate limit and attempt
     if let Err(err) = rate_limiter.check_and_record(&ip_address).await {
         warn!("Rate limit exceeded for IP: {}", ip_address);
 
@@ -168,6 +168,8 @@ pub async fn login_with_rate_limit(
     )
     .await;
 
+    let csrf_token = csrf_service.generate_token(&user.id).await;
+
     info!("User logged in: {}", req.username);
 
     Ok(reply::with_status(
@@ -176,6 +178,7 @@ pub async fn login_with_rate_limit(
             username: user.username,
             token,
             expires_in: expires_at,
+            csrf_token,
         }),
         warp::http::StatusCode::OK,
     ))

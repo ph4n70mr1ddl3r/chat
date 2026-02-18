@@ -3,7 +3,7 @@
 //! Handles POST /auth/refresh for refreshing JWT tokens
 
 use crate::handlers::ErrorBody;
-use crate::services::AuthService;
+use crate::services::{AuthService, CsrfService};
 use serde::Deserialize;
 use tracing::{info, warn};
 use warp::{reply, Rejection, Reply};
@@ -20,10 +20,10 @@ pub struct RefreshRequest {
 pub async fn refresh_token_handler(
     req: RefreshRequest,
     jwt_secret: String,
+    csrf_service: CsrfService,
 ) -> Result<impl Reply, Rejection> {
     let auth_service = AuthService::new(jwt_secret.clone());
 
-    // Verify the existing token
     let claims = match auth_service.verify_token(&req.token) {
         Ok(claims) => claims,
         Err(e) => {
@@ -39,7 +39,6 @@ pub async fn refresh_token_handler(
         }
     };
 
-    // Generate a new token with the same user ID
     let (new_token, expires_at) = match auth_service.generate_token(claims.sub.clone()) {
         Ok((token, expires_at)) => (token, expires_at),
         Err(e) => {
@@ -55,14 +54,17 @@ pub async fn refresh_token_handler(
         }
     };
 
+    let csrf_token = csrf_service.generate_token(&claims.sub).await;
+
     info!("Token refreshed for user: {}", claims.sub);
 
     Ok(reply::with_status(
         reply::json(&AuthResponse {
             user_id: claims.sub.clone(),
-            username: String::new(), // Username not available in refresh token claims
+            username: String::new(),
             token: new_token,
             expires_in: expires_at,
+            csrf_token,
         }),
         warp::http::StatusCode::OK,
     ))

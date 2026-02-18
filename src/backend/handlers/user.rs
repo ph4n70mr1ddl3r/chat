@@ -4,12 +4,13 @@
 
 use crate::db::queries;
 use crate::handlers::ErrorBody;
-use crate::services::{AuthService, UserService};
+use crate::services::{AuthService, CsrfService, UserService};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use tracing::warn;
 use warp::{reply, Rejection, Reply};
+use crate::validators;
 
 /// User profile response
 #[derive(Debug, Serialize)]
@@ -168,9 +169,24 @@ pub async fn search_users(
 pub async fn delete_account(
     user_id: String,
     request: DeleteAccountRequest,
+    csrf_token: Option<String>,
+    csrf_service: CsrfService,
     pool: SqlitePool,
 ) -> Result<impl Reply, Rejection> {
-    // 1. Fetch user to get password hash
+    if let Some(token) = &csrf_token {
+        if !csrf_service.validate_token(token, &user_id).await {
+            warn!("Invalid CSRF token for delete account request");
+            return Ok(reply::with_status(
+                reply::json(&ErrorBody {
+                    code: "FORBIDDEN".to_string(),
+                    message: "Invalid CSRF token".to_string(),
+                    details: None,
+                }),
+                warp::http::StatusCode::FORBIDDEN,
+            ));
+        }
+    }
+
     let user = match queries::find_user_by_id(&pool, &user_id).await {
         Ok(Some(u)) => u,
         Ok(None) => {
@@ -196,11 +212,8 @@ pub async fn delete_account(
         }
     };
 
-    // 2. Verify password
     match AuthService::verify_password(&request.password, &user.password_hash) {
-        Ok(true) => {
-            // Password correct
-        }
+        Ok(true) => {}
         Ok(false) => {
             return Ok(reply::with_status(
                 reply::json(&ErrorBody {
@@ -224,7 +237,6 @@ pub async fn delete_account(
         }
     }
 
-    // 3. Perform soft delete
     if let Err(e) = queries::soft_delete_user(&pool, &user_id).await {
         warn!("Failed to delete user: {}", e);
         return Ok(reply::with_status(
@@ -237,9 +249,12 @@ pub async fn delete_account(
         ));
     }
 
-    // 4. Return success (No Content)
+    if let Some(token) = csrf_token {
+        csrf_service.invalidate_token(&token).await;
+    }
+
     Ok(reply::with_status(
-        reply::json(&serde_json::json!({})), // warp reply needs body even for 204? Usually empty.
+        reply::json(&serde_json::json!({})),
         warp::http::StatusCode::NO_CONTENT,
     ))
 }
@@ -248,9 +263,36 @@ pub async fn delete_account(
 pub async fn change_password(
     user_id: String,
     request: ChangePasswordRequest,
+    csrf_token: Option<String>,
+    csrf_service: CsrfService,
     pool: SqlitePool,
 ) -> Result<impl Reply, Rejection> {
-    // 1. Fetch user to verify current password
+    if let Some(token) = &csrf_token {
+        if !csrf_service.validate_token(token, &user_id).await {
+            warn!("Invalid CSRF token for change password request");
+            return Ok(reply::with_status(
+                reply::json(&ErrorBody {
+                    code: "FORBIDDEN".to_string(),
+                    message: "Invalid CSRF token".to_string(),
+                    details: None,
+                }),
+                warp::http::StatusCode::FORBIDDEN,
+            ));
+        }
+    }
+
+    if let Err(e) = validators::validate_password(&request.new_password) {
+        warn!("New password validation failed: {}", e);
+        return Ok(reply::with_status(
+            reply::json(&ErrorBody {
+                code: "VALIDATION_ERROR".to_string(),
+                message: format!("New password does not meet requirements: {}", e),
+                details: None,
+            }),
+            warp::http::StatusCode::BAD_REQUEST,
+        ));
+    }
+
     let user = match queries::find_user_by_id(&pool, &user_id).await {
         Ok(Some(u)) => u,
         Ok(None) => {
@@ -276,7 +318,6 @@ pub async fn change_password(
         }
     };
 
-    // 2. Verify current password
     match AuthService::verify_password(&request.current_password, &user.password_hash) {
         Ok(true) => {}
         Ok(false) => {
@@ -302,7 +343,6 @@ pub async fn change_password(
         }
     }
 
-    // 3. Validate and hash new password
     let new_hash = match AuthService::hash_password(&request.new_password) {
         Ok(hash) => hash,
         Err(e) => {
@@ -317,7 +357,6 @@ pub async fn change_password(
         }
     };
 
-    // 4. Update password in database
     if let Err(e) = queries::update_password(&pool, &user_id, &new_hash).await {
         warn!("Failed to update password: {}", e);
         return Ok(reply::with_status(
@@ -328,6 +367,10 @@ pub async fn change_password(
             }),
             warp::http::StatusCode::INTERNAL_SERVER_ERROR,
         ));
+    }
+
+    if let Some(token) = csrf_token {
+        csrf_service.invalidate_token(&token).await;
     }
 
     Ok(reply::with_status(

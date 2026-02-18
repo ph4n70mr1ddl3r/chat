@@ -63,6 +63,13 @@ impl RateLimiter {
     /// Check if an IP address is rate limited
     ///
     /// Returns true if the IP has exceeded the rate limit
+    ///
+    /// # Deprecation Notice
+    /// Use `check_and_record()` instead to avoid TOCTOU race conditions.
+    #[deprecated(
+        since = "0.2.0",
+        note = "Use `check_and_record()` instead for atomic rate limit checking and recording"
+    )]
     pub async fn is_rate_limited(&self, ip: &str) -> bool {
         let mut entries = self.entries.lock().await;
 
@@ -83,6 +90,13 @@ impl RateLimiter {
     }
 
     /// Record a failed attempt for an IP address
+    ///
+    /// # Deprecation Notice
+    /// Use `check_and_record()` instead to avoid TOCTOU race conditions.
+    #[deprecated(
+        since = "0.2.0",
+        note = "Use `check_and_record()` instead for atomic rate limit checking and recording"
+    )]
     pub async fn record_attempt(&self, ip: &str) {
         let mut entries = self.entries.lock().await;
 

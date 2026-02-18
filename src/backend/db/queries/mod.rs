@@ -563,12 +563,38 @@ pub async fn search_messages_in_conversation(
     .map_err(|e| format!("Failed to search messages: {}", e))
 }
 
-/// Soft delete user helper
+/// Soft delete user helper - wraps all operations in a transaction
 pub async fn soft_delete_user(pool: &SqlitePool, user_id: &str) -> Result<(), String> {
-    delete_user(pool, user_id).await?;
-    anonymize_user_messages(pool, user_id).await?;
-    delete_user_conversations(pool, user_id).await?;
-    Ok(())
+    let user_id = user_id.to_string();
+    execute_transaction(pool, |tx| {
+        Box::pin(async move {
+            let now = chrono::Utc::now().timestamp_millis();
+
+            sqlx::query("UPDATE users SET deleted_at = ?, updated_at = ? WHERE id = ?")
+                .bind(now)
+                .bind(now)
+                .bind(&user_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| format!("Failed to delete user: {}", e))?;
+
+            sqlx::query("UPDATE messages SET is_anonymized = TRUE WHERE sender_id = ?")
+                .bind(&user_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| format!("Failed to anonymize messages: {}", e))?;
+
+            sqlx::query("DELETE FROM conversations WHERE user1_id = ? OR user2_id = ?")
+                .bind(&user_id)
+                .bind(&user_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| format!("Failed to delete conversations: {}", e))?;
+
+            Ok(())
+        })
+    })
+    .await
 }
 
 /// Delete all conversations for a user

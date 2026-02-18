@@ -27,7 +27,7 @@ use warp::{Filter, Rejection, Reply};
 use crate::handlers::dispatcher::{DispatchResult, MessageDispatcher};
 use crate::handlers::handshake::HandshakeValidator;
 use crate::handlers::messages::MessageHandler;
-use crate::services::{MessageQueueService, PresenceService};
+use crate::services::{CsrfService, MessageQueueService, PresenceService};
 use chat_shared::protocol::TokenClaims;
 
 use crate::handlers::{self, auth, conversation, server as server_handlers, user, websocket};
@@ -106,8 +106,10 @@ pub struct ServerState {
     pub user_service: Arc<crate::services::UserService>,
     pub global_rate_limiter: Arc<rate_limit::RateLimiter>,
     pub auth_rate_limiter: Arc<rate_limit::RateLimiter>,
+    pub csrf_service: CsrfService,
     _global_cleanup_handle: Arc<tokio::task::JoinHandle<()>>,
     _auth_cleanup_handle: Arc<tokio::task::JoinHandle<()>>,
+    _csrf_cleanup_handle: Arc<tokio::task::JoinHandle<()>>,
     pub start_time: Instant,
 }
 
@@ -118,10 +120,11 @@ impl ServerState {
         let global_rate_limiter = Arc::new(rate_limit::RateLimiter::global());
         let auth_rate_limiter = Arc::new(rate_limit::RateLimiter::new(5, 900));
         let user_service = Arc::new(crate::services::UserService::new(pool.clone()));
+        let csrf_service = CsrfService::new();
 
-        // Start periodic cleanup tasks for rate limiters
         let global_cleanup_handle = global_rate_limiter.start_periodic_cleanup();
         let auth_cleanup_handle = auth_rate_limiter.start_periodic_cleanup();
+        let csrf_cleanup_handle = csrf_service.start_periodic_cleanup();
 
         Self {
             pool,
@@ -135,8 +138,10 @@ impl ServerState {
             user_service,
             global_rate_limiter,
             auth_rate_limiter,
+            csrf_service,
             _global_cleanup_handle: Arc::new(global_cleanup_handle),
             _auth_cleanup_handle: Arc::new(auth_cleanup_handle),
+            _csrf_cleanup_handle: Arc::new(csrf_cleanup_handle),
             start_time: Instant::now(),
         }
     }
@@ -171,10 +176,12 @@ pub fn create_routes(
         .and_then(server_handlers::status);
 
     // WebSocket endpoint with JWT authentication
+    // Token can be provided via Sec-WebSocket-Protocol header (preferred) or URL query
     let websocket_route = warp::path!("socket")
         .and(warp::ws())
         .and(rate_limit_filter.clone())
         .and(warp::query::raw())
+        .and(warp::header::optional::<String>("Sec-WebSocket-Protocol"))
         .and(state_filter.clone())
         .and_then(handle_websocket_upgrade);
 
@@ -208,6 +215,7 @@ pub fn create_routes(
                     .and(warp::path("logout"))
                     .and(warp::path::end())
                     .and(with_auth.clone())
+                    .and(warp::header::optional::<String>("X-CSRF-Token"))
                     .and(rate_limit_filter.clone())
                     .and(state_filter.clone())
                     .and_then(handle_logout),
@@ -230,6 +238,7 @@ pub fn create_routes(
                     .and(warp::path("me"))
                     .and(warp::path::end())
                     .and(with_auth.clone())
+                    .and(warp::header::optional::<String>("X-CSRF-Token"))
                     .and(rate_limit_filter.clone())
                     .and(warp::body::json())
                     .and(state_filter.clone())
@@ -241,6 +250,7 @@ pub fn create_routes(
                     .and(warp::path("change-password"))
                     .and(warp::path::end())
                     .and(with_auth.clone())
+                    .and(warp::header::optional::<String>("X-CSRF-Token"))
                     .and(rate_limit_filter.clone())
                     .and(warp::body::json())
                     .and(state_filter.clone())
@@ -395,13 +405,13 @@ fn build_cors(config: &ServerConfig) -> Cors {
 async fn handle_websocket_upgrade(
     ws: Ws,
     query: String,
+    protocol_header: Option<String>,
     state: ServerState,
 ) -> Result<impl Reply, Rejection> {
     info!("WebSocket connection request received");
 
-    // Validate JWT token using handshake validator
     let validator = HandshakeValidator::new(state.config.jwt_secret.clone());
-    match validator.validate_upgrade(&query) {
+    match validator.validate_upgrade(&query, protocol_header.as_deref()) {
         Ok(claims) => {
             info!(
                 "WebSocket authentication successful for user: {}",
@@ -411,7 +421,6 @@ async fn handle_websocket_upgrade(
         }
         Err((status, message)) => {
             warn!("WebSocket authentication failed: {} - {}", status, message);
-            // Reject the WebSocket upgrade with appropriate HTTP status
             Err(warp::reject::custom(WebSocketAuthError { status, message }))
         }
     }
@@ -444,31 +453,43 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
         }
     };
 
-    // Register connection with connection manager
     let connection = websocket::ClientConnection::new(user_id.clone(), username);
 
-    // Channel used by other parts of the system to push frames to this socket
     const MAX_QUEUED_MESSAGES: usize = 100;
     let (tx, mut rx) = mpsc::channel::<warp::ws::Message>(MAX_QUEUED_MESSAGES);
-    let connection_id = state
+
+    let register_result = state
         .connection_manager
         .register(connection.clone(), tx.clone())
         .await;
-    info!(
-        "Registered connection {} for user {}",
-        connection_id, user_id
-    );
 
-    // Only mark user as online after successful connection registration
-    if !connection_id.is_empty() {
-        if let Err(e) = state.presence_service.mark_online(&user_id).await {
-            warn!("Failed to mark presence online: {}", e);
+    let connection_id = match register_result {
+        websocket::RegisterResult::Success { connection_id } => {
+            info!(
+                "Registered connection {} for user {}",
+                connection_id, user_id
+            );
+            if let Err(e) = state.presence_service.mark_online(&user_id).await {
+                warn!("Failed to mark presence online: {}", e);
+            }
+            Some(connection_id)
         }
-    } else {
-        warn!("Failed to register connection for user {}", user_id);
-    }
+        websocket::RegisterResult::MaxConnectionsReached => {
+            warn!(
+                "Connection rejected for user {}: server at max capacity",
+                user_id
+            );
+            None
+        }
+        websocket::RegisterResult::MaxUserConnectionsReached => {
+            warn!(
+                "Connection rejected for user {}: user has too many connections",
+                user_id
+            );
+            None
+        }
+    };
 
-    // Create message handler
     let message_handler = MessageHandler::new(
         state.pool.clone(),
         state.connection_manager.clone(),
@@ -478,7 +499,14 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
     let (ws_tx, mut ws_rx) = socket.split();
     let ws_tx = Arc::new(tokio::sync::Mutex::new(ws_tx));
 
-    // Forward messages from channel to websocket sink
+    if connection_id.is_none() {
+        let mut sender = ws_tx.lock().await;
+        let _ = sender.send(websocket::ErrorResponse::server_error(
+            "Connection limit reached, please try again later",
+        )).await;
+        return;
+    }
+
     let ws_tx_forward = ws_tx.clone();
     tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
@@ -489,7 +517,6 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
         }
     });
 
-    // Process incoming messages with timeout
     let read_timeout = Duration::from_secs(WS_READ_TIMEOUT_SECS);
     while let Ok(result) = timeout(read_timeout, ws_rx.next()).await {
         match result {
@@ -510,15 +537,12 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
                     break;
                 }
 
-                // Parse and dispatch message
                 let dispatch_result = MessageDispatcher::parse_message(&msg);
 
                 match dispatch_result {
                     DispatchResult::RequiresAck { envelope, .. } => {
-                        // Handle text message
                         match message_handler.handle_message(&envelope, &connection).await {
                             Ok(responses) => {
-                                // Send all responses
                                 for response in responses {
                                     let mut sender = ws_tx.lock().await;
                                     if let Err(e) = sender.send(response).await {
@@ -537,11 +561,9 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
                         }
                     }
                     DispatchResult::Success { msg_type, .. } => {
-                        // Heartbeat, typing, etc. - just log
                         info!("Handled {} message from {}", msg_type, user_id);
                     }
                     DispatchResult::Error { error_msg } => {
-                        // Send error response
                         let mut sender = ws_tx.lock().await;
                         if let Err(e) = sender.send(error_msg).await {
                             warn!("Failed to send error response: {}", e);
@@ -558,23 +580,22 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
                 break;
             }
             None => {
-                // Connection closed
                 info!("WebSocket stream ended for user: {}", user_id);
                 break;
             }
         }
     }
-    // Timeout occurred
     info!("WebSocket read timeout for user: {}", user_id);
 
-    // Unregister connection
-    state
-        .connection_manager
-        .unregister(&user_id, &connection_id)
-        .await;
+    if let Some(ref conn_id) = connection_id {
+        state
+            .connection_manager
+            .unregister(&user_id, conn_id)
+            .await;
 
-    if let Err(e) = state.presence_service.mark_offline(&user_id).await {
-        warn!("Failed to mark presence offline: {}", e);
+        if let Err(e) = state.presence_service.mark_offline(&user_id).await {
+            warn!("Failed to mark presence offline: {}", e);
+        }
     }
     info!("WebSocket connection closed for user: {}", user_id);
 }
@@ -594,8 +615,7 @@ async fn handle_signup(
         .await
         .map_err(warp::reject::custom)?;
 
-    // Delegate to auth handler
-    auth::signup_handler(req, state.pool, state.config.jwt_secret).await
+    auth::signup_handler(req, state.pool, state.config.jwt_secret, state.csrf_service).await
 }
 
 /// Handle login request
@@ -613,7 +633,14 @@ async fn handle_login(
         .await
         .map_err(warp::reject::custom)?;
 
-    match auth::login_handler(req, state.pool.clone(), state.config.jwt_secret.clone()).await {
+    match auth::login_handler(
+        req,
+        state.pool.clone(),
+        state.config.jwt_secret.clone(),
+        state.csrf_service.clone(),
+    )
+    .await
+    {
         Ok(response) => {
             state.auth_rate_limiter.reset(&ip).await;
             Ok(response)
@@ -623,9 +650,20 @@ async fn handle_login(
 }
 
 /// Handle logout request
-async fn handle_logout(user_id: String, state: ServerState) -> Result<impl Reply, Rejection> {
+async fn handle_logout(
+    user_id: String,
+    csrf_token: Option<String>,
+    state: ServerState,
+) -> Result<impl Reply, Rejection> {
     info!("Logout request for user: {}", user_id);
-    auth::logout_handler(user_id, state.connection_manager, state.pool).await
+    auth::logout_handler(
+        user_id,
+        csrf_token,
+        state.connection_manager,
+        state.csrf_service,
+        state.pool,
+    )
+    .await
 }
 
 /// Handle GET /user/me
@@ -639,19 +677,21 @@ async fn handle_get_current_user(
 /// Handle DELETE /user/me
 async fn handle_delete_account(
     user_id: String,
+    csrf_token: Option<String>,
     req: user::DeleteAccountRequest,
     state: ServerState,
 ) -> Result<impl Reply, Rejection> {
-    user::delete_account(user_id, req, state.pool).await
+    user::delete_account(user_id, req, csrf_token, state.csrf_service, state.pool).await
 }
 
 /// Handle POST /user/change-password
 async fn handle_change_password(
     user_id: String,
+    csrf_token: Option<String>,
     req: user::ChangePasswordRequest,
     state: ServerState,
 ) -> Result<impl Reply, Rejection> {
-    user::change_password(user_id, req, state.pool).await
+    user::change_password(user_id, req, csrf_token, state.csrf_service, state.pool).await
 }
 
 fn client_ip(remote_addr: Option<SocketAddr>) -> String {
