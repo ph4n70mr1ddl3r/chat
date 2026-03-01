@@ -148,10 +148,10 @@ impl MessageQueueService {
 
         if user_queue.len() >= MAX_QUEUED_MESSAGES_PER_USER {
             tracing::warn!(
-                "Message queue full for user {}, dropping oldest message",
+                "Message queue full for user {}, cannot queue new message",
                 recipient_id
             );
-            user_queue.remove(0);
+            return false;
         }
         user_queue.push(queued_msg);
         true

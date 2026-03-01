@@ -106,7 +106,7 @@ impl HandshakeValidator {
     ///
     /// Checks for token in Sec-WebSocket-Protocol header first (recommended),
     /// falls back to URL query parameter for backwards compatibility.
-    pub fn validate_upgrade(
+    pub async fn validate_upgrade(
         &self,
         query: &str,
         protocol_header: Option<&str>,
@@ -121,9 +121,9 @@ impl HandshakeValidator {
             extract_token_from_query(query).map_err(|e| (StatusCode::BAD_REQUEST, e))?
         };
 
-        let claims = self.auth_service.verify_token(&token).map_err(|e| {
-            if e.contains("expired") || e.contains("Expiration") {
-                (StatusCode::UNAUTHORIZED, "Token has expired".to_string())
+        let claims = self.auth_service.verify_token(&token).await.map_err(|e| {
+            if e.contains("expired") || e.contains("Expiration") || e.contains("revoked") {
+                (StatusCode::UNAUTHORIZED, e)
             } else {
                 (
                     StatusCode::UNAUTHORIZED,
@@ -212,8 +212,8 @@ mod tests {
             .is_empty());
     }
 
-    #[test]
-    fn test_handshake_validator_valid_token() {
+    #[tokio::test]
+    async fn test_handshake_validator_valid_token() {
         let validator = HandshakeValidator::new("test_secret".to_string());
         let (token, _) = validator
             .auth_service
@@ -221,7 +221,7 @@ mod tests {
             .unwrap();
 
         let query = format!("token={}", token);
-        let result = validator.validate_upgrade(&query, None);
+        let result = validator.validate_upgrade(&query, None).await;
 
         assert!(result.is_ok());
         let claims = result.unwrap();
@@ -229,11 +229,11 @@ mod tests {
         assert_eq!(claims.aud, "chat-app");
     }
 
-    #[test]
-    fn test_handshake_validator_missing_token() {
+    #[tokio::test]
+    async fn test_handshake_validator_missing_token() {
         let validator = HandshakeValidator::new("test_secret".to_string());
         let query = "foo=bar";
-        let result = validator.validate_upgrade(query, None);
+        let result = validator.validate_upgrade(query, None).await;
 
         assert!(result.is_err());
         let (status, msg) = result.unwrap_err();
@@ -241,11 +241,11 @@ mod tests {
         assert!(msg.contains("not found"));
     }
 
-    #[test]
-    fn test_handshake_validator_invalid_token() {
+    #[tokio::test]
+    async fn test_handshake_validator_invalid_token() {
         let validator = HandshakeValidator::new("test_secret".to_string());
         let query = "token=invalid.token.here";
-        let result = validator.validate_upgrade(query, None);
+        let result = validator.validate_upgrade(query, None).await;
 
         assert!(result.is_err());
         let (status, msg) = result.unwrap_err();
@@ -253,8 +253,8 @@ mod tests {
         assert!(msg.contains("Invalid") || msg.contains("malformed"));
     }
 
-    #[test]
-    fn test_handshake_validator_wrong_secret() {
+    #[tokio::test]
+    async fn test_handshake_validator_wrong_secret() {
         let validator1 = HandshakeValidator::new("secret1".to_string());
         let (token, _) = validator1
             .auth_service
@@ -263,7 +263,7 @@ mod tests {
 
         let validator2 = HandshakeValidator::new("secret2".to_string());
         let query = format!("token={}", token);
-        let result = validator2.validate_upgrade(&query, None);
+        let result = validator2.validate_upgrade(&query, None).await;
 
         assert!(result.is_err());
         let (status, _) = result.unwrap_err();
@@ -300,8 +300,8 @@ mod tests {
         assert!(result.is_none());
     }
 
-    #[test]
-    fn test_handshake_validator_token_from_protocol_header() {
+    #[tokio::test]
+    async fn test_handshake_validator_token_from_protocol_header() {
         let validator = HandshakeValidator::new("test_secret".to_string());
         let (token, _) = validator
             .auth_service
@@ -309,15 +309,15 @@ mod tests {
             .unwrap();
 
         let protocol_header = format!("jwt.{}", token);
-        let result = validator.validate_upgrade("", Some(&protocol_header));
+        let result = validator.validate_upgrade("", Some(&protocol_header)).await;
 
         assert!(result.is_ok());
         let claims = result.unwrap();
         assert_eq!(claims.sub, "user123");
     }
 
-    #[test]
-    fn test_handshake_validator_protocol_header_preferred() {
+    #[tokio::test]
+    async fn test_handshake_validator_protocol_header_preferred() {
         let validator = HandshakeValidator::new("test_secret".to_string());
         let (token, _) = validator
             .auth_service
@@ -326,7 +326,7 @@ mod tests {
 
         let protocol_header = format!("jwt.{}", token);
         let query = "token=invalid.token.here";
-        let result = validator.validate_upgrade(query, Some(&protocol_header));
+        let result = validator.validate_upgrade(query, Some(&protocol_header)).await;
 
         assert!(result.is_ok());
         let claims = result.unwrap();

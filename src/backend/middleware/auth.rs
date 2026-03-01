@@ -25,7 +25,9 @@ pub fn with_auth(
         .and(warp::any().map(move || auth_service.clone()))
         .and_then(
             |headers: HeaderMap, auth_service: Arc<AuthService>| async move {
-                extract_user_id(&headers, &auth_service).ok_or_else(|| reject::custom(Unauthorized))
+                extract_user_id(&headers, &auth_service)
+                    .await
+                    .ok_or_else(|| reject::custom(Unauthorized))
             },
         )
 }
@@ -33,7 +35,7 @@ pub fn with_auth(
 /// Extract user ID from Authorization header
 ///
 /// Expected format: "Bearer <token>"
-fn extract_user_id(headers: &HeaderMap, auth_service: &AuthService) -> Option<String> {
+async fn extract_user_id(headers: &HeaderMap, auth_service: &AuthService) -> Option<String> {
     let auth_header = headers.get(AUTHORIZATION)?;
     let auth_str = auth_header.to_str().ok()?;
 
@@ -43,6 +45,7 @@ fn extract_user_id(headers: &HeaderMap, auth_service: &AuthService) -> Option<St
     // Verify token and extract user_id
     auth_service
         .verify_token(token)
+        .await
         .ok()
         .map(|claims| claims.sub)
 }
@@ -52,8 +55,8 @@ mod tests {
     use super::*;
     use warp::http::HeaderValue;
 
-    #[test]
-    fn test_extract_user_id_valid() {
+    #[tokio::test]
+    async fn test_extract_user_id_valid() {
         let auth_service = AuthService::new("test_secret".to_string());
         let (token, _) = auth_service.generate_token("user123".to_string()).unwrap();
 
@@ -63,33 +66,33 @@ mod tests {
             HeaderValue::from_str(&format!("Bearer {}", token)).unwrap(),
         );
 
-        let result = extract_user_id(&headers, &auth_service);
+        let result = extract_user_id(&headers, &auth_service).await;
         assert_eq!(result, Some("user123".to_string()));
     }
 
-    #[test]
-    fn test_extract_user_id_no_header() {
+    #[tokio::test]
+    async fn test_extract_user_id_no_header() {
         let auth_service = AuthService::new("test_secret".to_string());
         let headers = HeaderMap::new();
 
-        let result = extract_user_id(&headers, &auth_service);
+        let result = extract_user_id(&headers, &auth_service).await;
         assert_eq!(result, None);
     }
 
-    #[test]
-    fn test_extract_user_id_no_bearer_prefix() {
+    #[tokio::test]
+    async fn test_extract_user_id_no_bearer_prefix() {
         let auth_service = AuthService::new("test_secret".to_string());
         let (token, _) = auth_service.generate_token("user123".to_string()).unwrap();
 
         let mut headers = HeaderMap::new();
         headers.insert(AUTHORIZATION, HeaderValue::from_str(&token).unwrap());
 
-        let result = extract_user_id(&headers, &auth_service);
+        let result = extract_user_id(&headers, &auth_service).await;
         assert_eq!(result, None);
     }
 
-    #[test]
-    fn test_extract_user_id_invalid_token() {
+    #[tokio::test]
+    async fn test_extract_user_id_invalid_token() {
         let auth_service = AuthService::new("test_secret".to_string());
 
         let mut headers = HeaderMap::new();
@@ -98,12 +101,12 @@ mod tests {
             HeaderValue::from_str("Bearer invalid.token.here").unwrap(),
         );
 
-        let result = extract_user_id(&headers, &auth_service);
+        let result = extract_user_id(&headers, &auth_service).await;
         assert_eq!(result, None);
     }
 
-    #[test]
-    fn test_extract_user_id_wrong_secret() {
+    #[tokio::test]
+    async fn test_extract_user_id_wrong_secret() {
         let auth1 = AuthService::new("secret1".to_string());
         let (token, _) = auth1.generate_token("user123".to_string()).unwrap();
 
@@ -115,7 +118,7 @@ mod tests {
             HeaderValue::from_str(&format!("Bearer {}", token)).unwrap(),
         );
 
-        let result = extract_user_id(&headers, &auth2);
+        let result = extract_user_id(&headers, &auth2).await;
         assert_eq!(result, None);
     }
 }

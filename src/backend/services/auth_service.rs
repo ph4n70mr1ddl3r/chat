@@ -7,13 +7,17 @@ use crate::validators;
 use bcrypt::{hash, verify, DEFAULT_COST};
 use chrono::Utc;
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use std::collections::HashSet;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use tracing::{info, warn};
 
 use chat_shared::protocol::TokenClaims;
 
-/// Authentication service
+/// Authentication service with token revocation support
 pub struct AuthService {
     jwt_secret: String,
+    revoked_tokens: Arc<RwLock<HashSet<String>>>,
 }
 
 /// JWT token expiration time in seconds (1 hour)
@@ -25,7 +29,29 @@ const DEFAULT_SCOPES: [&str; 2] = ["send", "receive"];
 impl AuthService {
     /// Create a new authentication service with the given secret key
     pub fn new(jwt_secret: String) -> Self {
-        Self { jwt_secret }
+        Self {
+            jwt_secret,
+            revoked_tokens: Arc::new(RwLock::new(HashSet::new())),
+        }
+    }
+
+    /// Revoke a token (add to blacklist)
+    pub async fn revoke_token(&self, token: &str) {
+        self.revoked_tokens.write().await.insert(token.to_string());
+    }
+
+    /// Check if a token has been revoked
+    pub async fn is_token_revoked(&self, token: &str) -> bool {
+        self.revoked_tokens.read().await.contains(token)
+    }
+
+    /// Clean up expired revoked tokens (call periodically)
+    pub async fn cleanup_revoked_tokens(&self) {
+        let mut tokens = self.revoked_tokens.write().await;
+        if tokens.len() > 10_000 {
+            tokens.clear();
+            info!(target: "auth", "Cleared revoked tokens cache");
+        }
     }
 
     /// Hash a password with bcrypt
@@ -131,7 +157,11 @@ impl AuthService {
     }
 
     /// Verify and decode a JWT token
-    pub fn verify_token(&self, token: &str) -> Result<TokenClaims, String> {
+    pub async fn verify_token(&self, token: &str) -> Result<TokenClaims, String> {
+        if self.is_token_revoked(token).await {
+            return Err("Token has been revoked".to_string());
+        }
+
         let key = DecodingKey::from_secret(self.jwt_secret.as_bytes());
         let mut validation = Validation::new(Algorithm::HS256);
         validation.set_audience(&["chat-app"]);
@@ -220,32 +250,46 @@ mod tests {
         assert_eq!(exp, TOKEN_EXPIRATION_SECONDS as u64);
     }
 
-    #[test]
-    fn test_verify_token_valid() {
+    #[tokio::test]
+    async fn test_verify_token_valid() {
         let auth = AuthService::new(uuid::Uuid::new_v4().to_string());
         let (token, _) = auth.generate_token("user123".to_string()).unwrap();
 
-        let claims = auth.verify_token(&token);
+        let claims = auth.verify_token(&token).await;
         assert!(claims.is_ok());
         assert_eq!(claims.unwrap().sub, "user123");
     }
 
-    #[test]
-    fn test_verify_token_invalid() {
+    #[tokio::test]
+    async fn test_verify_token_invalid() {
         let auth = AuthService::new(uuid::Uuid::new_v4().to_string());
-        let result = auth.verify_token("invalid.token.here");
+        let result = auth.verify_token("invalid.token.here").await;
 
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_verify_token_wrong_secret() {
+    #[tokio::test]
+    async fn test_verify_token_wrong_secret() {
         let auth1 = AuthService::new(uuid::Uuid::new_v4().to_string());
         let (token, _) = auth1.generate_token("user123".to_string()).unwrap();
 
         let auth2 = AuthService::new(uuid::Uuid::new_v4().to_string());
-        let result = auth2.verify_token(&token);
+        let result = auth2.verify_token(&token).await;
 
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_token_revocation() {
+        let auth = AuthService::new(uuid::Uuid::new_v4().to_string());
+        let (token, _) = auth.generate_token("user123".to_string()).unwrap();
+
+        assert!(auth.verify_token(&token).await.is_ok());
+
+        auth.revoke_token(&token).await;
+
+        let result = auth.verify_token(&token).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("revoked"));
     }
 }

@@ -1,103 +1,64 @@
 //! CSRF protection service
 //!
-//! Provides CSRF token generation and validation for state-changing operations.
+//! Provides stateless CSRF token generation and validation using JWT.
 //! This is a security measure to prevent cross-site request forgery attacks.
 
-use chrono::{DateTime, Utc};
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use uuid::Uuid;
+use chrono::Utc;
+use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use serde::{Deserialize, Serialize};
 
-const CSRF_TOKEN_VALIDITY_SECS: i64 = 3600; // 1 hour
-const CSRF_CLEANUP_INTERVAL_SECS: u64 = 300; // 5 minutes
+const CSRF_TOKEN_VALIDITY_SECS: i64 = 3600;
 
-#[derive(Clone)]
-pub struct CsrfToken {
-    pub token: String,
-    pub user_id: String,
-    pub created_at: DateTime<Utc>,
-}
-
-impl CsrfToken {
-    pub fn is_expired(&self) -> bool {
-        let now = Utc::now();
-        let elapsed = now.signed_duration_since(self.created_at);
-        elapsed.num_seconds() > CSRF_TOKEN_VALIDITY_SECS
-    }
-}
-
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct CsrfService {
-    tokens: Arc<Mutex<HashMap<String, CsrfToken>>>,
+    encoding_key: EncodingKey,
+    decoding_key: DecodingKey,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct CsrfClaims {
+    sub: String,
+    iat: i64,
+    exp: i64,
+    nonce: String,
 }
 
 impl CsrfService {
-    pub fn new() -> Self {
+    pub fn new(secret: &str) -> Self {
         Self {
-            tokens: Arc::new(Mutex::new(HashMap::new())),
+            encoding_key: EncodingKey::from_secret(secret.as_bytes()),
+            decoding_key: DecodingKey::from_secret(secret.as_bytes()),
         }
     }
 
-    pub async fn generate_token(&self, user_id: &str) -> String {
-        let token = Uuid::new_v4().to_string();
-        let csrf_token = CsrfToken {
-            token: token.clone(),
-            user_id: user_id.to_string(),
-            created_at: Utc::now(),
+    pub fn generate_token(&self, user_id: &str) -> String {
+        let now = Utc::now().timestamp();
+        let nonce = uuid::Uuid::new_v4().to_string();
+
+        let claims = CsrfClaims {
+            sub: user_id.to_string(),
+            iat: now,
+            exp: now + CSRF_TOKEN_VALIDITY_SECS,
+            nonce,
         };
 
-        let mut tokens = self.tokens.lock().await;
-        tokens.insert(token.clone(), csrf_token);
-        token
+        encode(&Header::default(), &claims, &self.encoding_key).expect("CSRF token encoding failed")
     }
 
-    pub async fn validate_token(&self, token: &str, user_id: &str) -> bool {
-        let tokens = self.tokens.lock().await;
-        if let Some(csrf_token) = tokens.get(token) {
-            if csrf_token.user_id != user_id || csrf_token.is_expired() {
-                return false;
-            }
-            true
-        } else {
-            false
+    pub fn validate_token(&self, token: &str, user_id: &str) -> bool {
+        let mut validation = Validation::new(Algorithm::HS256);
+        validation.set_required_spec_claims(&["sub", "iat", "exp"]);
+
+        match decode::<CsrfClaims>(token, &self.decoding_key, &validation) {
+            Ok(data) => data.claims.sub == user_id,
+            Err(_) => false,
         }
-    }
-
-    pub async fn invalidate_token(&self, token: &str) {
-        let mut tokens = self.tokens.lock().await;
-        tokens.remove(token);
-    }
-
-    pub async fn cleanup_expired(&self) {
-        let mut tokens = self.tokens.lock().await;
-        tokens.retain(|_, token| !token.is_expired());
-    }
-
-    /// Start a background task that periodically cleans up expired tokens.
-    ///
-    /// The returned `JoinHandle` should be kept alive for the cleanup to continue.
-    /// If the handle is dropped, the spawned task will be cancelled.
-    #[must_use]
-    pub fn start_periodic_cleanup(&self) -> tokio::task::JoinHandle<()> {
-        let service = self.clone();
-        let interval = std::time::Duration::from_secs(CSRF_CLEANUP_INTERVAL_SECS);
-
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(interval);
-            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-
-            loop {
-                interval.tick().await;
-                service.cleanup_expired().await;
-            }
-        })
     }
 }
 
 impl Default for CsrfService {
     fn default() -> Self {
-        Self::new()
+        Self::new("default-csrf-secret-change-in-production")
     }
 }
 
@@ -105,27 +66,26 @@ impl Default for CsrfService {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_csrf_token_generation() {
-        let service = CsrfService::new();
-        let token = service.generate_token("user123").await;
+    #[test]
+    fn test_csrf_token_generation() {
+        let service = CsrfService::new("test-secret");
+        let token = service.generate_token("user123");
         assert!(!token.is_empty());
     }
 
-    #[tokio::test]
-    async fn test_csrf_token_validation() {
-        let service = CsrfService::new();
-        let token = service.generate_token("user123").await;
-        assert!(service.validate_token(&token, "user123").await);
-        assert!(!service.validate_token(&token, "wrong_user").await);
+    #[test]
+    fn test_csrf_token_validation() {
+        let service = CsrfService::new("test-secret");
+        let token = service.generate_token("user123");
+        assert!(service.validate_token(&token, "user123"));
+        assert!(!service.validate_token(&token, "wrong_user"));
     }
 
-    #[tokio::test]
-    async fn test_csrf_token_invalidation() {
-        let service = CsrfService::new();
-        let token = service.generate_token("user123").await;
-        assert!(service.validate_token(&token, "user123").await);
-        service.invalidate_token(&token).await;
-        assert!(!service.validate_token(&token, "user123").await);
+    #[test]
+    fn test_csrf_token_wrong_secret() {
+        let service1 = CsrfService::new("secret1");
+        let service2 = CsrfService::new("secret2");
+        let token = service1.generate_token("user123");
+        assert!(!service2.validate_token(&token, "user123"));
     }
 }

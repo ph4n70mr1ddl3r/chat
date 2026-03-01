@@ -24,7 +24,7 @@ pub async fn refresh_token_handler(
 ) -> Result<impl Reply, Rejection> {
     let auth_service = AuthService::new(jwt_secret.clone());
 
-    let claims = match auth_service.verify_token(&req.token) {
+    let claims = match auth_service.verify_token(&req.token).await {
         Ok(claims) => claims,
         Err(e) => {
             warn!("Token verification failed: {}", e);
@@ -54,7 +54,7 @@ pub async fn refresh_token_handler(
         }
     };
 
-    let csrf_token = csrf_service.generate_token(&claims.sub).await;
+    let csrf_token = csrf_service.generate_token(&claims.sub);
 
     info!("Token refreshed for user: {}", claims.sub);
 

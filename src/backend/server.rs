@@ -109,7 +109,6 @@ pub struct ServerState {
     pub csrf_service: CsrfService,
     _global_cleanup_handle: Arc<tokio::task::JoinHandle<()>>,
     _auth_cleanup_handle: Arc<tokio::task::JoinHandle<()>>,
-    _csrf_cleanup_handle: Arc<tokio::task::JoinHandle<()>>,
     pub start_time: Instant,
 }
 
@@ -120,11 +119,10 @@ impl ServerState {
         let global_rate_limiter = Arc::new(rate_limit::RateLimiter::global());
         let auth_rate_limiter = Arc::new(rate_limit::RateLimiter::new(5, 900));
         let user_service = Arc::new(crate::services::UserService::new(pool.clone()));
-        let csrf_service = CsrfService::new();
+        let csrf_service = CsrfService::new(&config.jwt_secret);
 
         let global_cleanup_handle = global_rate_limiter.start_periodic_cleanup();
         let auth_cleanup_handle = auth_rate_limiter.start_periodic_cleanup();
-        let csrf_cleanup_handle = csrf_service.start_periodic_cleanup();
 
         Self {
             pool,
@@ -141,7 +139,6 @@ impl ServerState {
             csrf_service,
             _global_cleanup_handle: Arc::new(global_cleanup_handle),
             _auth_cleanup_handle: Arc::new(auth_cleanup_handle),
-            _csrf_cleanup_handle: Arc::new(csrf_cleanup_handle),
             start_time: Instant::now(),
         }
     }
@@ -412,7 +409,7 @@ async fn handle_websocket_upgrade(
     info!("WebSocket connection request received");
 
     let validator = HandshakeValidator::new(state.config.jwt_secret.clone());
-    match validator.validate_upgrade(&query, protocol_header.as_deref()) {
+    match validator.validate_upgrade(&query, protocol_header.as_deref()).await {
         Ok(claims) => {
             info!(
                 "WebSocket authentication successful for user: {}",

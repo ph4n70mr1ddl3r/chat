@@ -168,7 +168,7 @@ pub async fn login_with_rate_limit(
     )
     .await;
 
-    let csrf_token = csrf_service.generate_token(&user.id).await;
+    let csrf_token = csrf_service.generate_token(&user.id);
 
     info!("User logged in: {}", req.username);
 

@@ -118,6 +118,14 @@ impl MessageHandler {
         // Get or create conversation
         let conversation_id = if let Some(conv_id) = &data.conversation_id {
             let conversation_id = conv_id.clone();
+            
+            // Validate conversation_id is a valid UUID
+            if uuid::Uuid::parse_str(&conversation_id).is_err() {
+                return Ok(vec![ErrorResponse::invalid_message(
+                    "Invalid conversation ID format",
+                )]);
+            }
+            
             // Verify sender is a participant in the conversation
             let conversation = queries::get_conversation_by_id(&self.pool, &conversation_id)
                 .await

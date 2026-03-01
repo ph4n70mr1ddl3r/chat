@@ -62,7 +62,7 @@ pub async fn logout_handler(
     info!("Logout request for user: {}", user_id);
 
     if let Some(token) = csrf_token {
-        if !csrf_service.validate_token(&token, &user_id).await {
+        if !csrf_service.validate_token(&token, &user_id) {
             warn!("Invalid CSRF token for logout request");
             return Ok(error_response!(
                 "FORBIDDEN",
@@ -70,7 +70,6 @@ pub async fn logout_handler(
                 warp::http::StatusCode::FORBIDDEN
             ));
         }
-        csrf_service.invalidate_token(&token).await;
     }
 
     if let Err(e) = queries::insert_auth_log(
@@ -175,7 +174,7 @@ pub async fn signup_handler(
         }
     };
 
-    let csrf_token = csrf_service.generate_token(&user.id).await;
+    let csrf_token = csrf_service.generate_token(&user.id);
 
     info!("User signed up: {}", req.username);
 
@@ -276,7 +275,7 @@ pub async fn login_handler(
         }
     };
 
-    let csrf_token = csrf_service.generate_token(&user.id).await;
+    let csrf_token = csrf_service.generate_token(&user.id);
 
     info!("User logged in: {}", req.username);
 

@@ -188,7 +188,7 @@ pub async fn delete_account(
         }
     };
 
-    if !csrf_service.validate_token(&csrf_token, &user_id).await {
+    if !csrf_service.validate_token(&csrf_token, &user_id) {
         warn!("Invalid CSRF token for delete account request");
         return Ok(reply::with_status(
             reply::json(&ErrorBody {
@@ -262,8 +262,6 @@ pub async fn delete_account(
         ));
     }
 
-    csrf_service.invalidate_token(&csrf_token).await;
-
     Ok(reply::with_status(
         reply::json(&serde_json::json!({})),
         warp::http::StatusCode::NO_CONTENT,
@@ -293,7 +291,7 @@ pub async fn change_password(
         }
     };
 
-    if !csrf_service.validate_token(&csrf_token, &user_id).await {
+    if !csrf_service.validate_token(&csrf_token, &user_id) {
         warn!("Invalid CSRF token for change password request");
         return Ok(reply::with_status(
             reply::json(&ErrorBody {
@@ -392,8 +390,6 @@ pub async fn change_password(
             warp::http::StatusCode::INTERNAL_SERVER_ERROR,
         ));
     }
-
-    csrf_service.invalidate_token(&csrf_token).await;
 
     Ok(reply::with_status(
         reply::json(&serde_json::json!({ "message": "Password changed successfully" })),

@@ -41,7 +41,7 @@ impl ClientConnection {
 }
 
 /// Result of a connection registration attempt
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RegisterResult {
     Success { connection_id: ConnectionId },
     MaxConnectionsReached,
@@ -231,10 +231,10 @@ impl MessageValidator {
         }
 
         // Check timestamp is reasonable (not far in future/past).
-        // Allow 5 minutes (300,000ms) tolerance to account for clock skew between clients and server.
+        // Allow 60 seconds tolerance to account for clock skew between clients and server.
         let now = chrono::Utc::now().timestamp_millis();
         let time_diff = (envelope.timestamp as i64).saturating_sub(now).abs();
-        if time_diff > 300_000 {
+        if time_diff > 60_000 {
             return Err("Timestamp out of reasonable range".to_string());
         }
 
