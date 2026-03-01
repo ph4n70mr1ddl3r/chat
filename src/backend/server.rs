@@ -217,6 +217,7 @@ pub fn create_routes(
                     .and(with_auth.clone())
                     .and(warp::header::optional::<String>("X-CSRF-Token"))
                     .and(rate_limit_filter.clone())
+                    .and(warp::addr::remote())
                     .and(state_filter.clone())
                     .and_then(handle_logout),
             ),
@@ -653,15 +654,18 @@ async fn handle_login(
 async fn handle_logout(
     user_id: String,
     csrf_token: Option<String>,
+    remote_addr: Option<SocketAddr>,
     state: ServerState,
 ) -> Result<impl Reply, Rejection> {
     info!("Logout request for user: {}", user_id);
+    let ip = client_ip(remote_addr);
     auth::logout_handler(
         user_id,
         csrf_token,
         state.connection_manager,
         state.csrf_service,
         state.pool,
+        Some(&ip),
     )
     .await
 }

@@ -44,6 +44,7 @@ pub async fn logout_handler(
     connection_manager: Arc<ConnectionManager>,
     csrf_service: CsrfService,
     pool: SqlitePool,
+    ip_address: Option<&str>,
 ) -> Result<impl Reply, Rejection> {
     info!("Logout request for user: {}", user_id);
 
@@ -64,7 +65,7 @@ pub async fn logout_handler(
 
     if let Err(e) = queries::insert_auth_log(
         &pool,
-        "",
+        ip_address.unwrap_or("unknown"),
         None,
         queries::AuthEventType::Logout,
         None,

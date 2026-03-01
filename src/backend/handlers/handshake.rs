@@ -332,11 +332,4 @@ mod tests {
         let claims = result.unwrap();
         assert_eq!(claims.sub, "user_from_header");
     }
-
-    #[test]
-    fn test_handshake_validator_audience_mismatch() {
-        // This test would require creating a token with wrong audience,
-        // which is not directly testable with current AuthService.
-        // For now, we test via integration if the validator checks audience properly.
-    }
 }

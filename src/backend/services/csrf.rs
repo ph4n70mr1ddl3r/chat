@@ -74,6 +74,11 @@ impl CsrfService {
         tokens.retain(|_, token| !token.is_expired());
     }
 
+    /// Start a background task that periodically cleans up expired tokens.
+    ///
+    /// The returned `JoinHandle` should be kept alive for the cleanup to continue.
+    /// If the handle is dropped, the spawned task will be cancelled.
+    #[must_use]
     pub fn start_periodic_cleanup(&self) -> tokio::task::JoinHandle<()> {
         let service = self.clone();
         let interval = std::time::Duration::from_secs(CSRF_CLEANUP_INTERVAL_SECS);
