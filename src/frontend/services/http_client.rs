@@ -3,6 +3,7 @@
 //! Provides methods for authentication endpoints (signup, login)
 
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
 /// Signup request payload
 #[derive(Debug, Serialize)]
@@ -44,12 +45,13 @@ pub struct HttpClient {
 }
 
 impl HttpClient {
-    /// Create a new HTTP client
     pub fn new(base_url: String) -> Self {
-        Self {
-            base_url,
-            client: reqwest::Client::new(),
-        }
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .connect_timeout(Duration::from_secs(10))
+            .build()
+            .expect("Failed to create HTTP client");
+        Self { base_url, client }
     }
 
     /// Sign up a new user

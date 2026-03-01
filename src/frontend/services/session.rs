@@ -114,8 +114,13 @@ impl SessionManager {
             }
         }
 
-        // Update in-memory session
-        *self.current_session.lock().expect("session mutex poisoned") = Some(session);
+        match self.current_session.lock() {
+            Ok(mut guard) => *guard = Some(session),
+            Err(poisoned) => {
+                tracing::error!("Session mutex poisoned, recovering...");
+                *poisoned.into_inner() = Some(session);
+            }
+        }
 
         Ok(())
     }
@@ -140,8 +145,13 @@ impl SessionManager {
         let session: SessionData = serde_json::from_str(&contents)
             .map_err(|e| format!("Failed to parse session file: {e}"))?;
 
-        // Update in-memory session
-        *self.current_session.lock().expect("session mutex poisoned") = Some(session.clone());
+        match self.current_session.lock() {
+            Ok(mut guard) => *guard = Some(session.clone()),
+            Err(poisoned) => {
+                tracing::error!("Session mutex poisoned, recovering...");
+                *poisoned.into_inner() = Some(session.clone());
+            }
+        }
 
         Ok(Some(session))
     }
@@ -203,8 +213,13 @@ impl SessionManager {
         let session: SessionData = serde_json::from_str(&contents)
             .map_err(|e| format!("Failed to parse session file: {e}"))?;
 
-        // Update in-memory session
-        *self.current_session.lock().expect("session mutex poisoned") = Some(session.clone());
+        match self.current_session.lock() {
+            Ok(mut guard) => *guard = Some(session.clone()),
+            Err(poisoned) => {
+                tracing::error!("Session mutex poisoned, recovering...");
+                *poisoned.into_inner() = Some(session.clone());
+            }
+        }
 
         Ok(Some(session))
     }

@@ -152,12 +152,9 @@ impl MessageQueueService {
                 recipient_id
             );
             user_queue.remove(0);
-            user_queue.push(queued_msg);
-            false
-        } else {
-            user_queue.push(queued_msg);
-            true
         }
+        user_queue.push(queued_msg);
+        true
     }
 
     /// Deliver a message to online recipient
