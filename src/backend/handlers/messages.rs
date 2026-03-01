@@ -86,6 +86,17 @@ impl MessageHandler {
                 MAX_MESSAGE_LENGTH
             ))]);
         }
+        
+        // Validate characters in content
+        let has_invalid_chars = data
+            .content
+            .chars()
+            .any(|c| c.is_control() && c != '\n' && c != '\r' && c != '\t');
+        if has_invalid_chars {
+            return Ok(vec![ErrorResponse::invalid_message(
+                "Message contains invalid control characters",
+            )]);
+        }
 
         // Prevent self-messaging
         if data.recipient_id == sender.user_id {

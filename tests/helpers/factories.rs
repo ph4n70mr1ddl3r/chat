@@ -20,7 +20,7 @@ use uuid::Uuid;
 /// let alice = create_test_user(Default::default());
 /// ```
 ///
-/// # Example: Create user with specific role
+/// # Example: Create user with specific username
 ///
 /// ```ignore
 /// let admin = create_test_user(UserFactoryOverrides {
@@ -32,14 +32,16 @@ use uuid::Uuid;
 pub struct UserFactoryOverrides {
     pub username: Option<String>,
     pub password_hash: Option<String>,
-    pub salt: Option<String>,
 }
 
 pub fn create_test_user(overrides: UserFactoryOverrides) -> User {
     User::new(
-        overrides.username.unwrap_or_else(|| format!("user_{}", Uuid::new_v4())),
-        overrides.password_hash.unwrap_or_else(|| format!("hash_{}", Uuid::new_v4())),
-        overrides.salt.unwrap_or_else(|| format!("salt_{}", Uuid::new_v4())),
+        overrides
+            .username
+            .unwrap_or_else(|| format!("user_{}", Uuid::new_v4())),
+        overrides
+            .password_hash
+            .unwrap_or_else(|| format!("hash_{}", Uuid::new_v4())),
     )
 }
 
@@ -90,7 +92,9 @@ pub fn create_test_message(
         conversation_id: "test_conversation".to_string(), // Will be set by test
         sender_id: sender_id.to_string(),
         recipient_id: recipient_id.to_string(),
-        content: overrides.content.unwrap_or_else(|| "Test message".to_string()),
+        content: overrides
+            .content
+            .unwrap_or_else(|| "Test message".to_string()),
         status: overrides.status.unwrap_or_else(|| "sent".to_string()),
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
