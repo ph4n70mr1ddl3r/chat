@@ -25,7 +25,7 @@ const MAX_EMAIL_DOMAIN_LENGTH: usize = 255;
 /// Rules:
 /// - 1-50 characters
 /// - Must start with alphanumeric or underscore
-/// - Can contain alphanumeric, underscore, hyphen, dot, and Unicode letters
+/// - Can contain alphanumeric, underscore, hyphen, and dot
 /// - Case-sensitive
 pub fn validate_username(username: &str) -> Result<(), String> {
     if username.is_empty() || username.len() > MAX_USERNAME_LENGTH {

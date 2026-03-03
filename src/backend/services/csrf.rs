@@ -56,12 +56,6 @@ impl CsrfService {
     }
 }
 
-impl Default for CsrfService {
-    fn default() -> Self {
-        Self::new("default-csrf-secret-change-in-production")
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
