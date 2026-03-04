@@ -174,7 +174,17 @@ pub async fn signup_handler(
         }
     };
 
-    let csrf_token = csrf_service.generate_token(&user.id);
+    let csrf_token = match csrf_service.generate_token(&user.id) {
+        Ok(token) => token,
+        Err(e) => {
+            warn!("Failed to generate CSRF token: {}", e);
+            return Ok(error_response!(
+                "AUTH_ERROR",
+                "Failed to generate security token",
+                warp::http::StatusCode::INTERNAL_SERVER_ERROR
+            ));
+        }
+    };
 
     info!("User signed up: {}", req.username);
 
@@ -275,7 +285,17 @@ pub async fn login_handler(
         }
     };
 
-    let csrf_token = csrf_service.generate_token(&user.id);
+    let csrf_token = match csrf_service.generate_token(&user.id) {
+        Ok(token) => token,
+        Err(e) => {
+            warn!("Failed to generate CSRF token: {}", e);
+            return Ok(error_response!(
+                "AUTH_ERROR",
+                "Failed to generate security token",
+                warp::http::StatusCode::INTERNAL_SERVER_ERROR
+            ));
+        }
+    };
 
     info!("User logged in: {}", req.username);
 

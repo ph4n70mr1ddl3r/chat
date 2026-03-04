@@ -7,7 +7,7 @@ use crate::validators;
 use bcrypt::{hash, verify, DEFAULT_COST};
 use chrono::Utc;
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
@@ -17,7 +17,7 @@ use chat_shared::protocol::TokenClaims;
 /// Authentication service with token revocation support
 pub struct AuthService {
     jwt_secret: String,
-    revoked_tokens: Arc<RwLock<HashSet<String>>>,
+    revoked_tokens: Arc<RwLock<HashMap<String, i64>>>,
 }
 
 /// JWT token expiration time in seconds (1 hour)
@@ -31,26 +31,34 @@ impl AuthService {
     pub fn new(jwt_secret: String) -> Self {
         Self {
             jwt_secret,
-            revoked_tokens: Arc::new(RwLock::new(HashSet::new())),
+            revoked_tokens: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
-    /// Revoke a token (add to blacklist)
+    /// Revoke a token (add to blacklist with expiration time)
     pub async fn revoke_token(&self, token: &str) {
-        self.revoked_tokens.write().await.insert(token.to_string());
+        let expiration = Utc::now().timestamp() + TOKEN_EXPIRATION_SECONDS + 60;
+        self.revoked_tokens.write().await.insert(token.to_string(), expiration);
     }
 
     /// Check if a token has been revoked
     pub async fn is_token_revoked(&self, token: &str) -> bool {
-        self.revoked_tokens.read().await.contains(token)
+        let tokens = self.revoked_tokens.read().await;
+        if let Some(&exp) = tokens.get(token) {
+            return exp > Utc::now().timestamp();
+        }
+        false
     }
 
     /// Clean up expired revoked tokens (call periodically)
     pub async fn cleanup_revoked_tokens(&self) {
         let mut tokens = self.revoked_tokens.write().await;
-        if tokens.len() > 10_000 {
-            tokens.clear();
-            info!(target: "auth", "Cleared revoked tokens cache");
+        let now = Utc::now().timestamp();
+        let before_count = tokens.len();
+        tokens.retain(|_, exp| *exp > now);
+        let removed = before_count - tokens.len();
+        if removed > 0 {
+            info!(target: "auth", removed = removed, remaining = tokens.len(), "Cleaned up expired revoked tokens");
         }
     }
 

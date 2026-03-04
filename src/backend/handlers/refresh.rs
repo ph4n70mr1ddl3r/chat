@@ -54,7 +54,20 @@ pub async fn refresh_token_handler(
         }
     };
 
-    let csrf_token = csrf_service.generate_token(&claims.sub);
+    let csrf_token = match csrf_service.generate_token(&claims.sub) {
+        Ok(token) => token,
+        Err(e) => {
+            warn!("Failed to generate CSRF token: {}", e);
+            return Ok(reply::with_status(
+                reply::json(&ErrorBody {
+                    code: "AUTH_ERROR".to_string(),
+                    message: "Failed to generate security token".to_string(),
+                    details: None,
+                }),
+                warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+            ));
+        }
+    };
 
     info!("Token refreshed for user: {}", claims.sub);
 

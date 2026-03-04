@@ -107,11 +107,8 @@ impl SessionManager {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            if let Err(e) =
-                std::fs::set_permissions(&self.session_file, std::fs::Permissions::from_mode(0o600))
-            {
-                tracing::warn!("Failed to set secure file permissions: {}. Session may have weaker permissions than expected.", e);
-            }
+            std::fs::set_permissions(&self.session_file, std::fs::Permissions::from_mode(0o600))
+                .map_err(|e| format!("Failed to set secure file permissions: {}. Session file may be readable by other users.", e))?;
         }
 
         match self.current_session.lock() {

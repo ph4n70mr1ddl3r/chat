@@ -31,7 +31,7 @@ impl CsrfService {
         }
     }
 
-    pub fn generate_token(&self, user_id: &str) -> String {
+    pub fn generate_token(&self, user_id: &str) -> Result<String, String> {
         let now = Utc::now().timestamp();
         let nonce = uuid::Uuid::new_v4().to_string();
 
@@ -42,7 +42,8 @@ impl CsrfService {
             nonce,
         };
 
-        encode(&Header::default(), &claims, &self.encoding_key).expect("CSRF token encoding failed")
+        encode(&Header::default(), &claims, &self.encoding_key)
+            .map_err(|e| format!("CSRF token encoding failed: {}", e))
     }
 
     pub fn validate_token(&self, token: &str, user_id: &str) -> bool {
@@ -63,14 +64,14 @@ mod tests {
     #[test]
     fn test_csrf_token_generation() {
         let service = CsrfService::new("test-secret");
-        let token = service.generate_token("user123");
+        let token = service.generate_token("user123").unwrap();
         assert!(!token.is_empty());
     }
 
     #[test]
     fn test_csrf_token_validation() {
         let service = CsrfService::new("test-secret");
-        let token = service.generate_token("user123");
+        let token = service.generate_token("user123").unwrap();
         assert!(service.validate_token(&token, "user123"));
         assert!(!service.validate_token(&token, "wrong_user"));
     }
@@ -79,7 +80,7 @@ mod tests {
     fn test_csrf_token_wrong_secret() {
         let service1 = CsrfService::new("secret1");
         let service2 = CsrfService::new("secret2");
-        let token = service1.generate_token("user123");
+        let token = service1.generate_token("user123").unwrap();
         assert!(!service2.validate_token(&token, "user123"));
     }
 }

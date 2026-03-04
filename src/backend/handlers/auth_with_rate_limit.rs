@@ -91,11 +91,11 @@ pub async fn login_with_rate_limit(
 
         return Ok(reply::with_status(
             reply::json(&ErrorBody {
-                code: "ACCOUNT_DELETED".to_string(),
-                message: "Account has been deleted".to_string(),
+                code: "AUTH_ERROR".to_string(),
+                message: "Invalid credentials".to_string(),
                 details: None,
             }),
-            warp::http::StatusCode::NOT_FOUND,
+            warp::http::StatusCode::UNAUTHORIZED,
         ));
     }
 
@@ -168,7 +168,20 @@ pub async fn login_with_rate_limit(
     )
     .await;
 
-    let csrf_token = csrf_service.generate_token(&user.id);
+    let csrf_token = match csrf_service.generate_token(&user.id) {
+        Ok(token) => token,
+        Err(e) => {
+            warn!("Failed to generate CSRF token: {}", e);
+            return Ok(reply::with_status(
+                reply::json(&ErrorBody {
+                    code: "AUTH_ERROR".to_string(),
+                    message: "Failed to generate security token".to_string(),
+                    details: None,
+                }),
+                warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+            ));
+        }
+    };
 
     info!("User logged in: {}", req.username);
 

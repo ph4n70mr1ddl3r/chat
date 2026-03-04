@@ -20,6 +20,8 @@ fn max_reconnect_attempts() -> usize {
         .unwrap_or(10)
 }
 
+const MAX_PENDING_QUEUE_SIZE: usize = 100;
+
 /// Events emitted by the WebSocket client.
 #[derive(Debug, Clone)]
 pub enum WebSocketEvent {
@@ -110,7 +112,7 @@ impl WebSocketClient {
                     if matches!(cmd, WebSocketCommand::Disconnect) {
                         return;
                     }
-                    pending.push_back(cmd);
+                    push_to_queue(&mut pending, cmd, &event_tx);
                 }
 
                 let token_to_use = session::get_token().unwrap_or_else(|| token.clone());
@@ -161,7 +163,7 @@ impl WebSocketClient {
                                         let _ = ws_write.send(Message::Close(None)).await;
                                         return;
                                     }
-                                    pending.push_back(cmd);
+                                    push_to_queue(&mut pending, cmd, &event_tx);
                                     if let Err(e) = flush_queue(&mut ws_write, &mut pending, &event_tx).await {
                                         if let Err(send_err) = event_tx.send(WebSocketEvent::ConnectionState(ConnectionStatus::Disconnected { reason: format!("Send failed: {e}") })) {
                                             tracing::error!("Failed to send disconnected state: {}", send_err);
@@ -443,6 +445,22 @@ fn current_timestamp_ms() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default();
     now.as_millis() as u64
+}
+
+fn push_to_queue(
+    pending: &mut VecDeque<WebSocketCommand>,
+    cmd: WebSocketCommand,
+    event_tx: &mpsc::UnboundedSender<WebSocketEvent>,
+) {
+    if pending.len() >= MAX_PENDING_QUEUE_SIZE {
+        pending.pop_front();
+        if let Err(e) = event_tx.send(WebSocketEvent::Error(
+            "Message queue full, dropped oldest message".to_string(),
+        )) {
+            tracing::error!("Failed to send queue full error: {}", e);
+        }
+    }
+    pending.push_back(cmd);
 }
 
 fn handle_incoming_text(text: &str, event_tx: &mpsc::UnboundedSender<WebSocketEvent>) {
