@@ -4,6 +4,7 @@
 
 use crate::models::{Conversation, Message, User};
 use sqlx::SqlitePool;
+use tracing::warn;
 use uuid::Uuid;
 
 /// Auth event types
@@ -126,7 +127,10 @@ pub async fn find_user_by_username(
     .bind(username)
     .fetch_optional(pool)
     .await
-    .map_err(|e| format!("Failed to find user by username: {}", e))
+    .map_err(|e| {
+        warn!("Database error during user lookup: {}", e);
+        "Database operation failed".to_string()
+    })
 }
 
 /// Find a user by ID
@@ -145,7 +149,10 @@ pub async fn find_user_by_id(pool: &SqlitePool, user_id: &str) -> Result<Option<
     .bind(user_id)
     .fetch_optional(pool)
     .await
-    .map_err(|e| format!("Failed to find user: {}", e))
+    .map_err(|e| {
+        warn!("Database error finding user by id: {}", e);
+        "Database operation failed".to_string()
+    })
 }
 
 /// Find multiple users by their IDs
@@ -311,8 +318,8 @@ pub async fn insert_conversation(
     pool: &SqlitePool,
     conversation: &Conversation,
 ) -> Result<Conversation, String> {
-    sqlx::query(
-        "INSERT INTO conversations (id, user1_id, user2_id, created_at, updated_at, last_message_at, message_count)
+    let result = sqlx::query(
+        "INSERT OR IGNORE INTO conversations (id, user1_id, user2_id, created_at, updated_at, last_message_at, message_count)
          VALUES (?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(&conversation.id)
@@ -325,6 +332,11 @@ pub async fn insert_conversation(
     .execute(pool)
     .await
     .map_err(|e| format!("Failed to insert conversation: {}", e))?;
+
+    if result.rows_affected() == 0 {
+        let existing = get_conversation_by_users(pool, &conversation.user1_id, &conversation.user2_id).await?;
+        return existing.ok_or_else(|| "Conversation insert failed and not found".to_string());
+    }
 
     Ok(conversation.clone())
 }

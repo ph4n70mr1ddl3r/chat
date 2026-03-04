@@ -45,8 +45,7 @@ impl ConversationService {
             return Ok((conversation, false));
         }
 
-        // Create new conversation
-        let conversation = Conversation::new(u1, u2);
+        let conversation = Conversation::new(u1.clone(), u2.clone());
         conversation.validate()?;
 
         let created = queries::insert_conversation(&self.pool, &conversation).await?;

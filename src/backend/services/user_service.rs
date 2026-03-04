@@ -9,6 +9,7 @@ use log::info;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
@@ -49,6 +50,7 @@ pub struct UserService {
     cache: Arc<RwLock<HashMap<SearchKey, CacheEntry>>>,
     ttl: Duration,
     last_prune: Arc<RwLock<Instant>>,
+    pruning: Arc<AtomicBool>,
 }
 
 impl UserService {
@@ -64,6 +66,7 @@ impl UserService {
             cache: Arc::new(RwLock::new(HashMap::new())),
             ttl,
             last_prune: Arc::new(RwLock::new(Instant::now())),
+            pruning: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -76,13 +79,11 @@ impl UserService {
             }
         }
 
-        let mut cache = self.cache.write().await;
-        {
-            let last_prune = *self.last_prune.read().await;
-            if now.duration_since(last_prune) < Duration::from_secs(30) {
-                return;
-            }
+        if self.pruning.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).is_err() {
+            return;
         }
+
+        let mut cache = self.cache.write().await;
 
         let initial_size = cache.len();
         cache.retain(|_, entry| entry.expires_at > now);
@@ -93,6 +94,7 @@ impl UserService {
         }
 
         *self.last_prune.write().await = now;
+        self.pruning.store(false, Ordering::Release);
     }
 
     /// Search users with cached results (per requester + query + limit)

@@ -875,8 +875,7 @@ mod tests {
             resp.status(),
             String::from_utf8_lossy(resp.body())
         );
-        // Should reject WebSocket upgrade due to missing token
-        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]

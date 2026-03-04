@@ -87,6 +87,9 @@ pub fn validate_password(password: &str) -> Result<(), String> {
     let mut has_special = false;
 
     for c in password.chars() {
+        if c.is_control() {
+            return Err("Password cannot contain control characters".to_string());
+        }
         if c.is_uppercase() {
             has_upper = true;
         } else if c.is_lowercase() {

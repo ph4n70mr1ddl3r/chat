@@ -61,15 +61,25 @@ pub async fn logout_handler(
 ) -> Result<impl Reply, Rejection> {
     info!("Logout request for user: {}", user_id);
 
-    if let Some(token) = csrf_token {
-        if !csrf_service.validate_token(&token, &user_id) {
-            warn!("Invalid CSRF token for logout request");
+    let csrf_token = match csrf_token {
+        Some(t) => t,
+        None => {
+            warn!("Missing CSRF token for logout request");
             return Ok(error_response!(
                 "FORBIDDEN",
-                "Invalid CSRF token",
+                "CSRF token required for logout",
                 warp::http::StatusCode::FORBIDDEN
             ));
         }
+    };
+
+    if !csrf_service.validate_token(&csrf_token, &user_id) {
+        warn!("Invalid CSRF token for logout request");
+        return Ok(error_response!(
+            "FORBIDDEN",
+            "Invalid CSRF token",
+            warp::http::StatusCode::FORBIDDEN
+        ));
     }
 
     if let Err(e) = queries::insert_auth_log(
