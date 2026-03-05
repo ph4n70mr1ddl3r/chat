@@ -54,7 +54,9 @@ pub struct AuthResponse {
 pub async fn logout_handler(
     user_id: String,
     csrf_token: Option<String>,
+    auth_token: Option<String>,
     connection_manager: Arc<ConnectionManager>,
+    auth_service: Arc<crate::services::AuthService>,
     csrf_service: CsrfService,
     pool: SqlitePool,
     ip_address: Option<&str>,
@@ -98,6 +100,11 @@ pub async fn logout_handler(
     .await
     {
         warn!("Failed to log logout event: {}", e);
+    }
+
+    if let Some(token) = auth_token {
+        auth_service.revoke_token(&token).await;
+        info!("Token revoked for user: {}", user_id);
     }
 
     connection_manager.disconnect_user(&user_id).await;

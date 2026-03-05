@@ -78,16 +78,22 @@ impl ServerConfig {
             .unwrap_or_else(|| vec!["http://localhost:3000".to_string()]);
 
         let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| {
-            let is_production = std::env::var("RUST_ENV").as_deref().unwrap_or("development") == "production";
-            if is_production {
-                panic!("JWT_SECRET environment variable must be set in production mode. Generate a secure random secret with at least 32 characters and set it before starting the server.");
+            #[cfg(not(debug_assertions))]
+            {
+                panic!(
+                    "JWT_SECRET environment variable must be set in production (release builds). \
+                    Generate a secure random secret with at least 32 characters and set it before starting the server."
+                );
             }
-            tracing::warn!("SECURITY WARNING: JWT_SECRET not set, generating cryptographically secure secret for development.");
-            tracing::warn!("For production deployments, ALWAYS set the JWT_SECRET environment variable.");
-            tracing::warn!("Generated secrets are not persisted between restarts and will invalidate all existing tokens.");
-            tracing::warn!("To avoid this warning, set a JWT_SECRET environment variable with at least 32 random characters.");
-            let secret: [u8; 64] = rand::random();
-            BASE64_STANDARD.encode(secret)
+            #[cfg(debug_assertions)]
+            {
+                tracing::warn!("SECURITY WARNING: JWT_SECRET not set, generating cryptographically secure secret for development.");
+                tracing::warn!("For production deployments, ALWAYS set the JWT_SECRET environment variable.");
+                tracing::warn!("Generated secrets are not persisted between restarts and will invalidate all existing tokens.");
+                tracing::warn!("To avoid this warning, set a JWT_SECRET environment variable with at least 32 random characters.");
+                let secret: [u8; 64] = rand::random();
+                BASE64_STANDARD.encode(secret)
+            }
         });
 
         Ok(Self {
@@ -223,6 +229,7 @@ pub fn create_routes(
                     .and(warp::path::end())
                     .and(with_auth.clone())
                     .and(warp::header::optional::<String>("X-CSRF-Token"))
+                    .and(warp::header::optional::<String>("Authorization"))
                     .and(rate_limit_filter.clone())
                     .and(warp::addr::remote())
                     .and(state_filter.clone())
@@ -661,15 +668,21 @@ async fn handle_login(
 async fn handle_logout(
     user_id: String,
     csrf_token: Option<String>,
+    auth_header: Option<String>,
     remote_addr: Option<SocketAddr>,
     state: ServerState,
 ) -> Result<impl Reply, Rejection> {
     info!("Logout request for user: {}", user_id);
     let ip = client_ip(remote_addr);
+    let auth_token = auth_header.and_then(|h| {
+        h.strip_prefix("Bearer ").map(|s| s.to_string())
+    });
     auth::logout_handler(
         user_id,
         csrf_token,
+        auth_token,
         state.connection_manager,
+        Arc::new(crate::services::auth_service::AuthService::new(state.config.jwt_secret)),
         state.csrf_service,
         state.pool,
         Some(&ip),

@@ -325,6 +325,10 @@ impl MessageHandler {
                 continue;
             }
 
+            if current.sender_id == user_id {
+                continue;
+            }
+
             let current_weight =
                 crate::services::message_service::MessageService::status_weight(&current.status);
             let new_weight =

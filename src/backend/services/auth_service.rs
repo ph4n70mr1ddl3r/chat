@@ -155,6 +155,7 @@ impl AuthService {
 
         let claims = TokenClaims {
             sub: user_id,
+            iss: "chat-app".to_string(),
             aud: "chat-app".to_string(),
             iat: now,
             exp: expiration,
@@ -213,6 +214,7 @@ impl AuthService {
         let key = DecodingKey::from_secret(self.jwt_secret.as_bytes());
         let mut validation = Validation::new(Algorithm::HS256);
         validation.set_audience(&["chat-app"]);
+        validation.set_issuer(&["chat-app"]);
 
         decode::<TokenClaims>(token, &key, &validation)
             .map(|data| data.claims)

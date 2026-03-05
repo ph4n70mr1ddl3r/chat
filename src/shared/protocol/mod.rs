@@ -121,6 +121,9 @@ pub struct ErrorData {
 pub struct TokenClaims {
     /// Subject (user ID)
     pub sub: String,
+    /// Issuer
+    #[serde(default = "default_issuer")]
+    pub iss: String,
     /// Audience
     pub aud: String,
     /// Issued at
@@ -130,6 +133,10 @@ pub struct TokenClaims {
     /// Scopes
     #[serde(default)]
     pub scopes: Vec<String>,
+}
+
+fn default_issuer() -> String {
+    "chat-app".to_string()
 }
 
 /// User DTO for API responses
