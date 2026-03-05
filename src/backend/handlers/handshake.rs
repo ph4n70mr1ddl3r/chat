@@ -108,14 +108,15 @@ impl HandshakeValidator {
     /// falls back to URL query parameter for backwards compatibility.
     pub async fn validate_upgrade(
         &self,
-        _query: &str,
+        query: &str,
         protocol_header: Option<&str>,
     ) -> Result<TokenClaims, (StatusCode, String)> {
         let token = protocol_header
             .and_then(extract_token_from_protocol_header)
+            .or_else(|| extract_token_from_query(query).ok())
             .ok_or((
                 StatusCode::UNAUTHORIZED,
-                "Token required in Sec-WebSocket-Protocol header".to_string(),
+                "Token required in Sec-WebSocket-Protocol header or query parameter".to_string(),
             ))?;
 
         let claims = self.auth_service.verify_token(&token).await.map_err(|e| {

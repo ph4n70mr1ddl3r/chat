@@ -143,8 +143,8 @@ pub async fn signup_handler(
                 req.username, e
             );
             return Ok(error_response!(
-                "DATABASE_ERROR",
-                "Failed to check username availability",
+                "INTERNAL_ERROR",
+                "An error occurred while processing your request",
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR
             ));
         }
@@ -166,8 +166,8 @@ pub async fn signup_handler(
     if let Err(e) = queries::insert_user(&pool, &user).await {
         warn!("Failed to save user '{}' to database: {}", user.username, e);
         return Ok(error_response!(
-            "DATABASE_ERROR",
-            "Failed to create account",
+            "INTERNAL_ERROR",
+            "An error occurred while processing your request",
             warp::http::StatusCode::INTERNAL_SERVER_ERROR
         ));
     }
@@ -244,8 +244,8 @@ pub async fn login_handler(
                 req.username, e
             );
             return Ok(error_response!(
-                "DATABASE_ERROR",
-                "Failed to authenticate",
+                "INTERNAL_ERROR",
+                "An error occurred while processing your request",
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR
             ));
         }

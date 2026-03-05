@@ -57,8 +57,8 @@ impl ServerConfig {
     }
 }
 
-impl Default for ServerConfig {
-    fn default() -> Self {
+impl ServerConfig {
+    pub fn from_env() -> anyhow::Result<Self> {
         let origins = std::env::var("CORS_ALLOWED_ORIGINS")
             .ok()
             .map(|value| {
@@ -74,10 +74,7 @@ impl Default for ServerConfig {
         let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| {
             let is_production = std::env::var("RUST_ENV").as_deref().unwrap_or("development") == "production";
             if is_production {
-                panic!(
-                    "CRITICAL SECURITY ERROR: JWT_SECRET must be set in production environment. \
-                     Set JWT_SECRET environment variable before starting the server."
-                );
+                tracing::error!("JWT_SECRET not set in production - this is a security violation");
             }
             tracing::warn!("SECURITY WARNING: JWT_SECRET not set, generating cryptographically secure secret for development.");
             tracing::warn!("For production deployments, ALWAYS set the JWT_SECRET environment variable.");
@@ -87,11 +84,17 @@ impl Default for ServerConfig {
             BASE64_STANDARD.encode(secret)
         });
 
-        Self {
+        Ok(Self {
             jwt_secret,
             max_message_size: 10 * 1024, // 10 KB
             allowed_origins: origins,
-        }
+        })
+    }
+}
+
+impl Default for ServerConfig {
+    fn default() -> Self {
+        Self::from_env().expect("Failed to create server config")
     }
 }
 
@@ -152,6 +155,7 @@ pub fn create_routes(
     let state_filter = warp::any().map(move || state_clone_for_filter.clone());
     let cors = build_cors(&state.config);
     let rate_limit_filter = rate_limit::rate_limit_filter(state.global_rate_limiter.clone());
+    let auth_rate_limit_filter = rate_limit::rate_limit_filter(state.auth_rate_limiter.clone());
 
     let auth_service = Arc::new(crate::services::auth_service::AuthService::new(
         state.config.jwt_secret.clone(),
@@ -249,7 +253,7 @@ pub fn create_routes(
                     .and(warp::path::end())
                     .and(with_auth.clone())
                     .and(warp::header::optional::<String>("X-CSRF-Token"))
-                    .and(rate_limit_filter.clone())
+                    .and(auth_rate_limit_filter.clone())
                     .and(warp::body::json())
                     .and(state_filter.clone())
                     .and_then(handle_change_password),

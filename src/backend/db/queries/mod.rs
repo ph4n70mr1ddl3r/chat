@@ -558,6 +558,12 @@ pub async fn search_messages_in_conversation(
     search_query: &str,
     limit: u32,
 ) -> Result<Vec<Message>, String> {
+    const MAX_SEARCH_QUERY_LENGTH: usize = 200;
+    
+    if search_query.len() > MAX_SEARCH_QUERY_LENGTH {
+        return Err(format!("Search query too long (max {} characters)", MAX_SEARCH_QUERY_LENGTH));
+    }
+    
     let escaped_query = search_query.replace('%', "\\%").replace('_', "\\_");
     let search_pattern = format!("%{}%", escaped_query);
 
