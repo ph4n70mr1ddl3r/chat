@@ -50,20 +50,25 @@ pub struct AuthResponse {
     pub csrf_token: String,
 }
 
+/// Context for logout operation
+pub struct LogoutContext {
+    pub csrf_token: Option<String>,
+    pub auth_token: Option<String>,
+    pub ip_address: Option<String>,
+}
+
 /// Handle POST /auth/logout
 pub async fn logout_handler(
     user_id: String,
-    csrf_token: Option<String>,
-    auth_token: Option<String>,
+    ctx: LogoutContext,
     connection_manager: Arc<ConnectionManager>,
     auth_service: Arc<crate::services::AuthService>,
     csrf_service: CsrfService,
     pool: SqlitePool,
-    ip_address: Option<&str>,
 ) -> Result<impl Reply, Rejection> {
     info!("Logout request for user: {}", user_id);
 
-    let csrf_token = match csrf_token {
+    let csrf_token = match ctx.csrf_token {
         Some(t) => t,
         None => {
             warn!("Missing CSRF token for logout request");
@@ -91,7 +96,7 @@ pub async fn logout_handler(
 
     if let Err(e) = queries::insert_auth_log(
         &pool,
-        ip_address.unwrap_or("unknown"),
+        ctx.ip_address.as_deref().unwrap_or("unknown"),
         None,
         queries::AuthEventType::Logout,
         None,
@@ -102,7 +107,7 @@ pub async fn logout_handler(
         warn!("Failed to log logout event: {}", e);
     }
 
-    if let Some(token) = auth_token {
+    if let Some(token) = ctx.auth_token {
         auth_service.revoke_token(&token).await;
         info!("Token revoked for user: {}", user_id);
     }

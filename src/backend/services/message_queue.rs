@@ -16,6 +16,8 @@ use tokio::sync::RwLock;
 use tokio::time::{sleep, Duration};
 use warp::ws::Message as WsMessage;
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 /// Retry schedule in seconds
 const RETRY_SCHEDULE: &[u64] = &[0, 1, 3, 7, 15, 30, 60];
 
@@ -36,10 +38,8 @@ struct QueuedMessage {
 pub struct MessageQueueService {
     pool: SqlitePool,
     connection_manager: Arc<ConnectionManager>,
-    /// Queue of pending messages: recipient_id -> Vec<QueuedMessage>
     queue: Arc<RwLock<HashMap<String, Vec<QueuedMessage>>>>,
-    /// Whether the background worker is running
-    is_running: Arc<RwLock<bool>>,
+    is_running: Arc<AtomicBool>,
 }
 
 impl MessageQueueService {
@@ -49,18 +49,15 @@ impl MessageQueueService {
             pool,
             connection_manager,
             queue: Arc::new(RwLock::new(HashMap::new())),
-            is_running: Arc::new(RwLock::new(false)),
+            is_running: Arc::new(AtomicBool::new(false)),
         }
     }
 
     /// Start the background worker for message delivery
     pub async fn start(&self) {
-        let mut running = self.is_running.write().await;
-        if *running {
-            return; // Already running
+        if self.is_running.swap(true, Ordering::SeqCst) {
+            return;
         }
-        *running = true;
-        drop(running);
 
         let pool = self.pool.clone();
         let queue = self.queue.clone();
@@ -70,54 +67,52 @@ impl MessageQueueService {
 
         tokio::spawn(async move {
             loop {
-                // Check if we should stop
-                if !*is_running.read().await {
+                if !is_running.load(Ordering::SeqCst) {
+                    tracing::info!("Message queue service shutting down gracefully");
                     break;
                 }
 
-                // Process queue every 500ms
-                sleep(Duration::from_millis(500)).await;
+                tokio::select! {
+                    _ = sleep(Duration::from_millis(500)) => {
+                        let now = chrono::Utc::now().timestamp() as u64;
+                        let mut queue_lock = queue.write().await;
 
-                let now = chrono::Utc::now().timestamp() as u64;
-                let mut queue_lock = queue.write().await;
-
-                // Collect messages ready for retry and group by recipient for batching
-                let mut ready_by_recipient: HashMap<String, Vec<QueuedMessage>> = HashMap::new();
-                for (_recipient_id, messages) in queue_lock.iter_mut() {
-                    messages.retain(|msg| {
-                        if msg.next_retry_at <= now {
-                            ready_by_recipient
-                                .entry(msg.recipient_id.clone())
-                                .or_default()
-                                .push(msg.clone());
-                            false // Remove from queue
-                        } else {
-                            true // Keep in queue
+                        let mut ready_by_recipient: HashMap<String, Vec<QueuedMessage>> = HashMap::new();
+                        for (_recipient_id, messages) in queue_lock.iter_mut() {
+                            messages.retain(|msg| {
+                                if msg.next_retry_at <= now {
+                                    ready_by_recipient
+                                        .entry(msg.recipient_id.clone())
+                                        .or_default()
+                                        .push(msg.clone());
+                                    false
+                                } else {
+                                    true
+                                }
+                            });
                         }
-                    });
-                }
 
-                drop(queue_lock);
+                        drop(queue_lock);
 
-                // Attempt batched delivery per recipient
-                for (recipient_id, queued_messages) in ready_by_recipient {
-                    if connection_manager.is_user_online(&recipient_id).await {
-                        Self::deliver_batch(
-                            &pool,
-                            &message_service,
-                            connection_manager.as_ref(),
-                            queue.clone(),
-                            queued_messages,
-                        )
-                        .await;
-                    } else {
-                        // Recipient still offline - requeue all with backoff
-                        for msg in queued_messages {
-                            if !Self::requeue_message(queue.clone(), msg).await {
-                                tracing::warn!(
-                                    "Dropped message for recipient {} due to queue overflow",
-                                    recipient_id
-                                );
+                        for (recipient_id, queued_messages) in ready_by_recipient {
+                            if connection_manager.is_user_online(&recipient_id).await {
+                                Self::deliver_batch(
+                                    &pool,
+                                    &message_service,
+                                    connection_manager.as_ref(),
+                                    queue.clone(),
+                                    queued_messages,
+                                )
+                                .await;
+                            } else {
+                                for msg in queued_messages {
+                                    if !Self::requeue_message(queue.clone(), msg).await {
+                                        tracing::warn!(
+                                            "Dropped message for recipient {} due to queue overflow",
+                                            recipient_id
+                                        );
+                                    }
+                                }
                             }
                         }
                     }
@@ -126,10 +121,8 @@ impl MessageQueueService {
         });
     }
 
-    /// Stop the background worker
-    pub async fn stop(&self) {
-        let mut running = self.is_running.write().await;
-        *running = false;
+    pub fn stop(&self) {
+        self.is_running.store(false, Ordering::SeqCst);
     }
 
     /// Queue a message for delivery

@@ -11,6 +11,10 @@ use std::sync::Arc;
 use tracing::warn;
 use warp::ws::Message as WsMessage;
 
+/// Maximum number of conversations to broadcast presence updates to.
+/// This limits the blast radius of presence changes for users with many conversations.
+const MAX_PRESENCE_BROADCAST_CONVERSATIONS: u32 = 200;
+
 #[derive(Clone)]
 pub struct PresenceService {
     pool: SqlitePool,
@@ -47,7 +51,7 @@ impl PresenceService {
             }
         };
 
-        let conversations = queries::get_user_conversations(&self.pool, user_id, 200, 0).await?;
+        let conversations = queries::get_user_conversations(&self.pool, user_id, MAX_PRESENCE_BROADCAST_CONVERSATIONS, 0).await?;
 
         // Collect participant ids (the other user in each conversation)
         let mut recipients = Vec::new();

@@ -376,6 +376,15 @@ impl MessageService {
     }
 }
 
+/// Trait to determine if a character is allowed in message content.
+///
+/// Control characters are disallowed except for formatting whitespace:
+/// - Newlines (`\n`) - line breaks
+/// - Carriage returns (`\r`) - Windows-style line endings
+/// - Tabs (`\t`) - indentation
+///
+/// This prevents injection of terminal control sequences and other
+/// problematic characters while preserving basic text formatting.
 trait IsAllowedChar {
     fn is_allowed(&self) -> bool;
 }

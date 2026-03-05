@@ -274,7 +274,6 @@ impl MessageHandler {
         }
     }
 
-    /// Build acknowledgement envelope
     fn build_ack_envelope(
         &self,
         original_message_id: &str,
@@ -282,16 +281,17 @@ impl MessageHandler {
         stored_message_id: &str,
         status: &str,
     ) -> MessageEnvelope {
+        let now_ms = chrono::Utc::now().timestamp_millis();
         MessageEnvelope {
             id: uuid::Uuid::new_v4().to_string(),
             msg_type: "ack".to_string(),
-            timestamp: chrono::Utc::now().timestamp_millis() as u64,
+            timestamp: now_ms as u64,
             data: json!({
                 "status": status,
                 "conversationId": conversation_id,
                 "messageId": stored_message_id,
                 "originalMessageId": original_message_id,
-                "serverTimestamp": chrono::Utc::now().timestamp_millis(),
+                "serverTimestamp": now_ms,
             }),
         }
     }
@@ -321,11 +321,8 @@ impl MessageHandler {
                 _ => continue,
             };
 
-            if current.sender_id != user_id && current.recipient_id != user_id {
-                continue;
-            }
-
-            if current.sender_id == user_id {
+            // Only the recipient can update message status (e.g., mark as read/delivered)
+            if current.recipient_id != user_id {
                 continue;
             }
 
@@ -346,14 +343,15 @@ impl MessageHandler {
                 synced_count += 1;
 
                 let conv_id = current.conversation_id.clone();
+                let now_ms = chrono::Utc::now().timestamp_millis() as u64;
                 let event = MessageEnvelope {
                     id: uuid::Uuid::new_v4().to_string(),
                     msg_type: "deliveryStatusUpdated".to_string(),
-                    timestamp: chrono::Utc::now().timestamp_millis() as u64,
+                    timestamp: now_ms,
                     data: json!({
                         "messageId": update.message_id,
                         "status": update.status,
-                        "timestamp": chrono::Utc::now().timestamp_millis(),
+                        "timestamp": now_ms,
                         "conversationId": conv_id,
                     }),
                 };
@@ -369,13 +367,14 @@ impl MessageHandler {
             }
         }
 
+        let now_ms = chrono::Utc::now().timestamp_millis() as u64;
         let completion = MessageEnvelope {
             id: uuid::Uuid::new_v4().to_string(),
             msg_type: "syncDeliveryStatusCompleted".to_string(),
-            timestamp: chrono::Utc::now().timestamp_millis() as u64,
+            timestamp: now_ms,
             data: json!({
                 "syncedCount": synced_count,
-                "timestamp": chrono::Utc::now().timestamp_millis(),
+                "timestamp": now_ms,
             }),
         };
         responses.push(WsMessage::text(

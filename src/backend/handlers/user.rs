@@ -313,6 +313,18 @@ pub async fn change_password(
         ));
     }
 
+    if request.current_password.is_empty() {
+        warn!("Change password request with empty current password");
+        return Ok(reply::with_status(
+            reply::json(&ErrorBody {
+                code: "VALIDATION_ERROR".to_string(),
+                message: "Current password is required".to_string(),
+                details: None,
+            }),
+            warp::http::StatusCode::BAD_REQUEST,
+        ));
+    }
+
     if let Err(e) = validators::validate_password(&request.new_password) {
         warn!("New password validation failed: {}", e);
         return Ok(reply::with_status(

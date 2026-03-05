@@ -679,13 +679,15 @@ async fn handle_logout(
     });
     auth::logout_handler(
         user_id,
-        csrf_token,
-        auth_token,
+        auth::LogoutContext {
+            csrf_token,
+            auth_token,
+            ip_address: Some(ip),
+        },
         state.connection_manager,
         Arc::new(crate::services::auth_service::AuthService::new(state.config.jwt_secret)),
         state.csrf_service,
         state.pool,
-        Some(&ip),
     )
     .await
 }

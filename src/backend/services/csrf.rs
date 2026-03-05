@@ -62,18 +62,15 @@ impl CsrfService {
                 let now = Utc::now().timestamp();
                 if data.claims.exp < now {
                     tracing::warn!(
-                        "CSRF token expired for user {}: expired at {}, now {}",
-                        user_id,
-                        data.claims.exp,
-                        now
+                        user_id_prefix = &user_id[..8.min(user_id.len())],
+                        "CSRF token expired"
                     );
                     return Err(CsrfValidationError::Expired);
                 }
                 if data.claims.sub != user_id {
                     tracing::warn!(
-                        "CSRF token user mismatch: expected {}, got {}",
-                        user_id,
-                        data.claims.sub
+                        expected_prefix = &user_id[..8.min(user_id.len())],
+                        "CSRF token user mismatch"
                     );
                     return Err(CsrfValidationError::UserMismatch);
                 }
