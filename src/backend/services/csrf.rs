@@ -51,8 +51,31 @@ impl CsrfService {
         validation.set_required_spec_claims(&["sub", "iat", "exp"]);
 
         match decode::<CsrfClaims>(token, &self.decoding_key, &validation) {
-            Ok(data) => data.claims.sub == user_id,
-            Err(_) => false,
+            Ok(data) => {
+                let now = Utc::now().timestamp();
+                if data.claims.exp < now {
+                    tracing::warn!(
+                        "CSRF token expired for user {}: expired at {}, now {}",
+                        user_id,
+                        data.claims.exp,
+                        now
+                    );
+                    return false;
+                }
+                if data.claims.sub != user_id {
+                    tracing::warn!(
+                        "CSRF token user mismatch: expected {}, got {}",
+                        user_id,
+                        data.claims.sub
+                    );
+                    return false;
+                }
+                true
+            }
+            Err(e) => {
+                tracing::warn!("CSRF token validation failed: {}", e);
+                false
+            }
         }
     }
 }

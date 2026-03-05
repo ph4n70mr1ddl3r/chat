@@ -3,13 +3,39 @@
 //! Implements token-bucket rate limiting for authentication endpoints
 
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use warp::{self, addr::remote, reject, Filter, Rejection};
 
-/// Maximum number of entries in the rate limiter to prevent memory exhaustion
 const MAX_RATE_LIMIT_ENTRIES: usize = 100_000;
+
+const DEFAULT_TRUSTED_PROXIES: &[&str] = &[
+    "10.0.0.0/8",
+    "172.16.0.0/12",
+    "192.168.0.0/16",
+    "127.0.0.1",
+    "::1",
+];
+
+fn is_trusted_proxy(remote_ip: &IpAddr) -> bool {
+    let ip_str = remote_ip.to_string();
+    
+    for cidr in DEFAULT_TRUSTED_PROXIES {
+        if ip_str == *cidr {
+            return true;
+        }
+        if cidr.contains('/') {
+            if let Ok(network) = cidr.parse::<ipnet::IpNet>() {
+                if network.contains(remote_ip) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
 
 /// Rate limit entry tracking attempts and reset time
 ///
@@ -209,17 +235,31 @@ pub fn rate_limit_filter(
               forwarded_header: Option<String>,
               limiter: Arc<RateLimiter>| async move {
                 let ip = if let Some(header) = forwarded_header {
-                    header
-                        .split(',')
-                        .next()
-                        .map(|s| s.trim().to_string())
-                        .filter(|s| !s.is_empty())
-                        .and_then(|s| RateLimiter::parse_ip(&s))
-                        .unwrap_or_else(|| {
+                    let should_trust_header = remote_ip
+                        .map(|addr| is_trusted_proxy(&addr.ip()))
+                        .unwrap_or(false);
+                    
+                    if should_trust_header {
+                        header
+                            .split(',')
+                            .next()
+                            .map(|s| s.trim().to_string())
+                            .filter(|s| !s.is_empty())
+                            .and_then(|s| RateLimiter::parse_ip(&s))
+                            .unwrap_or_else(|| {
+                                remote_ip
+                                    .map(|a| a.ip().to_string())
+                                    .unwrap_or_else(|| "unknown".to_string())
+                            })
+                    } else {
+                        tracing::warn!(
+                            "Ignoring X-Forwarded-For header from untrusted source: {:?}",
                             remote_ip
-                                .map(|a| a.ip().to_string())
-                                .unwrap_or_else(|| "unknown".to_string())
-                        })
+                        );
+                        remote_ip
+                            .map(|a| a.ip().to_string())
+                            .unwrap_or_else(|| "unknown".to_string())
+                    }
                 } else {
                     remote_ip
                         .map(|a| a.ip().to_string())

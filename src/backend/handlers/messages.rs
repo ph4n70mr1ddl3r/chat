@@ -18,6 +18,16 @@ use std::sync::Arc;
 use tracing::warn;
 use warp::ws::Message as WsMessage;
 
+fn sanitize_html(input: &str) -> String {
+    input
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#x27;")
+        .replace('/', "&#x2F;")
+}
+
 /// Parameters for building a message envelope
 #[derive(Debug, Clone)]
 struct MessageParams<'a> {
@@ -155,6 +165,8 @@ impl MessageHandler {
             conversation.id
         };
 
+        let sanitized_content = sanitize_html(&data.content);
+
         // Send message using message service (with idempotency)
         let (message, was_created) = self
             .message_service
@@ -163,7 +175,7 @@ impl MessageHandler {
                 conversation_id.clone(),
                 sender.user_id.clone(),
                 data.recipient_id.clone(),
-                data.content.clone(),
+                sanitized_content.clone(),
             )
             .await?;
 
@@ -183,7 +195,7 @@ impl MessageHandler {
                     sender_id: &sender.user_id,
                     sender_username: &sender.username,
                     recipient_id: &data.recipient_id,
-                    content: &data.content,
+                    content: &sanitized_content,
                     conversation_id: &conversation_id,
                     status: "delivered",
                 });

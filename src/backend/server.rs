@@ -74,7 +74,7 @@ impl ServerConfig {
         let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| {
             let is_production = std::env::var("RUST_ENV").as_deref().unwrap_or("development") == "production";
             if is_production {
-                tracing::error!("JWT_SECRET not set in production - this is a security violation");
+                panic!("JWT_SECRET environment variable must be set in production mode. Generate a secure random secret with at least 32 characters and set it before starting the server.");
             }
             tracing::warn!("SECURITY WARNING: JWT_SECRET not set, generating cryptographically secure secret for development.");
             tracing::warn!("For production deployments, ALWAYS set the JWT_SECRET environment variable.");
@@ -157,7 +157,7 @@ pub fn create_routes(
     let rate_limit_filter = rate_limit::rate_limit_filter(state.global_rate_limiter.clone());
     let auth_rate_limit_filter = rate_limit::rate_limit_filter(state.auth_rate_limiter.clone());
 
-    let auth_service = Arc::new(crate::services::auth_service::AuthService::new(
+    let auth_service = Arc::new(crate::services::auth_service::AuthService::with_cleanup(
         state.config.jwt_secret.clone(),
     ));
     let with_auth = auth_middleware::with_auth(auth_service.clone());

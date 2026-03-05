@@ -25,6 +25,7 @@ fn hash_token(token: &str) -> String {
 pub struct AuthService {
     jwt_secret: String,
     revoked_tokens: Arc<RwLock<HashMap<String, i64>>>,
+    _cleanup_handle: Option<Arc<tokio::task::JoinHandle<()>>>,
 }
 
 /// JWT token expiration time in seconds (1 hour)
@@ -39,6 +40,34 @@ impl AuthService {
         Self {
             jwt_secret,
             revoked_tokens: Arc::new(RwLock::new(HashMap::new())),
+            _cleanup_handle: None,
+        }
+    }
+
+    /// Create a new authentication service with periodic cleanup of revoked tokens
+    pub fn with_cleanup(jwt_secret: String) -> Self {
+        let revoked_tokens = Arc::new(RwLock::new(HashMap::new()));
+        let tokens_clone = revoked_tokens.clone();
+        
+        let cleanup_handle = tokio::spawn(async move {
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300));
+            loop {
+                interval.tick().await;
+                let mut tokens = tokens_clone.write().await;
+                let now = chrono::Utc::now().timestamp();
+                let before_count = tokens.len();
+                tokens.retain(|_, exp| *exp > now);
+                let removed = before_count - tokens.len();
+                if removed > 0 {
+                    info!(target: "auth", removed = removed, remaining = tokens.len(), "Cleaned up expired revoked tokens");
+                }
+            }
+        });
+        
+        Self {
+            jwt_secret,
+            revoked_tokens,
+            _cleanup_handle: Some(Arc::new(cleanup_handle)),
         }
     }
 
