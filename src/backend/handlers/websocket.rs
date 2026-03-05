@@ -188,7 +188,7 @@ impl ConnectionManager {
         }
     }
 
-    /// Broadcast a message to multiple user IDs.
+    /// Broadcast a message to multiple user IDs concurrently.
     ///
     /// Sends the same message to all specified users. Each user receives
     /// the message on all their active connections.
@@ -197,9 +197,20 @@ impl ConnectionManager {
         I: IntoIterator,
         I::Item: AsRef<str>,
     {
-        for uid in user_ids {
-            let _ = self.send_to_user(uid.as_ref(), message.clone()).await;
-        }
+        let user_ids: Vec<String> = user_ids
+            .into_iter()
+            .map(|s| s.as_ref().to_string())
+            .collect();
+
+        let futures: Vec<_> = user_ids
+            .into_iter()
+            .map(|uid| {
+                let msg = message.clone();
+                async move { self.send_to_user(&uid, msg).await }
+            })
+            .collect();
+
+        futures::future::join_all(futures).await;
     }
 }
 

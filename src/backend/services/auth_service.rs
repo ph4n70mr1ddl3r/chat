@@ -7,12 +7,19 @@ use crate::validators;
 use bcrypt::{hash, verify, DEFAULT_COST};
 use chrono::Utc;
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 
 use chat_shared::protocol::TokenClaims;
+
+fn hash_token(token: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(token.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
 
 /// Authentication service with token revocation support
 pub struct AuthService {
@@ -36,15 +43,18 @@ impl AuthService {
     }
 
     /// Revoke a token (add to blacklist with expiration time)
+    /// Stores only the hash of the token for security
     pub async fn revoke_token(&self, token: &str) {
         let expiration = Utc::now().timestamp() + TOKEN_EXPIRATION_SECONDS + 60;
-        self.revoked_tokens.write().await.insert(token.to_string(), expiration);
+        let token_hash = hash_token(token);
+        self.revoked_tokens.write().await.insert(token_hash, expiration);
     }
 
     /// Check if a token has been revoked
     pub async fn is_token_revoked(&self, token: &str) -> bool {
+        let token_hash = hash_token(token);
         let tokens = self.revoked_tokens.read().await;
-        if let Some(&exp) = tokens.get(token) {
+        if let Some(&exp) = tokens.get(&token_hash) {
             return exp > Utc::now().timestamp();
         }
         false
