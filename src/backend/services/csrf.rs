@@ -9,6 +9,13 @@ use serde::{Deserialize, Serialize};
 
 const CSRF_TOKEN_VALIDITY_SECS: i64 = 3600;
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum CsrfValidationError {
+    Expired,
+    UserMismatch,
+    InvalidToken,
+}
+
 #[derive(Debug, Clone)]
 pub struct CsrfService {
     encoding_key: EncodingKey,
@@ -46,7 +53,7 @@ impl CsrfService {
             .map_err(|e| format!("CSRF token encoding failed: {}", e))
     }
 
-    pub fn validate_token(&self, token: &str, user_id: &str) -> bool {
+    pub fn validate_token(&self, token: &str, user_id: &str) -> Result<(), CsrfValidationError> {
         let mut validation = Validation::new(Algorithm::HS256);
         validation.set_required_spec_claims(&["sub", "iat", "exp"]);
 
@@ -60,7 +67,7 @@ impl CsrfService {
                         data.claims.exp,
                         now
                     );
-                    return false;
+                    return Err(CsrfValidationError::Expired);
                 }
                 if data.claims.sub != user_id {
                     tracing::warn!(
@@ -68,15 +75,20 @@ impl CsrfService {
                         user_id,
                         data.claims.sub
                     );
-                    return false;
+                    return Err(CsrfValidationError::UserMismatch);
                 }
-                true
+                Ok(())
             }
             Err(e) => {
                 tracing::warn!("CSRF token validation failed: {}", e);
-                false
+                Err(CsrfValidationError::InvalidToken)
             }
         }
+    }
+
+    /// Convenience method for backward compatibility
+    pub fn is_valid(&self, token: &str, user_id: &str) -> bool {
+        self.validate_token(token, user_id).is_ok()
     }
 }
 
@@ -95,8 +107,8 @@ mod tests {
     fn test_csrf_token_validation() {
         let service = CsrfService::new("test-secret");
         let token = service.generate_token("user123").unwrap();
-        assert!(service.validate_token(&token, "user123"));
-        assert!(!service.validate_token(&token, "wrong_user"));
+        assert!(service.is_valid(&token, "user123"));
+        assert!(!service.is_valid(&token, "wrong_user"));
     }
 
     #[test]
@@ -104,6 +116,21 @@ mod tests {
         let service1 = CsrfService::new("secret1");
         let service2 = CsrfService::new("secret2");
         let token = service1.generate_token("user123").unwrap();
-        assert!(!service2.validate_token(&token, "user123"));
+        assert!(!service2.is_valid(&token, "user123"));
+    }
+
+    #[test]
+    fn test_csrf_validation_error_types() {
+        let service = CsrfService::new("test-secret");
+        let token = service.generate_token("user123").unwrap();
+
+        // Valid token should return Ok
+        assert_eq!(service.validate_token(&token, "user123"), Ok(()));
+
+        // Wrong user should return UserMismatch
+        assert_eq!(
+            service.validate_token(&token, "wrong_user"),
+            Err(CsrfValidationError::UserMismatch)
+        );
     }
 }

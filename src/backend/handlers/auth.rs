@@ -73,11 +73,16 @@ pub async fn logout_handler(
         }
     };
 
-    if !csrf_service.validate_token(&csrf_token, &user_id) {
-        warn!("Invalid CSRF token for logout request");
+    if let Err(e) = csrf_service.validate_token(&csrf_token, &user_id) {
+        let error_msg = match e {
+            crate::services::csrf::CsrfValidationError::Expired => "CSRF token expired",
+            crate::services::csrf::CsrfValidationError::UserMismatch => "CSRF token user mismatch",
+            crate::services::csrf::CsrfValidationError::InvalidToken => "Invalid CSRF token",
+        };
+        warn!("{} for logout request", error_msg);
         return Ok(error_response!(
             "FORBIDDEN",
-            "Invalid CSRF token",
+            error_msg,
             warp::http::StatusCode::FORBIDDEN
         ));
     }

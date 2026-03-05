@@ -121,8 +121,9 @@ impl AuthService {
     /// Verify a password against a hash
     ///
     /// Returns Ok(true) if password matches, Ok(false) if not.
-    /// Returns Err for any error case to avoid timing attacks that could
-    /// distinguish between invalid hash format and password mismatch.
+    /// Returns Err for any error case (e.g., invalid hash format).
+    /// Note: bcrypt::verify() internally uses constant-time comparison to prevent
+    /// timing attacks, so no additional protection is needed here.
     pub fn verify_password(password: &str, hash: &str) -> Result<bool, String> {
         verify(password, hash).map_err(|_| "Password verification failed".to_string())
     }

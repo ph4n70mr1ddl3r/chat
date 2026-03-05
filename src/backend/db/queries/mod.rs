@@ -170,6 +170,9 @@ pub async fn find_users_by_ids(
         return Err("Too many user IDs requested (max 1000)".to_string());
     }
 
+    // SECURITY: Build dynamic IN clause with parameterized queries.
+    // While UUIDs are validated before binding, we use placeholders to ensure
+    // proper escaping and prevent any potential SQL injection vectors.
     let placeholders: String = user_ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
     let query = format!(
         "{} FROM users WHERE id IN ({})",
@@ -180,6 +183,7 @@ pub async fn find_users_by_ids(
     let mut query = sqlx::query_as::<_, User>(&query);
 
     for user_id in user_ids {
+        // Validate UUID format before binding to query
         if uuid::Uuid::parse_str(user_id).is_err() {
             return Err(format!("Invalid UUID format: {}", user_id));
         }
@@ -380,6 +384,9 @@ pub async fn get_user_conversations(
     limit: u32,
     offset: u32,
 ) -> Result<Vec<Conversation>, String> {
+    // Cap limit at 100 to prevent unbounded result sets
+    let limit = limit.min(100);
+    
     sqlx::query_as::<_, Conversation>(
         &format!(
             "{} FROM conversations c WHERE c.user1_id = ? OR c.user2_id = ? ORDER BY c.updated_at DESC LIMIT ? OFFSET ?",
@@ -470,6 +477,10 @@ pub async fn get_messages_by_conversation(
     limit: u32,
     offset: u32,
 ) -> Result<Vec<Message>, String> {
+    // Cap limit at 100 and offset at 10,000 to prevent performance issues
+    let limit = limit.min(100);
+    let offset = offset.min(10_000);
+    
     sqlx::query_as::<_, Message>(&format!(
         "{} FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
         SQL_SELECT_MESSAGE_FIELDS

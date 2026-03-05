@@ -38,9 +38,15 @@ const MAX_BODY_SIZE: u64 = 1024;
 
 /// WebSocket read timeout in seconds - prevents hanging connections
 const WS_READ_TIMEOUT_SECS: u64 = 300;
+
+/// Server configuration
 #[derive(Clone)]
 pub struct ServerConfig {
     pub jwt_secret: String,
+    /// Maximum WebSocket frame size in bytes (default 10KB).
+    /// Note: This is the raw frame size limit for WebSocket messages.
+    /// The application-level message content limit is defined by MAX_MESSAGE_LENGTH (5000 chars)
+    /// in src/backend/models/mod.rs. The frame size should be larger to accommodate JSON overhead.
     pub max_message_size: usize,
     pub allowed_origins: Vec<String>,
 }

@@ -3,7 +3,10 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Maximum length for message content
+/// Maximum length for message content in characters.
+/// Note: The WebSocket frame size limit (configured in ServerConfig::max_message_size)
+/// should be larger than this to accommodate JSON serialization overhead and metadata.
+/// A 5000-character limit with ~10KB frame size allows for JSON structure overhead.
 pub const MAX_MESSAGE_LENGTH: usize = 5000;
 
 /// Message status constants

@@ -20,6 +20,9 @@ fn max_reconnect_attempts() -> usize {
         .unwrap_or(10)
 }
 
+/// Maximum number of pending messages in the queue before applying backpressure.
+/// When this limit is reached, the oldest messages will be dropped to prevent
+/// memory exhaustion and alert the user.
 const MAX_PENDING_QUEUE_SIZE: usize = 100;
 
 /// Events emitted by the WebSocket client.
@@ -447,17 +450,31 @@ fn current_timestamp_ms() -> u64 {
     now.as_millis() as u64
 }
 
+/// Push a command to the pending queue with backpressure handling.
+/// 
+/// When the queue reaches MAX_PENDING_QUEUE_SIZE, the oldest message is dropped
+/// and an error event is sent to notify the user. This prevents unbounded memory
+/// growth when the server is slow or the connection is unstable.
 fn push_to_queue(
     pending: &mut VecDeque<WebSocketCommand>,
     cmd: WebSocketCommand,
     event_tx: &mpsc::UnboundedSender<WebSocketEvent>,
 ) {
     if pending.len() >= MAX_PENDING_QUEUE_SIZE {
-        pending.pop_front();
-        if let Err(e) = event_tx.send(WebSocketEvent::Error(
-            "Message queue full, dropped oldest message".to_string(),
-        )) {
-            tracing::error!("Failed to send queue full error: {}", e);
+        // Drop oldest message to make room for new one
+        if let Some(dropped) = pending.pop_front() {
+            tracing::warn!(
+                "Message queue full ({} messages), dropping oldest message: {:?}",
+                MAX_PENDING_QUEUE_SIZE,
+                dropped
+            );
+            if let Err(e) = event_tx.send(WebSocketEvent::Error(
+                format!("Connection slow - message queue full ({} messages), dropped oldest message. \
+                         Consider waiting for delivery confirmation before sending more messages.",
+                        MAX_PENDING_QUEUE_SIZE)
+            )) {
+                tracing::error!("Failed to send queue full error: {}", e);
+            }
         }
     }
     pending.push_back(cmd);
