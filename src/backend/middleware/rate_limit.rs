@@ -221,6 +221,48 @@ impl RateLimiter {
     fn parse_ip(s: &str) -> Option<String> {
         s.parse::<std::net::IpAddr>().ok().map(|ip| ip.to_string())
     }
+
+    fn extract_client_ip(x_forwarded_for: &str, remote_ip: Option<std::net::SocketAddr>) -> String {
+        let ips: Vec<&str> = x_forwarded_for
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        if ips.is_empty() {
+            return remote_ip
+                .map(|a| a.ip().to_string())
+                .unwrap_or_else(|| "unknown".to_string());
+        }
+
+        let should_trust_header = remote_ip
+            .map(|addr| is_trusted_proxy(&addr.ip()))
+            .unwrap_or(false);
+
+        if !should_trust_header {
+            tracing::warn!(
+                "Ignoring X-Forwarded-For header from untrusted source: {:?}",
+                remote_ip
+            );
+            return remote_ip
+                .map(|a| a.ip().to_string())
+                .unwrap_or_else(|| "unknown".to_string());
+        }
+
+        for ip_str in ips.iter().rev() {
+            if let Some(parsed_ip) = Self::parse_ip(ip_str) {
+                if let Ok(ip_addr) = ip_str.parse::<std::net::IpAddr>() {
+                    if !is_trusted_proxy(&ip_addr) {
+                        return parsed_ip;
+                    }
+                }
+            }
+        }
+
+        remote_ip
+            .map(|a| a.ip().to_string())
+            .unwrap_or_else(|| "unknown".to_string())
+    }
 }
 
 /// Warp filter to enforce rate limits based on remote IP address
@@ -235,31 +277,7 @@ pub fn rate_limit_filter(
               forwarded_header: Option<String>,
               limiter: Arc<RateLimiter>| async move {
                 let ip = if let Some(header) = forwarded_header {
-                    let should_trust_header = remote_ip
-                        .map(|addr| is_trusted_proxy(&addr.ip()))
-                        .unwrap_or(false);
-                    
-                    if should_trust_header {
-                        header
-                            .split(',')
-                            .next()
-                            .map(|s| s.trim().to_string())
-                            .filter(|s| !s.is_empty())
-                            .and_then(|s| RateLimiter::parse_ip(&s))
-                            .unwrap_or_else(|| {
-                                remote_ip
-                                    .map(|a| a.ip().to_string())
-                                    .unwrap_or_else(|| "unknown".to_string())
-                            })
-                    } else {
-                        tracing::warn!(
-                            "Ignoring X-Forwarded-For header from untrusted source: {:?}",
-                            remote_ip
-                        );
-                        remote_ip
-                            .map(|a| a.ip().to_string())
-                            .unwrap_or_else(|| "unknown".to_string())
-                    }
+                    RateLimiter::extract_client_ip(&header, remote_ip)
                 } else {
                     remote_ip
                         .map(|a| a.ip().to_string())

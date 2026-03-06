@@ -122,6 +122,7 @@ pub struct ServerState {
     pub global_rate_limiter: Arc<rate_limit::RateLimiter>,
     pub auth_rate_limiter: Arc<rate_limit::RateLimiter>,
     pub csrf_service: CsrfService,
+    pub login_attempt_service: Arc<crate::services::LoginAttemptService>,
     _global_cleanup_handle: Arc<tokio::task::JoinHandle<()>>,
     _auth_cleanup_handle: Arc<tokio::task::JoinHandle<()>>,
     pub start_time: Instant,
@@ -135,6 +136,7 @@ impl ServerState {
         let auth_rate_limiter = Arc::new(rate_limit::RateLimiter::new(5, 900));
         let user_service = Arc::new(crate::services::UserService::new(pool.clone()));
         let csrf_service = CsrfService::new(&config.jwt_secret);
+        let login_attempt_service = Arc::new(crate::services::LoginAttemptService::new());
 
         let global_cleanup_handle = global_rate_limiter.start_periodic_cleanup();
         let auth_cleanup_handle = auth_rate_limiter.start_periodic_cleanup();
@@ -152,6 +154,7 @@ impl ServerState {
             global_rate_limiter,
             auth_rate_limiter,
             csrf_service,
+            login_attempt_service,
             _global_cleanup_handle: Arc::new(global_cleanup_handle),
             _auth_cleanup_handle: Arc::new(auth_cleanup_handle),
             start_time: Instant::now(),
@@ -653,6 +656,7 @@ async fn handle_login(
         state.pool.clone(),
         state.config.jwt_secret.clone(),
         state.csrf_service.clone(),
+        state.login_attempt_service.clone(),
     )
     .await
     {

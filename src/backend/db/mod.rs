@@ -4,6 +4,7 @@ use anyhow::Result;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 use std::path::Path;
 use std::str::FromStr;
+use std::time::Duration;
 use tracing::info;
 
 pub mod queries;
@@ -53,6 +54,8 @@ pub async fn init_db_with_pool_settings(
     let pool = SqlitePoolOptions::new()
         .min_connections(min_connections)
         .max_connections(max_connections)
+        .acquire_timeout(Duration::from_secs(5))
+        .idle_timeout(Duration::from_secs(600))
         .connect_with(connect_options)
         .await?;
 

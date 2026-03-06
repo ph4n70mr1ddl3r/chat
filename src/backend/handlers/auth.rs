@@ -9,7 +9,7 @@ use warp::{reply, Rejection, Reply};
 
 use crate::db::queries;
 use crate::handlers::{websocket::ConnectionManager, ErrorBody};
-use crate::services::{AuthService, CsrfService};
+use crate::services::{AuthService, CsrfService, LoginAttemptService};
 use crate::validators;
 use std::sync::Arc;
 
@@ -233,6 +233,7 @@ pub async fn login_handler(
     pool: SqlitePool,
     jwt_secret: String,
     csrf_service: CsrfService,
+    login_attempt_service: Arc<LoginAttemptService>,
 ) -> Result<impl Reply, Rejection> {
     if let Err(e) = validators::validate_username(&req.username) {
         warn!("Login failed: invalid username ({}) - {}", req.username, e);
@@ -243,12 +244,22 @@ pub async fn login_handler(
         ));
     }
 
+    if login_attempt_service.is_locked(&req.username).await {
+        warn!("Login attempt on locked account ({})", &req.username[..8.min(req.username.len())]);
+        return Ok(error_response!(
+            "AUTH_ERROR",
+            "Account temporarily locked due to too many failed attempts. Please try again later.",
+            warp::http::StatusCode::TOO_MANY_REQUESTS
+        ));
+    }
+
     let auth_service = AuthService::new(jwt_secret.clone());
 
     let user = match queries::find_user_by_username(&pool, &req.username).await {
         Ok(Some(user)) => user,
         Ok(None) => {
             warn!("Login failed: user not found ({})", req.username);
+            login_attempt_service.record_failed_attempt(&req.username).await;
             return Ok(error_response!(
                 "AUTH_ERROR",
                 "Invalid credentials",
@@ -270,6 +281,7 @@ pub async fn login_handler(
 
     if user.is_deleted() {
         warn!("Login failed: deleted account ({})", req.username);
+        login_attempt_service.record_failed_attempt(&req.username).await;
         return Ok(error_response!(
             "AUTH_ERROR",
             "Invalid credentials",
@@ -278,9 +290,12 @@ pub async fn login_handler(
     }
 
     match auth_service.verify_login(&req.username, &req.password, &user.password_hash) {
-        Ok(true) => {}
+        Ok(true) => {
+            login_attempt_service.clear_attempts(&req.username).await;
+        }
         Ok(false) => {
             warn!("Login failed: invalid password ({})", req.username);
+            login_attempt_service.record_failed_attempt(&req.username).await;
             return Ok(error_response!(
                 "AUTH_ERROR",
                 "Invalid credentials",

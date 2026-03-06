@@ -6,6 +6,7 @@
 use chrono::Utc;
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
+use subtle::ConstantTimeEq;
 
 const CSRF_TOKEN_VALIDITY_SECS: i64 = 3600;
 
@@ -67,7 +68,7 @@ impl CsrfService {
                     );
                     return Err(CsrfValidationError::Expired);
                 }
-                if data.claims.sub != user_id {
+                if !bool::from(data.claims.sub.as_bytes().ct_eq(user_id.as_bytes())) {
                     tracing::warn!(
                         expected_prefix = &user_id[..8.min(user_id.len())],
                         "CSRF token user mismatch"
