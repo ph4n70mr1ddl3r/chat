@@ -140,6 +140,13 @@ impl MessageHandler {
             )]);
         }
 
+        // Validate recipient_id is a valid UUID format before database query
+        if uuid::Uuid::parse_str(&data.recipient_id).is_err() {
+            return Ok(vec![ErrorResponse::invalid_message(
+                "Invalid recipient ID format",
+            )]);
+        }
+
         // Validate recipient exists
         let recipient = queries::find_user_by_id(&self.pool, &data.recipient_id)
             .await

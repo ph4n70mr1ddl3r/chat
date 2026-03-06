@@ -5,7 +5,6 @@
 
 use crate::db::queries;
 use crate::models::User;
-use log::info;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -13,6 +12,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
+use tracing::info;
 
 #[derive(Eq, Clone)]
 struct SearchKey {

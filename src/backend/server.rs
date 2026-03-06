@@ -633,8 +633,11 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
             .unregister(&user_id, conn_id)
             .await;
 
-        if let Err(e) = state.presence_service.mark_offline(&user_id).await {
-            warn!("Failed to mark presence offline: {}", e);
+        // Only mark offline if no other connections remain for this user
+        if !state.connection_manager.is_user_online(&user_id).await {
+            if let Err(e) = state.presence_service.mark_offline(&user_id).await {
+                warn!("Failed to mark presence offline: {}", e);
+            }
         }
     }
     info!("WebSocket connection closed for user: {}", user_id);
@@ -655,7 +658,13 @@ async fn handle_signup(
         .await
         .map_err(warp::reject::custom)?;
 
-    auth::signup_handler(req, state.pool, state.config.jwt_secret, state.csrf_service).await
+    match auth::signup_handler(req, state.pool, state.config.jwt_secret, state.csrf_service).await {
+        Ok(response) => {
+            state.auth_rate_limiter.reset(&ip).await;
+            Ok(response)
+        }
+        Err(err) => Err(err),
+    }
 }
 
 /// Handle login request

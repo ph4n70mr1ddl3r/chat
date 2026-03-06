@@ -90,11 +90,14 @@ impl From<ChatError> for ApiError {
             ChatError::MessageError(msg) | ChatError::ValidationError(msg) => {
                 Self::bad_request(msg)
             }
-            ChatError::DatabaseError(msg) => Self::internal(msg),
-            ChatError::InternalError => Self::internal("Internal server error"),
+            ChatError::DatabaseError { .. } => Self::internal("An internal error occurred"),
+            ChatError::InternalError { .. } => Self::internal("Internal server error"),
             ChatError::NotFound(msg) => Self::not_found(msg),
             ChatError::Conflict(msg) => Self::conflict(msg),
             ChatError::RateLimited(msg) => Self::too_many_requests(msg),
+            ChatError::TokenExpired => Self::unauthorized("Token has expired"),
+            ChatError::TokenInvalid(msg) => Self::unauthorized(msg),
+            ChatError::Timeout => Self::new(StatusCode::REQUEST_TIMEOUT, "TIMEOUT", "Request timed out"),
         }
     }
 }

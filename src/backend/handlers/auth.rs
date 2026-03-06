@@ -312,10 +312,12 @@ pub async fn login_handler(
                 warp::http::StatusCode::UNAUTHORIZED
             ));
         }
-        Err(e) => {
+        Err(_e) => {
             warn!(
-                "Password verification error for user '{}': {}",
-                req.username, e
+                target: "auth",
+                event = "auth.login.error",
+                error_type = "password_verification",
+                "Password verification error"
             );
             return Ok(error_response!(
                 "AUTH_ERROR",

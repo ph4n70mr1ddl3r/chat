@@ -2,6 +2,15 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Maximum nesting depth for JSON structures to prevent stack overflow attacks
+pub const MAX_JSON_DEPTH: usize = 32;
+
+/// Maximum number of items in batch operations to prevent memory exhaustion
+pub const MAX_BATCH_SIZE: usize = 100;
+
+/// Maximum size for the data payload in bytes (64KB)
+pub const MAX_DATA_SIZE: usize = 64 * 1024;
+
 /// Message status lifecycle
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -137,6 +146,46 @@ pub struct TokenClaims {
 
 fn default_issuer() -> String {
     "chat-app".to_string()
+}
+
+impl TokenClaims {
+    /// Check if the token has expired
+    #[must_use]
+    pub fn is_expired(&self) -> bool {
+        let now = chrono::Utc::now().timestamp() as u64;
+        self.exp < now
+    }
+
+    /// Check if the token is valid (not expired and issued before now)
+    #[must_use]
+    pub fn is_valid(&self) -> bool {
+        let now = chrono::Utc::now().timestamp() as u64;
+        self.iat <= now && self.exp > now
+    }
+
+    /// Check if the token has a specific scope
+    #[must_use]
+    pub fn has_scope(&self, scope: &str) -> bool {
+        self.scopes.iter().any(|s| s == scope)
+    }
+
+    /// Check if the token has all of the specified scopes
+    #[must_use]
+    pub fn has_scopes(&self, required_scopes: &[&str]) -> bool {
+        required_scopes.iter().all(|scope| self.has_scope(scope))
+    }
+
+    /// Validate issuer matches expected value
+    #[must_use]
+    pub fn has_issuer(&self, expected: &str) -> bool {
+        self.iss == expected
+    }
+
+    /// Validate audience matches expected value
+    #[must_use]
+    pub fn has_audience(&self, expected: &str) -> bool {
+        self.aud == expected
+    }
 }
 
 /// User DTO for API responses
