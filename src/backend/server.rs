@@ -15,7 +15,7 @@ use sqlx::SqlitePool;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tokio::time::{timeout, Duration};
 use tracing::{info, warn};
 use warp::cors::Cors;
@@ -76,6 +76,15 @@ impl ServerConfig {
             })
             .filter(|list| !list.is_empty())
             .unwrap_or_else(|| vec!["http://localhost:3000".to_string()]);
+
+        for origin in &origins {
+            if origin == "*" {
+                anyhow::bail!(
+                    "Wildcard CORS origin (*) is not allowed for security reasons. \
+                     Remove it from CORS_ALLOWED_ORIGINS."
+                );
+            }
+        }
 
         let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| {
             #[cfg(not(debug_assertions))]
@@ -374,10 +383,13 @@ pub fn create_routes(
             "Strict-Transport-Security",
             "max-age=63072000; includeSubDomains; preload",
         ))
-        .with(warp::reply::with::default_header("X-Frame-Options", "DENY"))
         .with(warp::reply::with::default_header(
             "X-Content-Type-Options",
             "nosniff",
+        ))
+        .with(warp::reply::with::default_header(
+            "X-Frame-Options",
+            "DENY",
         ))
         .with(warp::reply::with::default_header(
             "Referrer-Policy",
@@ -399,7 +411,7 @@ pub fn create_routes(
 fn build_cors(config: &ServerConfig) -> Cors {
     let mut cors = warp::cors()
         .allow_headers(vec![CONTENT_TYPE, AUTHORIZATION])
-        .allow_methods(vec!["GET", "POST", "DELETE", "OPTIONS"])
+        .allow_methods(vec!["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
         .max_age(86_400);
 
     if config.allowed_origins.is_empty() {
@@ -407,11 +419,6 @@ fn build_cors(config: &ServerConfig) -> Cors {
         cors = cors.allow_origin("http://localhost:3000");
     } else {
         for origin in &config.allowed_origins {
-            if origin == "*" {
-                panic!(
-                    "Wildcard CORS origin (*) is not allowed for security reasons. Remove it from CORS_ALLOWED_ORIGINS."
-                );
-            }
             cors = cors.allow_origin(origin.as_str());
         }
     }
@@ -427,6 +434,12 @@ async fn handle_websocket_upgrade(
     state: ServerState,
 ) -> Result<impl Reply, Rejection> {
     info!("WebSocket connection request received");
+
+    if query.contains("token=") {
+        warn!(
+            "WebSocket auth via query parameter is deprecated. Use Sec-WebSocket-Protocol header instead."
+        );
+    }
 
     let validator = HandshakeValidator::new(state.config.jwt_secret.clone());
     match validator.validate_upgrade(&query, protocol_header.as_deref()).await {
@@ -526,12 +539,22 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
     }
 
     let ws_tx_forward = ws_tx.clone();
+    let user_id_for_cancel = user_id.clone();
+    let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
+    
     tokio::spawn(async move {
-        while let Some(msg) = rx.recv().await {
-            let mut sender = ws_tx_forward.lock().await;
-            if sender.send(msg).await.is_err() {
-                break;
+        tokio::select! {
+            _ = cancel_rx => {
+                info!("Forwarding task cancelled for user: {}", user_id_for_cancel);
             }
+            _ = async {
+                while let Some(msg) = rx.recv().await {
+                    let mut sender = ws_tx_forward.lock().await;
+                    if sender.send(msg).await.is_err() {
+                        break;
+                    }
+                }
+            } => {}
         }
     });
 
@@ -605,6 +628,8 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
     }
     info!("WebSocket read timeout for user: {}", user_id);
 
+    let _ = cancel_tx.send(());
+
     if let Some(ref conn_id) = connection_id {
         state
             .connection_manager
@@ -625,7 +650,7 @@ async fn handle_signup(
     state: ServerState,
 ) -> Result<impl Reply, Rejection> {
     info!("Signup request for username: {}", req.username);
-    let ip = client_ip(remote_addr);
+    let ip = client_ip(remote_addr, None);
 
     state
         .auth_rate_limiter
@@ -643,7 +668,7 @@ async fn handle_login(
     state: ServerState,
 ) -> Result<impl Reply, Rejection> {
     info!("Login request for username: {}", req.username);
-    let ip = client_ip(remote_addr);
+    let ip = client_ip(remote_addr, None);
 
     state
         .auth_rate_limiter
@@ -677,7 +702,7 @@ async fn handle_logout(
     state: ServerState,
 ) -> Result<impl Reply, Rejection> {
     info!("Logout request for user: {}", user_id);
-    let ip = client_ip(remote_addr);
+    let ip = client_ip(remote_addr, None);
     let auth_token = auth_header.and_then(|h| {
         h.strip_prefix("Bearer ").map(|s| s.to_string())
     });
@@ -724,13 +749,20 @@ async fn handle_change_password(
     user::change_password(user_id, req, csrf_token, state.csrf_service, state.pool).await
 }
 
-fn client_ip(remote_addr: Option<SocketAddr>) -> String {
+fn client_ip(remote_addr: Option<SocketAddr>, forwarded_for: Option<&str>) -> String {
+    if let Some(xff) = forwarded_for {
+        if let Some(client_ip) = xff.split(',').next() {
+            let client_ip = client_ip.trim();
+            if !client_ip.is_empty() {
+                return client_ip.to_string();
+            }
+        }
+    }
+    
     remote_addr
         .map(|addr| addr.ip().to_string())
         .unwrap_or_else(|| {
-            tracing::warn!(
-                "Request missing remote address, rate limiting may not work correctly"
-            );
+            tracing::warn!("Request missing remote address");
             "unknown".to_string()
         })
 }

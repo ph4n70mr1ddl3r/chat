@@ -12,6 +12,9 @@ use tracing::warn;
 use warp::{reply, Rejection, Reply};
 use crate::validators;
 
+const MAX_PASSWORD_LENGTH: usize = 128;
+const MAX_SEARCH_QUERY_LENGTH: usize = 100;
+
 /// User profile response
 #[derive(Debug, Serialize)]
 pub struct UserProfileResponse {
@@ -118,7 +121,6 @@ pub async fn search_users(
     query: SearchQuery,
     user_service: Arc<UserService>,
 ) -> Result<impl Reply, Rejection> {
-    // Validate query length (minimum 1 character)
     if query.q.is_empty() {
         return Ok(reply::with_status(
             reply::json(&ErrorBody {
@@ -128,6 +130,34 @@ pub async fn search_users(
             }),
             warp::http::StatusCode::BAD_REQUEST,
         ));
+    }
+    
+    if query.q.len() > MAX_SEARCH_QUERY_LENGTH {
+        return Ok(reply::with_status(
+            reply::json(&ErrorBody {
+                code: "INVALID_QUERY".to_string(),
+                message: format!("Search query must be at most {} characters", MAX_SEARCH_QUERY_LENGTH),
+                details: None,
+            }),
+            warp::http::StatusCode::BAD_REQUEST,
+        ));
+    }
+
+    // Validate query doesn't contain suspicious patterns
+    let suspicious_patterns = ["<script", "javascript:", "onerror", "onload"];
+    let query_lower = query.q.to_lowercase();
+    for pattern in suspicious_patterns {
+        if query_lower.contains(pattern) {
+            warn!("Suspicious search query pattern detected: {}", pattern);
+            return Ok(reply::with_status(
+                reply::json(&ErrorBody {
+                    code: "INVALID_QUERY".to_string(),
+                    message: "Search query contains invalid characters".to_string(),
+                    details: None,
+                }),
+                warp::http::StatusCode::BAD_REQUEST,
+            ));
+        }
     }
 
     // Cap limit at 50
@@ -173,6 +203,17 @@ pub async fn delete_account(
     csrf_service: CsrfService,
     pool: SqlitePool,
 ) -> Result<impl Reply, Rejection> {
+    if request.password.len() > MAX_PASSWORD_LENGTH {
+        return Ok(reply::with_status(
+            reply::json(&ErrorBody {
+                code: "VALIDATION_ERROR".to_string(),
+                message: "Password exceeds maximum length".to_string(),
+                details: None,
+            }),
+            warp::http::StatusCode::BAD_REQUEST,
+        ));
+    }
+
     let csrf_token = match csrf_token {
         Some(token) => token,
         None => {
@@ -268,8 +309,8 @@ pub async fn delete_account(
     }
 
     Ok(reply::with_status(
-        reply::json(&serde_json::json!({})),
-        warp::http::StatusCode::NO_CONTENT,
+        reply::json(&serde_json::json!({ "message": "Account deleted successfully" })),
+        warp::http::StatusCode::OK,
     ))
 }
 
@@ -281,6 +322,17 @@ pub async fn change_password(
     csrf_service: CsrfService,
     pool: SqlitePool,
 ) -> Result<impl Reply, Rejection> {
+    if request.current_password.len() > MAX_PASSWORD_LENGTH {
+        return Ok(reply::with_status(
+            reply::json(&ErrorBody {
+                code: "VALIDATION_ERROR".to_string(),
+                message: "Password exceeds maximum length".to_string(),
+                details: None,
+            }),
+            warp::http::StatusCode::BAD_REQUEST,
+        ));
+    }
+
     let csrf_token = match csrf_token {
         Some(token) => token,
         None => {
