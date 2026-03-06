@@ -12,6 +12,13 @@ use std::sync::Arc;
 use tracing::{info, warn};
 use warp::{reply, Rejection, Reply};
 
+fn sanitize_for_log(s: &str) -> String {
+    s.chars()
+        .take(50)
+        .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
+        .collect()
+}
+
 /// Enhanced login handler with rate limiting
 pub async fn login_with_rate_limit(
     req: LoginRequest,
@@ -41,7 +48,7 @@ pub async fn login_with_rate_limit(
     let user = match queries::find_user_by_username(&pool, &req.username).await {
         Ok(Some(user)) => user,
         Ok(None) => {
-            warn!("Login failed: user not found ({})", req.username);
+            warn!("Login failed: user not found ({})", sanitize_for_log(&req.username));
 
             let _ = queries::insert_auth_log(
                 &pool,
@@ -77,7 +84,7 @@ pub async fn login_with_rate_limit(
 
     // Check if user is deleted
     if user.is_deleted() {
-        warn!("Login failed: deleted account ({})", req.username);
+        warn!("Login failed: deleted account ({})", sanitize_for_log(&req.username));
 
         let _ = queries::insert_auth_log(
             &pool,
@@ -105,7 +112,7 @@ pub async fn login_with_rate_limit(
             // Password is correct - proceed with token generation
         }
         Ok(false) => {
-            warn!("Login failed: invalid password ({})", req.username);
+            warn!("Login failed: invalid password ({})", sanitize_for_log(&req.username));
 
             let _ = queries::insert_auth_log(
                 &pool,

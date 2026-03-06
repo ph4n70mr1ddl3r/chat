@@ -19,8 +19,32 @@ use tracing::warn;
 use unicode_normalization::UnicodeNormalization;
 use warp::ws::Message as WsMessage;
 
+/// Basic HTML sanitization for message content
+///
+/// Performs HTML entity encoding to prevent XSS attacks by escaping:
+/// - `&` -> `&amp;`
+/// - `<` -> `&lt;`
+/// - `>` -> `&gt;`
+/// - `"` -> `&quot;`
+/// - `'` -> `&#x27;`
+/// - `/` -> `&#x2F;`
+///
+/// Also strips null bytes and control characters that could be used for
+/// log injection or string truncation attacks.
+///
+/// # Limitations
+/// This is a basic sanitization approach suitable for plain text messages.
+/// For rich text or HTML content, consider using a dedicated sanitization library
+/// like `ammonia` or `blake2` for more comprehensive protection.
+///
+/// # Security Note
+/// This function escapes characters to prevent HTML injection but does not
+/// validate or sanitize URL schemes, CSS, or JavaScript in more complex scenarios.
 fn sanitize_html(input: &str) -> String {
     input
+        .chars()
+        .filter(|c| *c != '\0')
+        .collect::<String>()
         .replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")

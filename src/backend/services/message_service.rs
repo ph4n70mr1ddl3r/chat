@@ -282,33 +282,62 @@ impl MessageService {
     ) -> Result<(), String> {
         let now = chrono::Utc::now().timestamp_millis();
 
-        match new_status {
-            status::READ => {
-                sqlx::query("UPDATE messages SET status = ?, read_at = ? WHERE id = ?")
-                    .bind(status::READ)
+        let query_str = match new_status {
+            status::READ => "UPDATE messages SET status = ?, read_at = ? WHERE id = ?",
+            status::DELIVERED => "UPDATE messages SET status = ?, delivered_at = ? WHERE id = ?",
+            _ => "UPDATE messages SET status = ? WHERE id = ?",
+        };
+
+        let rows_affected = match new_status {
+            status::READ | status::DELIVERED => {
+                sqlx::query(query_str)
+                    .bind(new_status)
                     .bind(now)
                     .bind(message_id)
                     .execute(&self.pool)
                     .await
-                    .map_err(|e| format!("Failed to update message {} to read: {}", message_id, e))?;
-            }
-            status::DELIVERED => {
-                sqlx::query("UPDATE messages SET status = ?, delivered_at = ? WHERE id = ?")
-                    .bind(status::DELIVERED)
-                    .bind(now)
-                    .bind(message_id)
-                    .execute(&self.pool)
-                    .await
-                    .map_err(|e| format!("Failed to update message {} to delivered: {}", message_id, e))?;
+                    .map_err(|e| {
+                        warn!(
+                            target: "message",
+                            event = "message.status_update.failed",
+                            message_id = %message_id,
+                            status = %new_status,
+                            error = %e,
+                            "Failed to update message status"
+                        );
+                        format!("Failed to update message {} to {}: {}", message_id, new_status, e)
+                    })?
+                    .rows_affected()
             }
             _ => {
-                sqlx::query("UPDATE messages SET status = ? WHERE id = ?")
+                sqlx::query(query_str)
                     .bind(new_status)
                     .bind(message_id)
                     .execute(&self.pool)
                     .await
-                    .map_err(|e| format!("Failed to update message {} status: {}", message_id, e))?;
+                    .map_err(|e| {
+                        warn!(
+                            target: "message",
+                            event = "message.status_update.failed",
+                            message_id = %message_id,
+                            status = %new_status,
+                            error = %e,
+                            "Failed to update message status"
+                        );
+                        format!("Failed to update message {} to {}: {}", message_id, new_status, e)
+                    })?
+                    .rows_affected()
             }
+        };
+
+        if rows_affected == 0 {
+            warn!(
+                target: "message",
+                event = "message.status_update.not_found",
+                message_id = %message_id,
+                status = %new_status,
+                "Message not found for status update"
+            );
         }
 
         Ok(())

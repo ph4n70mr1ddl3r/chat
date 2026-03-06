@@ -15,6 +15,10 @@ use warp::ws::Message as WsMessage;
 const MAX_TOTAL_CONNECTIONS: usize = 10_000;
 const MAX_CONNECTIONS_PER_USER: usize = 10;
 
+/// Maximum allowed timestamp drift in milliseconds (5 minutes)
+/// This allows for reasonable clock drift between client and server
+const MAX_TIMESTAMP_DRIFT_MS: i64 = 300_000;
+
 pub type ConnectionId = String;
 
 /// Client connection state
@@ -176,11 +180,32 @@ impl ConnectionManager {
     pub async fn send_to_user(&self, user_id: &str, message: WsMessage) -> usize {
         let conns = self.connections.read().await;
         if let Some(entries) = conns.get(user_id) {
+            let total = entries.len();
             let mut delivered = 0;
             for conn in entries {
-                if conn.sender.try_send(message.clone()).is_ok() {
-                    delivered += 1;
+                match conn.sender.try_send(message.clone()) {
+                    Ok(_) => delivered += 1,
+                    Err(e) => {
+                        tracing::debug!(
+                            target: "websocket",
+                            event = "websocket.send.failed",
+                            user_id = %user_id,
+                            connection_id = %conn.client.connection_id,
+                            error = ?e,
+                            "Failed to send message to connection"
+                        );
+                    }
                 }
+            }
+            if delivered < total {
+                tracing::warn!(
+                    target: "websocket",
+                    event = "websocket.send.partial",
+                    user_id = %user_id,
+                    delivered = delivered,
+                    total = total,
+                    "Partial message delivery"
+                );
             }
             delivered
         } else {
@@ -237,16 +262,21 @@ impl MessageValidator {
             | crate::models::msg_type::PRESENCE
             | crate::models::msg_type::ACK
             | crate::models::msg_type::ERROR
-            | crate::models::msg_type::HEARTBEAT => {}
+            | crate::models::msg_type::HEARTBEAT => {
+                // valid message type
+            }
             _ => return Err(format!("Invalid message type: {}", envelope.msg_type)),
         }
 
-        // Check timestamp is reasonable (not far in future/past).
-        // Allow 30 seconds tolerance for regular messages to accommodate clock drift.
-        // Heartbeat messages are handled separately with more lenient tolerance.
         let now = chrono::Utc::now().timestamp_millis();
-        let time_diff = (envelope.timestamp as i64).saturating_sub(now).abs();
-        if time_diff > 30_000 {
+        let ts_i64 = envelope.timestamp as i64;
+        if envelope.timestamp > i64::MAX as u64 {
+            return Err("Timestamp value too large".to_string());
+        }
+
+        let time_diff = (ts_i64 - now).abs();
+
+        if time_diff > MAX_TIMESTAMP_DRIFT_MS {
             return Err("Timestamp out of reasonable range".to_string());
         }
 
@@ -275,6 +305,7 @@ impl MessageValidator {
         if recipient_id.is_empty() {
             return Err("Recipient ID cannot be empty".to_string());
         }
+
         Ok(())
     }
 }

@@ -13,6 +13,13 @@ use crate::services::{AuthService, CsrfService, LoginAttemptService};
 use crate::validators;
 use std::sync::Arc;
 
+fn sanitize_for_log(s: &str) -> String {
+    s.chars()
+        .take(50)
+        .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
+        .collect()
+}
+
 macro_rules! error_response {
     ($code:expr, $message:expr, $status:expr) => {
         reply::with_status(
@@ -147,7 +154,7 @@ pub async fn signup_handler(
 
     match queries::find_user_by_username(&pool, &req.username).await {
         Ok(Some(_)) => {
-            warn!("Username already exists: {}", req.username);
+            warn!("Username already exists: {}", sanitize_for_log(&req.username));
             return Ok(error_response!(
                 "CONFLICT",
                 "Username already exists",
@@ -157,7 +164,8 @@ pub async fn signup_handler(
         Err(e) => {
             warn!(
                 "Database error during user lookup for '{}': {}",
-                req.username, e
+                sanitize_for_log(&req.username),
+                e
             );
             return Ok(error_response!(
                 "INTERNAL_ERROR",
@@ -175,7 +183,7 @@ pub async fn signup_handler(
     {
         Ok(user) => user,
         Err(e) => {
-            warn!("Failed to create user '{}': {}", req.username, e);
+            warn!("Failed to create user '{}': {}", sanitize_for_log(&req.username), e);
             return Ok(error_response!("AUTH_ERROR", e, warp::http::StatusCode::BAD_REQUEST));
         }
     };
@@ -183,7 +191,7 @@ pub async fn signup_handler(
     let user = match queries::insert_user(&pool, &user).await {
         Ok(user) => user,
         Err(e) => {
-            warn!("Failed to save user '{}' to database: {}", req.username, e);
+            warn!("Failed to save user '{}' to database: {}", sanitize_for_log(&req.username), e);
             return Ok(error_response!(
                 "INTERNAL_ERROR",
                 "An error occurred while processing your request",
@@ -216,7 +224,7 @@ pub async fn signup_handler(
         }
     };
 
-    info!("User signed up: {}", req.username);
+    info!("User signed up: {}", sanitize_for_log(&req.username));
 
     Ok(reply::with_status(
         reply::json(&AuthResponse {
@@ -239,7 +247,7 @@ pub async fn login_handler(
     login_attempt_service: Arc<LoginAttemptService>,
 ) -> Result<impl Reply, Rejection> {
     if let Err(e) = validators::validate_username(&req.username) {
-        warn!("Login failed: invalid username ({}) - {}", req.username, e);
+        warn!("Login failed: invalid username ({}) - {}", sanitize_for_log(&req.username), e);
         return Ok(error_response!(
             "VALIDATION_ERROR",
             e,
@@ -248,7 +256,11 @@ pub async fn login_handler(
     }
 
     if login_attempt_service.is_locked(&req.username).await {
-        warn!("Login attempt on locked account ({})", &req.username[..8.min(req.username.len())]);
+        warn!(
+            target: "auth",
+            event = "auth.login.locked",
+            "Login attempt on locked account"
+        );
         return Ok(error_response!(
             "AUTH_ERROR",
             "Account temporarily locked due to too many failed attempts. Please try again later.",
@@ -261,7 +273,7 @@ pub async fn login_handler(
     let user = match queries::find_user_by_username(&pool, &req.username).await {
         Ok(Some(user)) => user,
         Ok(None) => {
-            warn!("Login failed: user not found ({})", req.username);
+            warn!("Login failed: user not found ({})", sanitize_for_log(&req.username));
             login_attempt_service.record_failed_attempt(&req.username).await;
             return Ok(error_response!(
                 "AUTH_ERROR",
@@ -272,7 +284,8 @@ pub async fn login_handler(
         Err(e) => {
             warn!(
                 "Database error during login lookup for '{}': {}",
-                req.username, e
+                sanitize_for_log(&req.username),
+                e
             );
             return Ok(error_response!(
                 "INTERNAL_ERROR",
@@ -283,7 +296,7 @@ pub async fn login_handler(
     };
 
     if user.is_deleted() {
-        warn!("Login failed: deleted account ({})", req.username);
+        warn!("Login failed: deleted account ({})", sanitize_for_log(&req.username));
         login_attempt_service.record_failed_attempt(&req.username).await;
         return Ok(error_response!(
             "AUTH_ERROR",
@@ -297,7 +310,7 @@ pub async fn login_handler(
             login_attempt_service.clear_attempts(&req.username).await;
         }
         Ok(false) => {
-            warn!("Login failed: invalid password ({})", req.username);
+            warn!("Login failed: invalid password ({})", sanitize_for_log(&req.username));
             login_attempt_service.record_failed_attempt(&req.username).await;
             return Ok(error_response!(
                 "AUTH_ERROR",
