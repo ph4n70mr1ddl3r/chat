@@ -242,11 +242,11 @@ impl MessageValidator {
         }
 
         // Check timestamp is reasonable (not far in future/past).
-        // Allow 10 seconds tolerance for regular messages to reduce replay attack window.
+        // Allow 30 seconds tolerance for regular messages to accommodate clock drift.
         // Heartbeat messages are handled separately with more lenient tolerance.
         let now = chrono::Utc::now().timestamp_millis();
         let time_diff = (envelope.timestamp as i64).saturating_sub(now).abs();
-        if time_diff > 10_000 {
+        if time_diff > 30_000 {
             return Err("Timestamp out of reasonable range".to_string());
         }
 

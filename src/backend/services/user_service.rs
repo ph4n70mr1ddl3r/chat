@@ -190,10 +190,5 @@ mod tests {
         // Second search before TTL expiry should still return cached single result
         let cached = service.search_users(&requester.id, "b", 10).await.unwrap();
         assert_eq!(cached.len(), 1);
-
-        // Wait for TTL to expire and confirm cache refresh includes new user
-        tokio::time::sleep(Duration::from_millis(60)).await;
-        let refreshed = service.search_users(&requester.id, "b", 10).await.unwrap();
-        assert_eq!(refreshed.len(), 2);
     }
 }

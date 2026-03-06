@@ -16,6 +16,7 @@ use serde_json::json;
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use tracing::warn;
+use unicode_normalization::UnicodeNormalization;
 use warp::ws::Message as WsMessage;
 
 fn sanitize_html(input: &str) -> String {
@@ -165,7 +166,8 @@ impl MessageHandler {
             conversation.id
         };
 
-        let sanitized_content = sanitize_html(&data.content);
+        let normalized_content: String = data.content.nfc().collect();
+        let sanitized_content = sanitize_html(&normalized_content);
 
         // Send message using message service (with idempotency)
         let (message, was_created) = self

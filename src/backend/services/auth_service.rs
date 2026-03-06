@@ -25,7 +25,17 @@ fn hash_token(token: &str) -> String {
 pub struct AuthService {
     jwt_secret: String,
     revoked_tokens: Arc<RwLock<HashMap<String, i64>>>,
-    _cleanup_handle: Option<Arc<tokio::task::JoinHandle<()>>>,
+    cleanup_handle: Option<Arc<tokio::task::JoinHandle<()>>>,
+}
+
+impl Drop for AuthService {
+    fn drop(&mut self) {
+        if let Some(handle) = self.cleanup_handle.take() {
+            if let Some(handle) = Arc::into_inner(handle) {
+                handle.abort();
+            }
+        }
+    }
 }
 
 /// JWT token expiration time in seconds (1 hour)
@@ -40,7 +50,7 @@ impl AuthService {
         Self {
             jwt_secret,
             revoked_tokens: Arc::new(RwLock::new(HashMap::new())),
-            _cleanup_handle: None,
+            cleanup_handle: None,
         }
     }
 
@@ -67,7 +77,7 @@ impl AuthService {
         Self {
             jwt_secret,
             revoked_tokens,
-            _cleanup_handle: Some(Arc::new(cleanup_handle)),
+            cleanup_handle: Some(Arc::new(cleanup_handle)),
         }
     }
 

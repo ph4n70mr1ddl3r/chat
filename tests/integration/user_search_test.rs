@@ -24,7 +24,7 @@ async fn test_user_search_valid_query() {
     ];
     
     for user in &users {
-        chat_backend::db::queries::insert_user(&pool, user).await.unwrap();
+        chat_backend::db::queries::insert_user(&pool, &user).await.unwrap();
     }
     
     // Search for "ali" - should return alice and alicia

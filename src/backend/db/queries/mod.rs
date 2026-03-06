@@ -96,7 +96,7 @@ pub async fn get_failed_attempts(
 pub async fn insert_user(pool: &SqlitePool, user: &User) -> Result<User, String> {
     sqlx::query(
         "INSERT INTO users (id, username, password_hash, created_at, updated_at, is_online, deleted_at, last_seen_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(&user.id)
     .bind(&user.username)

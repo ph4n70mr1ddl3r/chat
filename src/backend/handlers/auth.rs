@@ -180,14 +180,17 @@ pub async fn signup_handler(
         }
     };
 
-    if let Err(e) = queries::insert_user(&pool, &user).await {
-        warn!("Failed to save user '{}' to database: {}", user.username, e);
-        return Ok(error_response!(
-            "INTERNAL_ERROR",
-            "An error occurred while processing your request",
-            warp::http::StatusCode::INTERNAL_SERVER_ERROR
-        ));
-    }
+    let user = match queries::insert_user(&pool, &user).await {
+        Ok(user) => user,
+        Err(e) => {
+            warn!("Failed to save user '{}' to database: {}", req.username, e);
+            return Ok(error_response!(
+                "INTERNAL_ERROR",
+                "An error occurred while processing your request",
+                warp::http::StatusCode::INTERNAL_SERVER_ERROR
+            ));
+        }
+    };
 
     let (token, expires_at) = match auth_service.generate_token(user.id.clone()) {
         Ok((token, expires_at)) => (token, expires_at),

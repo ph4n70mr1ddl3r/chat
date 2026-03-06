@@ -12,7 +12,7 @@ use anyhow::Error;
 use base64::prelude::*;
 use futures::{SinkExt, StreamExt};
 use sqlx::SqlitePool;
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{mpsc, oneshot};
@@ -100,7 +100,8 @@ impl ServerConfig {
                 tracing::warn!("For production deployments, ALWAYS set the JWT_SECRET environment variable.");
                 tracing::warn!("Generated secrets are not persisted between restarts and will invalidate all existing tokens.");
                 tracing::warn!("To avoid this warning, set a JWT_SECRET environment variable with at least 32 random characters.");
-                let secret: [u8; 64] = rand::random();
+                let mut secret = [0u8; 64];
+                getrandom::fill(&mut secret).expect("Failed to generate random secret");
                 BASE64_STANDARD.encode(secret)
             }
         });
@@ -749,8 +750,40 @@ async fn handle_change_password(
     user::change_password(user_id, req, csrf_token, state.csrf_service, state.pool).await
 }
 
+fn is_trusted_proxy(remote_ip: &std::net::IpAddr) -> bool {
+    let ip_str = remote_ip.to_string();
+    
+    let trusted_proxies: &[&str] = &[
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "127.0.0.1",
+        "::1",
+    ];
+    
+    for cidr in trusted_proxies {
+        if ip_str == *cidr {
+            return true;
+        }
+        if cidr.contains('/') {
+            if let Ok(network) = cidr.parse::<ipnet::IpNet>() {
+                if network.contains(remote_ip) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
 fn client_ip(remote_addr: Option<SocketAddr>, forwarded_for: Option<&str>) -> String {
     if let Some(xff) = forwarded_for {
+        if let Some(remote) = remote_addr {
+            if !is_trusted_proxy(&remote.ip()) {
+                return remote.ip().to_string();
+            }
+        }
+        
         if let Some(client_ip) = xff.split(',').next() {
             let client_ip = client_ip.trim();
             if !client_ip.is_empty() {
@@ -871,10 +904,27 @@ pub async fn start_server(
 
     let routes = create_routes(state);
 
-    info!("Starting HTTP server on port {}", port);
+    let bind_addr: IpAddr = std::env::var("BIND_ADDR")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or_else(|| {
+            #[cfg(debug_assertions)]
+            {
+                info!("BIND_ADDR not set, defaulting to 127.0.0.1 for development");
+                info!("Set BIND_ADDR=0.0.0.0 to listen on all interfaces");
+                Ipv4Addr::LOCALHOST.into()
+            }
+            #[cfg(not(debug_assertions))]
+            {
+                info!("BIND_ADDR not set, defaulting to 0.0.0.0 for production");
+                Ipv4Addr::UNSPECIFIED.into()
+            }
+        });
+
+    info!("Starting HTTP server on {}:{}", bind_addr, port);
 
     let (addr, server) =
-        warp::serve(routes).bind_with_graceful_shutdown(([0, 0, 0, 0], port), async move {
+        warp::serve(routes).bind_with_graceful_shutdown((bind_addr, port), async move {
             let _ = shutdown_rx.changed().await;
             info!("Server shutting down gracefully...");
         });

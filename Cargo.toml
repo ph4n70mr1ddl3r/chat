@@ -52,9 +52,10 @@ thiserror = "2.0"
 # Utilities
 chrono = { version = "0.4", features = ["serde"] }
 log = "0.4"
-rand = { version = "0.10", features = ["std"] }
+rand = { version = "0.10", features = ["std", "thread_rng"] }
 hex = "0.4"
 subtle = "2.6"
+unicode-normalization = "0.1"
 
 # JSON Schema validation
 jsonschema = "0.41"
