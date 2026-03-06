@@ -7,17 +7,11 @@ use crate::handlers::auth::{AuthResponse, LoginRequest};
 use crate::handlers::ErrorBody;
 use crate::middleware::RateLimiter;
 use crate::services::{AuthService, CsrfService};
+use crate::utils::sanitize_for_log;
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use tracing::{info, warn};
 use warp::{reply, Rejection, Reply};
-
-fn sanitize_for_log(s: &str) -> String {
-    s.chars()
-        .take(50)
-        .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
-        .collect()
-}
 
 /// Enhanced login handler with rate limiting
 pub async fn login_with_rate_limit(

@@ -160,16 +160,14 @@ impl MessageService {
         limit: u32,
         offset: u32,
     ) -> Result<Vec<Message>, String> {
-        // Verify user is participant in conversation
         let conversation = queries::get_conversation_by_id(&self.pool, conversation_id)
             .await?
             .ok_or("Conversation not found".to_string())?;
 
         if conversation.user1_id != user_id && conversation.user2_id != user_id {
-            return Err("User is not a participant in this conversation".to_string());
+            return Err("Conversation not found".to_string());
         }
 
-        // Get messages
         queries::get_messages_by_conversation(&self.pool, conversation_id, limit, offset).await
     }
 

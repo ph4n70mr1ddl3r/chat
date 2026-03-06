@@ -133,6 +133,7 @@ pub struct ServerState {
     pub auth_rate_limiter: Arc<rate_limit::RateLimiter>,
     pub csrf_service: CsrfService,
     pub login_attempt_service: Arc<crate::services::LoginAttemptService>,
+    pub auth_service: Arc<crate::services::auth_service::AuthService>,
     _global_cleanup_handle: Arc<tokio::task::JoinHandle<()>>,
     _auth_cleanup_handle: Arc<tokio::task::JoinHandle<()>>,
     pub start_time: Instant,
@@ -147,6 +148,9 @@ impl ServerState {
         let user_service = Arc::new(crate::services::UserService::new(pool.clone()));
         let csrf_service = CsrfService::new(&config.jwt_secret);
         let login_attempt_service = Arc::new(crate::services::LoginAttemptService::new());
+        let auth_service = Arc::new(crate::services::auth_service::AuthService::with_cleanup(
+            config.jwt_secret.clone(),
+        ));
 
         let global_cleanup_handle = global_rate_limiter.start_periodic_cleanup();
         let auth_cleanup_handle = auth_rate_limiter.start_periodic_cleanup();
@@ -165,6 +169,7 @@ impl ServerState {
             auth_rate_limiter,
             csrf_service,
             login_attempt_service,
+            auth_service,
             _global_cleanup_handle: Arc::new(global_cleanup_handle),
             _auth_cleanup_handle: Arc::new(auth_cleanup_handle),
             start_time: Instant::now(),
@@ -182,10 +187,7 @@ pub fn create_routes(
     let rate_limit_filter = rate_limit::rate_limit_filter(state.global_rate_limiter.clone());
     let auth_rate_limit_filter = rate_limit::rate_limit_filter(state.auth_rate_limiter.clone());
 
-    let auth_service = Arc::new(crate::services::auth_service::AuthService::with_cleanup(
-        state.config.jwt_secret.clone(),
-    ));
-    let with_auth = auth_middleware::with_auth(auth_service.clone());
+    let with_auth = auth_middleware::with_auth(state.auth_service.clone());
 
     // Health endpoint
     let health_route = warp::path!("health")
@@ -202,11 +204,10 @@ pub fn create_routes(
         .and_then(server_handlers::status);
 
     // WebSocket endpoint with JWT authentication
-    // Token can be provided via Sec-WebSocket-Protocol header (preferred) or URL query
+    // Token MUST be provided via Sec-WebSocket-Protocol header (format: "jwt.<token>")
     let websocket_route = warp::path!("socket")
         .and(warp::ws())
         .and(rate_limit_filter.clone())
-        .and(warp::query::raw())
         .and(warp::header::optional::<String>("Sec-WebSocket-Protocol"))
         .and(state_filter.clone())
         .and_then(handle_websocket_upgrade);
@@ -280,6 +281,7 @@ pub fn create_routes(
                     .and(with_auth.clone())
                     .and(warp::header::optional::<String>("X-CSRF-Token"))
                     .and(auth_rate_limit_filter.clone())
+                    .and(warp::body::content_length_limit(MAX_BODY_SIZE))
                     .and(warp::body::json())
                     .and(state_filter.clone())
                     .and_then(handle_change_password),
@@ -428,22 +430,16 @@ fn build_cors(config: &ServerConfig) -> Cors {
 }
 
 /// Handle WebSocket upgrade with JWT authentication
+/// Token must be provided via Sec-WebSocket-Protocol header as "jwt.<token>"
 async fn handle_websocket_upgrade(
     ws: Ws,
-    query: String,
     protocol_header: Option<String>,
     state: ServerState,
 ) -> Result<impl Reply, Rejection> {
     info!("WebSocket connection request received");
 
-    if query.contains("token=") {
-        warn!(
-            "WebSocket auth via query parameter is deprecated. Use Sec-WebSocket-Protocol header instead."
-        );
-    }
-
     let validator = HandshakeValidator::new(state.config.jwt_secret.clone());
-    match validator.validate_upgrade(&query, protocol_header.as_deref()).await {
+    match validator.validate_upgrade(protocol_header.as_deref()).await {
         Ok(claims) => {
             info!(
                 "WebSocket authentication successful for user: {}",
@@ -715,7 +711,7 @@ async fn handle_logout(
             ip_address: Some(ip),
         },
         state.connection_manager,
-        Arc::new(crate::services::auth_service::AuthService::new(state.config.jwt_secret)),
+        state.auth_service,
         state.csrf_service,
         state.pool,
     )
@@ -973,7 +969,7 @@ mod tests {
 
         let resp = request()
             .method("GET")
-            .path("/socket?")
+            .path("/socket")
             .header("Upgrade", "websocket")
             .header("Connection", "Upgrade")
             .header("Sec-WebSocket-Version", "13")
@@ -997,15 +993,15 @@ mod tests {
 
         let resp = request()
             .method("GET")
-            .path("/socket?token=invalid")
+            .path("/socket")
             .header("Upgrade", "websocket")
             .header("Connection", "Upgrade")
             .header("Sec-WebSocket-Version", "13")
             .header("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+            .header("Sec-WebSocket-Protocol", "jwt.invalid")
             .reply(&routes)
             .await;
 
-        // Should reject WebSocket upgrade due to invalid token
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 

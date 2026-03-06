@@ -10,15 +10,9 @@ use warp::{reply, Rejection, Reply};
 use crate::db::queries;
 use crate::handlers::{websocket::ConnectionManager, ErrorBody};
 use crate::services::{AuthService, CsrfService, LoginAttemptService};
+use crate::utils::sanitize_for_log;
 use crate::validators;
 use std::sync::Arc;
-
-fn sanitize_for_log(s: &str) -> String {
-    s.chars()
-        .take(50)
-        .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
-        .collect()
-}
 
 macro_rules! error_response {
     ($code:expr, $message:expr, $status:expr) => {
