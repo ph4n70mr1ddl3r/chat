@@ -2,9 +2,12 @@
 //!
 //! Handles POST /auth/refresh for refreshing JWT tokens
 
+use crate::db::queries;
 use crate::handlers::ErrorBody;
 use crate::services::{AuthService, CsrfService};
 use serde::Deserialize;
+use sqlx::SqlitePool;
+use std::sync::Arc;
 use tracing::{info, warn};
 use warp::{reply, Rejection, Reply};
 
@@ -19,8 +22,10 @@ pub struct RefreshRequest {
 /// Handle POST /auth/refresh
 pub async fn refresh_token_handler(
     req: RefreshRequest,
+    pool: SqlitePool,
     jwt_secret: String,
     csrf_service: CsrfService,
+    shared_auth_service: Arc<AuthService>,
 ) -> Result<impl Reply, Rejection> {
     let auth_service = AuthService::new(jwt_secret.clone());
 
@@ -38,6 +43,47 @@ pub async fn refresh_token_handler(
             ));
         }
     };
+
+    match queries::find_user_by_id(&pool, &claims.sub).await {
+        Ok(Some(user)) => {
+            if user.is_deleted() {
+                warn!("Token refresh rejected for deleted user: {}", claims.sub);
+                return Ok(reply::with_status(
+                    reply::json(&ErrorBody {
+                        code: "USER_DELETED".to_string(),
+                        message: "Account has been deleted".to_string(),
+                        details: None,
+                    }),
+                    warp::http::StatusCode::UNAUTHORIZED,
+                ));
+            }
+        }
+        Ok(None) => {
+            warn!("Token refresh rejected - user not found: {}", claims.sub);
+            return Ok(reply::with_status(
+                reply::json(&ErrorBody {
+                    code: "USER_NOT_FOUND".to_string(),
+                    message: "User account not found".to_string(),
+                    details: None,
+                }),
+                warp::http::StatusCode::UNAUTHORIZED,
+            ));
+        }
+        Err(e) => {
+            warn!("Database error during token refresh for user {}: {}", claims.sub, e);
+            return Ok(reply::with_status(
+                reply::json(&ErrorBody {
+                    code: "INTERNAL_ERROR".to_string(),
+                    message: "An error occurred while processing your request".to_string(),
+                    details: None,
+                }),
+                warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+            ));
+        }
+    }
+
+    shared_auth_service.revoke_token(&req.token).await;
+    info!("Old token revoked for user: {}", claims.sub);
 
     let (new_token, expires_at) = match auth_service.generate_token(claims.sub.clone()) {
         Ok((token, expires_at)) => (token, expires_at),

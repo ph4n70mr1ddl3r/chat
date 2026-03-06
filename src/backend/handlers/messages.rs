@@ -1,9 +1,3 @@
-//! WebSocket message handlers
-//!
-//! Handles incoming text messages from WebSocket connections, validates them,
-//! stores them in database, and routes them to online recipients or queues
-//! them for offline delivery.
-
 use crate::db::queries;
 use crate::handlers::websocket::{ClientConnection, ConnectionManager, ErrorResponse};
 use crate::models::MAX_MESSAGE_LENGTH;
@@ -18,6 +12,8 @@ use std::sync::Arc;
 use tracing::warn;
 use unicode_normalization::UnicodeNormalization;
 use warp::ws::Message as WsMessage;
+
+const MAX_DELIVERY_STATUS_BATCH: usize = 100;
 
 /// Basic HTML sanitization for message content
 ///
@@ -343,6 +339,13 @@ impl MessageHandler {
     ) -> Result<Vec<WsMessage>, String> {
         if updates.is_empty() {
             return Ok(vec![]);
+        }
+
+        if updates.len() > MAX_DELIVERY_STATUS_BATCH {
+            return Err(format!(
+                "Too many updates in batch (max {})",
+                MAX_DELIVERY_STATUS_BATCH
+            ));
         }
 
         let mut responses = Vec::new();

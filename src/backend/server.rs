@@ -248,6 +248,18 @@ pub fn create_routes(
                     .and(warp::addr::remote())
                     .and(state_filter.clone())
                     .and_then(handle_logout),
+            )
+            .or(
+                // POST /auth/refresh
+                warp::post()
+                    .and(warp::path("refresh"))
+                    .and(warp::path::end())
+                    .and(rate_limit_filter.clone())
+                    .and(warp::body::content_length_limit(MAX_BODY_SIZE))
+                    .and(warp::header::exact("Content-Type", "application/json"))
+                    .and(warp::body::json())
+                    .and(state_filter.clone())
+                    .and_then(handle_refresh),
             ),
     );
 
@@ -723,6 +735,22 @@ async fn handle_logout(
         state.auth_service,
         state.csrf_service,
         state.pool,
+    )
+    .await
+}
+
+/// Handle token refresh request
+async fn handle_refresh(
+    req: handlers::refresh::RefreshRequest,
+    state: ServerState,
+) -> Result<impl Reply, Rejection> {
+    info!("Token refresh request");
+    handlers::refresh::refresh_token_handler(
+        req,
+        state.pool,
+        state.config.jwt_secret,
+        state.csrf_service,
+        state.auth_service,
     )
     .await
 }

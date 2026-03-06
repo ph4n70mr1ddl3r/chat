@@ -269,10 +269,10 @@ impl MessageValidator {
         }
 
         let now = chrono::Utc::now().timestamp_millis();
-        let ts_i64 = envelope.timestamp as i64;
         if envelope.timestamp > i64::MAX as u64 {
             return Err("Timestamp value too large".to_string());
         }
+        let ts_i64 = envelope.timestamp as i64;
 
         let time_diff = (ts_i64 - now).abs();
 

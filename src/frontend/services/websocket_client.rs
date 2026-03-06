@@ -125,8 +125,7 @@ impl WebSocketClient {
 
                 let request = match Request::builder()
                     .uri(&websocket_url)
-                    .header("Authorization", format!("Bearer {token_to_use}"))
-                    .header("Sec-WebSocket-Protocol", "chat")
+                    .header("Sec-WebSocket-Protocol", format!("jwt.{}", token_to_use))
                     .body(())
                 {
                     Ok(req) => req,
