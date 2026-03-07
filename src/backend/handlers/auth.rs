@@ -14,6 +14,11 @@ use crate::utils::sanitize_for_log;
 use crate::validators;
 use std::sync::Arc;
 
+/// Pre-computed dummy bcrypt hash for timing-attack resistant login.
+/// This is a hash of a dummy password ("DummyPassword123!") used to ensure
+/// password verification always runs even when user doesn't exist.
+const DUMMY_BCRYPT_HASH: &str = "$2b$12$LQv8wJ1ZQ7H8G8bS5h8Qe9O0o1iHtKrN6CWm";
+
 macro_rules! error_response {
     ($code:expr, $message:expr, $status:expr) => {
         reply::with_status(
@@ -262,18 +267,18 @@ pub async fn login_handler(
         ));
     }
 
-    let auth_service = AuthService::new(jwt_secret.clone());
+    let auth_service = AuthService::new(jwt_secret);
 
-    let user = match queries::find_user_by_username(&pool, &req.username).await {
-        Ok(Some(user)) => user,
+    let (user, hash_to_verify) = match queries::find_user_by_username(&pool, &req.username).await {
+        Ok(Some(user)) => {
+            if user.is_deleted() {
+                (None, user.password_hash.clone())
+            } else {
+                (Some(user.clone()), user.password_hash.clone())
+            }
+        }
         Ok(None) => {
-            warn!("Login failed: invalid credentials");
-            login_attempt_service.record_failed_attempt(&req.username).await;
-            return Ok(error_response!(
-                "AUTH_ERROR",
-                "Invalid credentials",
-                warp::http::StatusCode::UNAUTHORIZED
-            ));
+            (None, DUMMY_BCRYPT_HASH.to_string())
         }
         Err(e) => {
             warn!(
@@ -289,21 +294,13 @@ pub async fn login_handler(
         }
     };
 
-    if user.is_deleted() {
-        warn!("Login failed: invalid credentials");
-        login_attempt_service.record_failed_attempt(&req.username).await;
-        return Ok(error_response!(
-            "AUTH_ERROR",
-            "Invalid credentials",
-            warp::http::StatusCode::UNAUTHORIZED
-        ));
-    }
+    // Always verify password to maintain constant time (prevents user enumeration via timing)
+    let password_valid = AuthService::verify_password(&req.password, &hash_to_verify).unwrap_or_default();
 
-    match auth_service.verify_login(&req.username, &req.password, &user.password_hash) {
-        Ok(true) => {
-            login_attempt_service.clear_attempts(&req.username).await;
-        }
-        Ok(false) => {
+    // Check both password validity AND user existence
+    let user = match (password_valid, user) {
+        (true, Some(u)) => u,
+        _ => {
             warn!("Login failed: invalid credentials");
             login_attempt_service.record_failed_attempt(&req.username).await;
             return Ok(error_response!(
@@ -312,20 +309,7 @@ pub async fn login_handler(
                 warp::http::StatusCode::UNAUTHORIZED
             ));
         }
-        Err(_e) => {
-            warn!(
-                target: "auth",
-                event = "auth.login.error",
-                error_type = "password_verification",
-                "Login failed: authentication error"
-            );
-            return Ok(error_response!(
-                "AUTH_ERROR",
-                "Authentication failed",
-                warp::http::StatusCode::INTERNAL_SERVER_ERROR
-            ));
-        }
-    }
+    };
 
     let (token, expires_at) = match auth_service.generate_token(user.id.clone()) {
         Ok((token, expires_at)) => (token, expires_at),
@@ -351,6 +335,7 @@ pub async fn login_handler(
         }
     };
 
+    login_attempt_service.clear_attempts(&req.username).await;
     info!("User logged in: {}", req.username);
 
     Ok(reply::with_status(

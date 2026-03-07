@@ -40,10 +40,17 @@ const MAX_BODY_SIZE: u64 = 1024;
 /// WebSocket read timeout in seconds - prevents hanging connections
 const WS_READ_TIMEOUT_SECS: u64 = 300;
 
+/// Auth rate limit: max attempts per window
+const AUTH_RATE_LIMIT_MAX_ATTEMPTS: u32 = 5;
+/// Auth rate limit window in seconds (15 minutes)
+const AUTH_RATE_LIMIT_WINDOW_SECS: u64 = 900;
+
 /// Server configuration
 #[derive(Clone)]
 pub struct ServerConfig {
     pub jwt_secret: String,
+    /// Indicates if the JWT secret was auto-generated (ephemeral)
+    pub is_ephemeral_secret: bool,
     /// Maximum WebSocket frame size in bytes (default 10KB).
     /// Note: This is the raw frame size limit for WebSocket messages.
     /// The application-level message content limit is defined by MAX_MESSAGE_LENGTH (5000 chars)
@@ -58,6 +65,7 @@ impl ServerConfig {
     pub fn test_config() -> Self {
         Self {
             jwt_secret: uuid::Uuid::new_v4().to_string(),
+            is_ephemeral_secret: true,
             max_message_size: 10 * 1024, // 10 KB
             allowed_origins: vec!["http://localhost:3000".to_string()],
         }
@@ -87,7 +95,7 @@ impl ServerConfig {
             }
         }
 
-        let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| {
+        let (jwt_secret, is_ephemeral_secret) = std::env::var("JWT_SECRET").map(|s| (s, false)).unwrap_or_else(|_| {
             #[cfg(not(debug_assertions))]
             {
                 panic!(
@@ -103,12 +111,13 @@ impl ServerConfig {
                 tracing::warn!("To avoid this warning, set a JWT_SECRET environment variable with at least 32 random characters.");
                 let mut secret = [0u8; 64];
                 getrandom::fill(&mut secret).expect("Failed to generate random secret");
-                BASE64_STANDARD.encode(secret)
+                (BASE64_STANDARD.encode(secret), true)
             }
         });
 
         Ok(Self {
             jwt_secret,
+            is_ephemeral_secret,
             max_message_size: 10 * 1024, // 10 KB
             allowed_origins: origins,
         })
@@ -145,7 +154,10 @@ impl ServerState {
         let connection_manager = Arc::new(websocket::ConnectionManager::new());
         let pool_for_services = pool.clone();
         let global_rate_limiter = Arc::new(rate_limit::RateLimiter::global());
-        let auth_rate_limiter = Arc::new(rate_limit::RateLimiter::new(5, 900));
+        let auth_rate_limiter = Arc::new(rate_limit::RateLimiter::new(
+            AUTH_RATE_LIMIT_MAX_ATTEMPTS,
+            AUTH_RATE_LIMIT_WINDOW_SECS,
+        ));
         let user_service = Arc::new(crate::services::UserService::new(pool.clone()));
         let csrf_service = CsrfService::new(&config.jwt_secret);
         let login_attempt_service = Arc::new(crate::services::LoginAttemptService::new());
@@ -970,7 +982,10 @@ mod tests {
         let resp = request().method("GET").path("/health").reply(&routes).await;
 
         assert_eq!(resp.status(), StatusCode::OK);
-        assert!(String::from_utf8_lossy(resp.body()).contains("healthy"));
+        let body = String::from_utf8_lossy(resp.body());
+        // Test config uses ephemeral secret, so status is "degraded"
+        assert!(body.contains("degraded"));
+        assert!(body.contains("ephemeral"));
     }
 
     #[tokio::test]
@@ -1138,7 +1153,8 @@ mod tests {
         let pool = init_test_pool().await;
         let config = ServerConfig {
             allowed_origins: vec!["https://example.com".to_string()],
-            jwt_secret: uuid::Uuid::new_v4().to_string(), // Test secret
+            jwt_secret: uuid::Uuid::new_v4().to_string(),
+            is_ephemeral_secret: true,
             max_message_size: 10 * 1024,
         };
         let state = ServerState::new(pool, config);

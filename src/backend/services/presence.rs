@@ -52,6 +52,15 @@ impl PresenceService {
         };
 
         let conversations = queries::get_user_conversations(&self.pool, user_id, MAX_PRESENCE_BROADCAST_CONVERSATIONS, 0).await?;
+        
+        if conversations.len() == MAX_PRESENCE_BROADCAST_CONVERSATIONS as usize {
+            tracing::warn!(
+                user_id,
+                total_conversations = conversations.len(),
+                limit = MAX_PRESENCE_BROADCAST_CONVERSATIONS,
+                "Presence broadcast truncated at conversation limit - some recipients may not receive updates"
+            );
+        }
 
         // Collect participant ids (the other user in each conversation)
         let mut recipients = Vec::new();

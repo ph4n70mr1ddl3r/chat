@@ -228,7 +228,7 @@ impl AuthService {
 
         decode::<TokenClaims>(token, &key, &validation)
             .map(|data| data.claims)
-            .map_err(|e| format!("Failed to verify token: {}", e))
+            .map_err(|_| "Token verification failed".to_string())
     }
 }
 

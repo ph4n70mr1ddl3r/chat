@@ -11,6 +11,8 @@ struct HealthResponse {
     status: &'static str,
     timestamp: i64,
     uptime_seconds: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    warning: Option<&'static str>,
 }
 
 #[derive(Serialize)]
@@ -21,6 +23,8 @@ struct StatusResponse {
     uptime_seconds: u64,
     database: DatabaseStatus,
     metrics: StatusMetrics,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    warning: Option<&'static str>,
 }
 
 #[derive(Serialize)]
@@ -39,16 +43,24 @@ struct StatusMetrics {
 /// GET /health - lightweight readiness check
 pub async fn health(state: ServerState) -> Result<impl Reply, Rejection> {
     let uptime = state.start_time.elapsed().as_secs();
+    let (status, warning) = if state.config.is_ephemeral_secret {
+        ("degraded", Some("Running with ephemeral JWT secret - not suitable for production"))
+    } else {
+        ("healthy", None)
+    };
+    
     let response = HealthResponse {
-        status: "healthy",
+        status,
         timestamp: chrono::Utc::now().timestamp_millis(),
         uptime_seconds: uptime,
+        warning,
     };
 
     info!(
         target: "server",
         event = "server.health",
         uptime_seconds = uptime,
+        is_ephemeral_secret = state.config.is_ephemeral_secret,
         "Health check served"
     );
 
@@ -96,6 +108,12 @@ pub async fn status(state: ServerState) -> Result<impl Reply, Rejection> {
         })?;
 
     let online_connections = state.connection_manager.get_online_users().await.len();
+    
+    let warning = if state.config.is_ephemeral_secret {
+        Some("Running with ephemeral JWT secret - not suitable for production")
+    } else {
+        None
+    };
 
     let response = StatusResponse {
         status: "running",
@@ -111,6 +129,7 @@ pub async fn status(state: ServerState) -> Result<impl Reply, Rejection> {
             total_messages,
             online_connections,
         },
+        warning,
     };
 
     info!(
@@ -119,6 +138,7 @@ pub async fn status(state: ServerState) -> Result<impl Reply, Rejection> {
         total_users,
         total_messages,
         online_connections,
+        is_ephemeral_secret = state.config.is_ephemeral_secret,
         "Status check served"
     );
 

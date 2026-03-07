@@ -203,11 +203,15 @@ pub async fn delete_account(
     csrf_service: CsrfService,
     pool: SqlitePool,
 ) -> Result<impl Reply, Rejection> {
-    if request.password.len() > MAX_PASSWORD_LENGTH {
+    if request.password.is_empty() || request.password.len() > MAX_PASSWORD_LENGTH {
         return Ok(reply::with_status(
             reply::json(&ErrorBody {
                 code: "VALIDATION_ERROR".to_string(),
-                message: "Password exceeds maximum length".to_string(),
+                message: if request.password.is_empty() {
+                    "Password is required"
+                } else {
+                    "Password exceeds maximum length"
+                }.to_string(),
                 details: None,
             }),
             warp::http::StatusCode::BAD_REQUEST,
