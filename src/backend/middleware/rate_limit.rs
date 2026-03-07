@@ -2,40 +2,14 @@
 //!
 //! Implements token-bucket rate limiting for authentication endpoints
 
+use crate::utils::is_trusted_proxy;
 use std::collections::HashMap;
-use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use warp::{self, addr::remote, reject, Filter, Rejection};
 
 const MAX_RATE_LIMIT_ENTRIES: usize = 100_000;
-
-const DEFAULT_TRUSTED_PROXIES: &[&str] = &[
-    "10.0.0.0/8",
-    "172.16.0.0/12",
-    "192.168.0.0/16",
-    "127.0.0.1",
-    "::1",
-];
-
-fn is_trusted_proxy(remote_ip: &IpAddr) -> bool {
-    let ip_str = remote_ip.to_string();
-    
-    for cidr in DEFAULT_TRUSTED_PROXIES {
-        if ip_str == *cidr {
-            return true;
-        }
-        if cidr.contains('/') {
-            if let Ok(network) = cidr.parse::<ipnet::IpNet>() {
-                if network.contains(remote_ip) {
-                    return true;
-                }
-            }
-        }
-    }
-    false
-}
 
 /// Rate limit entry tracking attempts and reset time
 ///

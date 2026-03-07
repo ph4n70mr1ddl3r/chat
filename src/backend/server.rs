@@ -28,6 +28,7 @@ use crate::handlers::dispatcher::{DispatchResult, MessageDispatcher};
 use crate::handlers::handshake::HandshakeValidator;
 use crate::handlers::messages::MessageHandler;
 use crate::services::{CsrfService, MessageQueueService, PresenceService};
+use crate::utils::is_trusted_proxy;
 use chat_shared::protocol::TokenClaims;
 
 use crate::handlers::{self, auth, conversation, server as server_handlers, user, websocket};
@@ -781,32 +782,6 @@ async fn handle_change_password(
     state: ServerState,
 ) -> Result<impl Reply, Rejection> {
     user::change_password(user_id, req, csrf_token, state.csrf_service, state.pool).await
-}
-
-fn is_trusted_proxy(remote_ip: &std::net::IpAddr) -> bool {
-    let ip_str = remote_ip.to_string();
-    
-    let trusted_proxies: &[&str] = &[
-        "10.0.0.0/8",
-        "172.16.0.0/12",
-        "192.168.0.0/16",
-        "127.0.0.1",
-        "::1",
-    ];
-    
-    for cidr in trusted_proxies {
-        if ip_str == *cidr {
-            return true;
-        }
-        if cidr.contains('/') {
-            if let Ok(network) = cidr.parse::<ipnet::IpNet>() {
-                if network.contains(remote_ip) {
-                    return true;
-                }
-            }
-        }
-    }
-    false
 }
 
 fn client_ip(remote_addr: Option<SocketAddr>, forwarded_for: Option<&str>) -> String {

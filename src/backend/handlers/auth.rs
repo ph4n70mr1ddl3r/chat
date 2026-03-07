@@ -148,10 +148,10 @@ pub async fn signup_handler(
 
     match queries::find_user_by_username(&pool, &req.username).await {
         Ok(Some(_)) => {
-            warn!("Username already exists: {}", sanitize_for_log(&req.username));
+            warn!("Signup failed: username taken ({})", sanitize_for_log(&req.username));
             return Ok(error_response!(
                 "CONFLICT",
-                "Username already exists",
+                "Unable to create account",
                 warp::http::StatusCode::CONFLICT
             ));
         }
@@ -267,7 +267,7 @@ pub async fn login_handler(
     let user = match queries::find_user_by_username(&pool, &req.username).await {
         Ok(Some(user)) => user,
         Ok(None) => {
-            warn!("Login failed: user not found ({})", sanitize_for_log(&req.username));
+            warn!("Login failed: invalid credentials");
             login_attempt_service.record_failed_attempt(&req.username).await;
             return Ok(error_response!(
                 "AUTH_ERROR",
@@ -290,7 +290,7 @@ pub async fn login_handler(
     };
 
     if user.is_deleted() {
-        warn!("Login failed: deleted account ({})", sanitize_for_log(&req.username));
+        warn!("Login failed: invalid credentials");
         login_attempt_service.record_failed_attempt(&req.username).await;
         return Ok(error_response!(
             "AUTH_ERROR",
@@ -304,7 +304,7 @@ pub async fn login_handler(
             login_attempt_service.clear_attempts(&req.username).await;
         }
         Ok(false) => {
-            warn!("Login failed: invalid password ({})", sanitize_for_log(&req.username));
+            warn!("Login failed: invalid credentials");
             login_attempt_service.record_failed_attempt(&req.username).await;
             return Ok(error_response!(
                 "AUTH_ERROR",
@@ -317,7 +317,7 @@ pub async fn login_handler(
                 target: "auth",
                 event = "auth.login.error",
                 error_type = "password_verification",
-                "Password verification error"
+                "Login failed: authentication error"
             );
             return Ok(error_response!(
                 "AUTH_ERROR",

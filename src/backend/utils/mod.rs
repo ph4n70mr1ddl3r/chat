@@ -1,5 +1,33 @@
 //! Utility functions shared across the backend
 
+use std::net::IpAddr;
+
+/// Default trusted proxy CIDR ranges for extracting client IPs from X-Forwarded-For headers.
+const DEFAULT_TRUSTED_PROXIES: &[&str] = &[
+    "10.0.0.0/8",
+    "172.16.0.0/12",
+    "192.168.0.0/16",
+    "127.0.0.0/8",
+    "::1/128",
+];
+
+/// Check if an IP address belongs to a trusted proxy range.
+///
+/// Trusted proxies are internal network ranges (RFC 1918) and localhost.
+/// Used to determine whether to trust X-Forwarded-For headers.
+pub fn is_trusted_proxy(remote_ip: &IpAddr) -> bool {
+    for cidr in DEFAULT_TRUSTED_PROXIES {
+        if cidr.contains('/') {
+            if let Ok(network) = cidr.parse::<ipnet::IpNet>() {
+                if network.contains(remote_ip) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
 /// Sanitize a string for safe logging.
 ///
 /// Limits length to 50 characters and only allows alphanumeric,
