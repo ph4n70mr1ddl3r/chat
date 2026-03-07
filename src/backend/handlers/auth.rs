@@ -17,7 +17,7 @@ use std::sync::Arc;
 /// Pre-computed dummy bcrypt hash for timing-attack resistant login.
 /// This is a hash of a dummy password ("DummyPassword123!") used to ensure
 /// password verification always runs even when user doesn't exist.
-const DUMMY_BCRYPT_HASH: &str = "$2b$12$LQv8wJ1ZQ7H8G8bS5h8Qe9O0o1iHtKrN6CWm";
+const DUMMY_BCRYPT_HASH: &str = "$2b$12$LQv8wJ1ZQ7H8G8bS5h8QeO0o1iHtKrN6CWmYrfVrY1BuBbbfvVVW9";
 
 macro_rules! error_response {
     ($code:expr, $message:expr, $status:expr) => {
