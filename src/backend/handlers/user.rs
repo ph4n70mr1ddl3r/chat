@@ -317,22 +317,11 @@ pub async fn delete_account(
 /// Handle POST /user/change-password
 pub async fn change_password(
     user_id: String,
-    request: ChangePasswordRequest,
     csrf_token: Option<String>,
+    req: ChangePasswordRequest,
     csrf_service: CsrfService,
     pool: SqlitePool,
 ) -> Result<impl Reply, Rejection> {
-    if request.current_password.len() > MAX_PASSWORD_LENGTH {
-        return Ok(reply::with_status(
-            reply::json(&ErrorBody {
-                code: "VALIDATION_ERROR".to_string(),
-                message: "Password exceeds maximum length".to_string(),
-                details: None,
-            }),
-            warp::http::StatusCode::BAD_REQUEST,
-        ));
-    }
-
     let csrf_token = match csrf_token {
         Some(token) => token,
         None => {
@@ -365,7 +354,7 @@ pub async fn change_password(
         ));
     }
 
-    if request.current_password.is_empty() {
+    if req.current_password.is_empty() {
         warn!("Change password request with empty current password");
         return Ok(reply::with_status(
             reply::json(&ErrorBody {
@@ -377,7 +366,7 @@ pub async fn change_password(
         ));
     }
 
-    if let Err(e) = validators::validate_password(&request.new_password) {
+    if let Err(e) = validators::validate_password(&req.new_password) {
         warn!("New password validation failed: {}", e);
         return Ok(reply::with_status(
             reply::json(&ErrorBody {
@@ -414,7 +403,7 @@ pub async fn change_password(
         }
     };
 
-    match AuthService::verify_password(&request.current_password, &user.password_hash) {
+    match AuthService::verify_password(&req.current_password, &user.password_hash) {
         Ok(true) => {}
         Ok(false) => {
             return Ok(reply::with_status(
@@ -439,7 +428,7 @@ pub async fn change_password(
         }
     }
 
-    let new_hash = match AuthService::hash_password(&request.new_password) {
+    let new_hash = match AuthService::hash_password(&req.new_password) {
         Ok(hash) => hash,
         Err(e) => {
             return Ok(reply::with_status(

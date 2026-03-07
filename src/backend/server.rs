@@ -781,7 +781,7 @@ async fn handle_change_password(
     req: user::ChangePasswordRequest,
     state: ServerState,
 ) -> Result<impl Reply, Rejection> {
-    user::change_password(user_id, req, csrf_token, state.csrf_service, state.pool).await
+    user::change_password(user_id, csrf_token, req, state.csrf_service, state.pool).await
 }
 
 fn client_ip(remote_addr: Option<SocketAddr>, forwarded_for: Option<&str>) -> String {

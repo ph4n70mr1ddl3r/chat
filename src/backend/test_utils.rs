@@ -30,6 +30,15 @@ pub async fn setup_test_db() -> SqlitePool {
             .expect("Failed to run migration statement");
     }
 
+    // Run missing indexes migration
+    let migration_sql = include_str!("db/migrations/003_add_missing_indexes.sql");
+    for statement in migration_sql.split(';').filter(|s| !s.trim().is_empty()) {
+        sqlx::query(statement)
+            .execute(&pool)
+            .await
+            .expect("Failed to run migration statement");
+    }
+
     pool
 }
 
