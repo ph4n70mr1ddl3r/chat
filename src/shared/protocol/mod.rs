@@ -12,6 +12,7 @@ pub const MAX_BATCH_SIZE: usize = 100;
 pub const MAX_DATA_SIZE: usize = 64 * 1024;
 
 /// Message status lifecycle
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum MessageStatus {

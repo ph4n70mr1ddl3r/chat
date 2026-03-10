@@ -7,6 +7,7 @@ use thiserror::Error;
 pub type Result<T> = std::result::Result<T, ChatError>;
 
 /// Chat application errors
+#[non_exhaustive]
 #[derive(Debug, Error, Clone)]
 pub enum ChatError {
     #[error("Authentication error: {0}")]

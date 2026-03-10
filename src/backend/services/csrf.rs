@@ -10,6 +10,7 @@ use subtle::ConstantTimeEq;
 
 const CSRF_TOKEN_VALIDITY_SECS: i64 = 3600;
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 pub enum CsrfValidationError {
     Expired,

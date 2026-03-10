@@ -98,6 +98,7 @@ impl From<ChatError> for ApiError {
             ChatError::TokenExpired => Self::unauthorized("Token has expired"),
             ChatError::TokenInvalid(msg) => Self::unauthorized(msg),
             ChatError::Timeout => Self::new(StatusCode::REQUEST_TIMEOUT, "TIMEOUT", "Request timed out"),
+            _ => Self::internal("An error occurred"),
         }
     }
 }

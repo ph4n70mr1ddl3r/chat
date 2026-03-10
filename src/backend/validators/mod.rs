@@ -2,6 +2,8 @@
 //!
 //! Provides reusable validators for usernames, passwords, emails, and other inputs
 
+use uuid::Uuid;
+
 /// Minimum username length
 const MIN_USERNAME_LENGTH: usize = 1;
 
@@ -19,6 +21,15 @@ const MAX_EMAIL_LOCAL_LENGTH: usize = 64;
 
 /// Maximum email domain length
 const MAX_EMAIL_DOMAIN_LENGTH: usize = 255;
+
+/// Validate UUID format
+///
+/// Returns Ok(()) if the string is a valid UUID, Err with a message otherwise.
+pub fn validate_uuid(id: &str) -> Result<(), String> {
+    Uuid::parse_str(id)
+        .map(|_| ())
+        .map_err(|_| "Invalid UUID format".to_string())
+}
 
 /// Validate username
 ///
@@ -248,5 +259,18 @@ mod tests {
     #[test]
     fn test_validate_email_missing_domain_dot() {
         assert!(validate_email("user@example").is_err());
+    }
+
+    #[test]
+    fn test_validate_uuid_valid() {
+        assert!(validate_uuid("550e8400-e29b-41d4-a716-446655440000").is_ok());
+        assert!(validate_uuid("00000000-0000-0000-0000-000000000000").is_ok());
+    }
+
+    #[test]
+    fn test_validate_uuid_invalid() {
+        assert!(validate_uuid("not-a-uuid").is_err());
+        assert!(validate_uuid("").is_err());
+        assert!(validate_uuid("550e8400-e29b-41d4-a716").is_err());
     }
 }

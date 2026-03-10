@@ -37,16 +37,22 @@ const MAX_DELIVERY_STATUS_BATCH: usize = 100;
 /// This function escapes characters to prevent HTML injection but does not
 /// validate or sanitize URL schemes, CSS, or JavaScript in more complex scenarios.
 fn sanitize_html(input: &str) -> String {
-    input
-        .chars()
-        .filter(|c| *c != '\0' && !c.is_control())
-        .collect::<String>()
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#x27;")
-        .replace('/', "&#x2F;")
+    let mut result = String::with_capacity(input.len() + input.len() / 4);
+    for c in input.chars() {
+        if c == '\0' || (c.is_control() && c != '\n' && c != '\r' && c != '\t') {
+            continue;
+        }
+        match c {
+            '&' => result.push_str("&amp;"),
+            '<' => result.push_str("&lt;"),
+            '>' => result.push_str("&gt;"),
+            '"' => result.push_str("&quot;"),
+            '\'' => result.push_str("&#x27;"),
+            '/' => result.push_str("&#x2F;"),
+            _ => result.push(c),
+        }
+    }
+    result
 }
 
 /// Parameters for building a message envelope

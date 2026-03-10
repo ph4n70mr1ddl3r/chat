@@ -22,7 +22,6 @@ struct StatusResponse {
     timestamp: i64,
     uptime_seconds: u64,
     database: DatabaseStatus,
-    metrics: StatusMetrics,
     #[serde(skip_serializing_if = "Option::is_none")]
     warning: Option<&'static str>,
 }
@@ -31,13 +30,6 @@ struct StatusResponse {
 struct DatabaseStatus {
     status: &'static str,
     engine: &'static str,
-}
-
-#[derive(Serialize)]
-struct StatusMetrics {
-    total_users: i64,
-    total_messages: i64,
-    online_connections: usize,
 }
 
 /// GET /health - lightweight readiness check
@@ -67,7 +59,7 @@ pub async fn health(state: ServerState) -> Result<impl Reply, Rejection> {
     Ok(reply::json(&response))
 }
 
-/// GET /status - richer diagnostics with database connectivity and simple metrics
+/// GET /status - basic server diagnostics with database connectivity
 pub async fn status(state: ServerState) -> Result<impl Reply, Rejection> {
     let uptime = state.start_time.elapsed().as_secs();
     let timestamp = chrono::Utc::now().timestamp_millis();
@@ -85,29 +77,6 @@ pub async fn status(state: ServerState) -> Result<impl Reply, Rejection> {
         );
         return Err(rejection(ApiError::internal("Database unreachable")));
     }
-
-    let total_users = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM users")
-        .fetch_one(&state.pool)
-        .await
-        .map_err(|e| {
-            warn!(target: "server", event = "server.status", error = %e, "Failed to count users");
-            rejection(ApiError::internal("Failed to read user metrics"))
-        })?;
-
-    let total_messages = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM messages")
-        .fetch_one(&state.pool)
-        .await
-        .map_err(|e| {
-            warn!(
-                target: "server",
-                event = "server.status",
-                error = %e,
-                "Failed to count messages"
-            );
-            rejection(ApiError::internal("Failed to read message metrics"))
-        })?;
-
-    let online_connections = state.connection_manager.get_online_users().await.len();
     
     let warning = if state.config.is_ephemeral_secret {
         Some("Running with ephemeral JWT secret - not suitable for production")
@@ -124,20 +93,13 @@ pub async fn status(state: ServerState) -> Result<impl Reply, Rejection> {
             status: "connected",
             engine: "sqlite",
         },
-        metrics: StatusMetrics {
-            total_users,
-            total_messages,
-            online_connections,
-        },
         warning,
     };
 
     info!(
         target: "server",
         event = "server.status",
-        total_users,
-        total_messages,
-        online_connections,
+        uptime_seconds = uptime,
         is_ephemeral_secret = state.config.is_ephemeral_secret,
         "Status check served"
     );

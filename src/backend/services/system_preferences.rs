@@ -10,6 +10,7 @@ use crate::models::AppState;
 use std::sync::{Arc, Mutex};
 
 /// System preference for motion animation
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MotionPreference {
     /// Show animations (default)
