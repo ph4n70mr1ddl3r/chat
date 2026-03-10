@@ -521,12 +521,26 @@ pub async fn get_all_pending_messages(pool: &SqlitePool) -> Result<Vec<Message>,
     .map_err(|e| format!("Failed to get all pending messages: {}", e))
 }
 
+/// Valid message status values
+pub const VALID_STATUSES: &[&str] = &["pending", "sent", "delivered", "read", "failed"];
+
+/// Validate message status
+fn validate_status(status: &str) -> Result<(), String> {
+    if VALID_STATUSES.contains(&status) {
+        Ok(())
+    } else {
+        Err(format!("Invalid message status: {}", status))
+    }
+}
+
 /// Update message status
 pub async fn update_message_status(
     pool: &SqlitePool,
     message_id: &str,
     status: &str,
 ) -> Result<(), String> {
+    validate_status(status)?;
+    
     sqlx::query("UPDATE messages SET status = ? WHERE id = ?")
         .bind(status)
         .bind(message_id)

@@ -14,6 +14,7 @@ use warp::ws::Message as WsMessage;
 
 const MAX_TOTAL_CONNECTIONS: usize = 10_000;
 const MAX_CONNECTIONS_PER_USER: usize = 10;
+const MAX_MESSAGE_ID_LENGTH: usize = 100;
 
 /// Maximum allowed timestamp drift in milliseconds (5 minutes)
 /// This allows for reasonable clock drift between client and server
@@ -245,14 +246,16 @@ pub struct MessageValidator;
 impl MessageValidator {
     /// Validate message envelope structure
     pub fn validate_envelope(envelope: &MessageEnvelope) -> Result<(), String> {
-        // Check ID is non-empty UUID
         if envelope.id.is_empty() {
             return Err("Message ID cannot be empty".to_string());
         }
 
-        // Validate UUID format
+        if envelope.id.len() > MAX_MESSAGE_ID_LENGTH {
+            return Err("Message ID too long".to_string());
+        }
+
         if uuid::Uuid::parse_str(&envelope.id).is_err() {
-            return Err(format!("Message ID must be a valid UUID, got: {}", envelope.id));
+            return Err("Invalid message ID format".to_string());
         }
 
         // Check message type is valid
@@ -349,13 +352,11 @@ impl ErrorResponse {
         )
     }
 
-    pub fn recipient_not_found(recipient_id: &str) -> WsMessage {
+    pub fn recipient_not_found(_recipient_id: &str) -> WsMessage {
         Self::create_error_response(
             "RECIPIENT_NOT_FOUND",
             "Recipient user not found",
-            Some(serde_json::json!({
-                "recipientId": recipient_id
-            })),
+            None,
         )
     }
 

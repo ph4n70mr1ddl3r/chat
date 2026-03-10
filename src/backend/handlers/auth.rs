@@ -336,7 +336,7 @@ pub async fn login_handler(
     };
 
     login_attempt_service.clear_attempts(&req.username).await;
-    info!("User logged in: {}", req.username);
+    info!("User logged in: {}", sanitize_for_log(&req.username));
 
     Ok(reply::with_status(
         reply::json(&AuthResponse {

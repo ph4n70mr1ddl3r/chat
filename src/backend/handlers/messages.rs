@@ -39,7 +39,7 @@ const MAX_DELIVERY_STATUS_BATCH: usize = 100;
 fn sanitize_html(input: &str) -> String {
     input
         .chars()
-        .filter(|c| *c != '\0')
+        .filter(|c| *c != '\0' && !c.is_control())
         .collect::<String>()
         .replace('&', "&amp;")
         .replace('<', "&lt;")
