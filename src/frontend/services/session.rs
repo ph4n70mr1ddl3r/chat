@@ -14,6 +14,7 @@ pub struct SessionData {
     pub username: String,
     pub token: String,
     pub expires_at: i64,
+    pub csrf_token: String,
 }
 
 /// Session manager
@@ -81,12 +82,14 @@ impl SessionManager {
         token: &str,
         username: &str,
         expires_at: i64,
+        csrf_token: &str,
     ) -> Result<(), String> {
         let session = SessionData {
             user_id: user_id.to_string(),
             token: token.to_string(),
             username: username.to_string(),
             expires_at,
+            csrf_token: csrf_token.to_string(),
         };
 
         // Ensure parent directory exists
@@ -107,8 +110,13 @@ impl SessionManager {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&self.session_file, std::fs::Permissions::from_mode(0o600))
-                .map_err(|e| format!("Failed to set secure file permissions: {}. Session file may be readable by other users.", e))?;
+            if let Err(e) = std::fs::set_permissions(&self.session_file, std::fs::Permissions::from_mode(0o600)) {
+                tracing::warn!("Failed to set secure file permissions: {}", e);
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            tracing::warn!("Session file permissions not enforced on non-Unix systems - ensure proper filesystem access controls");
         }
 
         match self.current_session.lock() {
@@ -268,6 +276,7 @@ mod tests {
             username: "alice".to_string(),
             token: "eyJhbGc...".to_string(),
             expires_at: 1702657890,
+            csrf_token: "csrf-token-123".to_string(),
         };
 
         let json = serde_json::to_string(&session).unwrap();
@@ -297,6 +306,7 @@ mod tests {
             username: "testuser".to_string(),
             token: "test_token".to_string(),
             expires_at: chrono::Utc::now().timestamp() + 3600,
+            csrf_token: "test-csrf-token".to_string(),
         };
 
         // Save
@@ -306,6 +316,7 @@ mod tests {
                 &session.token,
                 &session.username,
                 session.expires_at,
+                &session.csrf_token,
             )
             .unwrap();
 

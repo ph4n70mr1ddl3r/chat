@@ -14,9 +14,9 @@ use futures::{SinkExt, StreamExt};
 use sqlx::SqlitePool;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, oneshot};
-use tokio::time::{timeout, Duration};
+use tokio::time::timeout;
 use tracing::{info, warn};
 use warp::cors::Cors;
 use warp::filters::ws::{WebSocket, Ws};
@@ -39,6 +39,9 @@ const MAX_BODY_SIZE: u64 = 1024;
 
 /// WebSocket read timeout in seconds - prevents hanging connections
 const WS_READ_TIMEOUT_SECS: u64 = 300;
+
+/// Per-connection message rate limit: max messages per minute
+const WS_MAX_MESSAGES_PER_MINUTE: u32 = 60;
 
 /// Auth rate limit: max attempts per window
 const AUTH_RATE_LIMIT_MAX_ATTEMPTS: u32 = 5;
@@ -497,6 +500,16 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
     let user_id = claims.sub.clone();
     info!("WebSocket connection established for user: {}", user_id);
 
+    struct ConnectionRateLimit {
+        message_count: u32,
+        window_start: Instant,
+    }
+
+    let mut rate_limit = ConnectionRateLimit {
+        message_count: 0,
+        window_start: Instant::now(),
+    };
+
     // Lookup username from database
     let username = match crate::db::queries::find_user_by_id(&state.pool, &user_id).await {
         Ok(Some(user)) => user.username,
@@ -592,6 +605,22 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
                     "Received WebSocket message from user {}: {:?}",
                     user_id, msg
                 );
+
+                // Per-connection rate limiting
+                let now = Instant::now();
+                if now.duration_since(rate_limit.window_start) > Duration::from_secs(60) {
+                    rate_limit.message_count = 0;
+                    rate_limit.window_start = now;
+                }
+                rate_limit.message_count += 1;
+                if rate_limit.message_count > WS_MAX_MESSAGES_PER_MINUTE {
+                    warn!("Rate limiting user {} for message flood ({} messages/min)", user_id, rate_limit.message_count);
+                    let mut sender = ws_tx.lock().await;
+                    let _ = sender.send(websocket::ErrorResponse::server_error(
+                        "Rate limit exceeded: too many messages",
+                    )).await;
+                    break;
+                }
 
                 if let Err(error_response) = enforce_frame_size(&msg, state.config.max_message_size)
                 {

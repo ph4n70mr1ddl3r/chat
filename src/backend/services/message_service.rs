@@ -8,6 +8,8 @@ use chat_shared::protocol::MessageStatus;
 use sqlx::SqlitePool;
 use tracing::{info, warn};
 
+const MAX_BATCH_UPDATES: usize = 100;
+
 #[derive(Clone)]
 /// Message service
 pub struct MessageService {
@@ -352,6 +354,14 @@ impl MessageService {
         user_id: &str,
         updates: Vec<(String, String)>, // (message_id, new_status)
     ) -> Result<Vec<Message>, String> {
+        if updates.len() > MAX_BATCH_UPDATES {
+            return Err(format!(
+                "Too many updates in batch (max {}, got {})",
+                MAX_BATCH_UPDATES,
+                updates.len()
+            ));
+        }
+
         let mut updated_messages = Vec::new();
 
         for (message_id, new_status) in updates {

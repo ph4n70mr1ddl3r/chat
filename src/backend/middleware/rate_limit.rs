@@ -131,13 +131,20 @@ impl RateLimiter {
         }
 
         if entries.len() >= MAX_RATE_LIMIT_ENTRIES {
-            entries.retain(|_, entry| entry.window_start.elapsed() <= self.window_duration);
+            let now = Instant::now();
+            let window_duration = self.window_duration;
+            
+            entries.retain(|_, entry| now.duration_since(entry.window_start) <= window_duration);
 
             if entries.len() >= MAX_RATE_LIMIT_ENTRIES {
-                let mut entries_vec: Vec<_> = entries.iter().collect();
-                entries_vec.sort_by_key(|(_, entry)| entry.window_start);
-                let to_remove = entries_vec.len().saturating_sub(MAX_RATE_LIMIT_ENTRIES - 10);
-                let keys_to_remove: Vec<_> = entries_vec.into_iter().take(to_remove).map(|(ip, _)| ip.clone()).collect();
+                let keys_to_remove: Vec<String> = {
+                    let mut entries_vec: Vec<_> = entries.iter().collect();
+                    entries_vec.sort_by_key(|(_, entry)| entry.window_start);
+                    entries_vec.into_iter()
+                        .take(entries.len().saturating_sub(MAX_RATE_LIMIT_ENTRIES - 10))
+                        .map(|(ip, _)| ip.clone())
+                        .collect()
+                };
                 for ip in keys_to_remove {
                     entries.remove(&ip);
                 }

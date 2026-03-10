@@ -19,6 +19,7 @@ pub struct AuthResponse {
     pub username: String,
     pub token: String,
     pub expires_in: u64,
+    pub csrf_token: String,
 }
 
 /// Login request payload
@@ -123,5 +124,21 @@ mod tests {
         let json = serde_json::to_string(&request).unwrap();
         assert!(json.contains("alice"));
         assert!(json.contains("TestPass123"));
+    }
+
+    #[test]
+    fn test_auth_response_deserialization() {
+        let json = r#"{
+            "user_id": "user123",
+            "username": "alice",
+            "token": "jwt-token-here",
+            "expires_in": 3600,
+            "csrf_token": "csrf-token-123"
+        }"#;
+
+        let response: AuthResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(response.user_id, "user123");
+        assert_eq!(response.username, "alice");
+        assert_eq!(response.csrf_token, "csrf-token-123");
     }
 }
