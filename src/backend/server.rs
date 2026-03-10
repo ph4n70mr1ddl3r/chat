@@ -28,7 +28,7 @@ use crate::handlers::dispatcher::{DispatchResult, MessageDispatcher};
 use crate::handlers::handshake::HandshakeValidator;
 use crate::handlers::messages::MessageHandler;
 use crate::services::{CsrfService, MessageQueueService, PresenceService};
-use crate::utils::is_trusted_proxy;
+use crate::utils::{is_trusted_proxy, sanitize_for_log};
 use chat_shared::protocol::TokenClaims;
 
 use crate::handlers::{self, auth, conversation, server as server_handlers, user, websocket};
@@ -428,6 +428,10 @@ pub fn create_routes(
             "geolocation=(), microphone=()",
         ))
         .with(warp::reply::with::default_header(
+            "Content-Security-Policy",
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+        ))
+        .with(warp::reply::with::default_header(
             "X-XSS-Protection",
             "1; mode=block",
         ))
@@ -804,10 +808,16 @@ fn client_ip(remote_addr: Option<SocketAddr>, forwarded_for: Option<&str>) -> St
             }
         }
         
-        if let Some(client_ip) = xff.split(',').next() {
-            let client_ip = client_ip.trim();
-            if !client_ip.is_empty() {
-                return client_ip.to_string();
+        if let Some(client_ip_str) = xff.split(',').next() {
+            let client_ip_str = client_ip_str.trim();
+            if !client_ip_str.is_empty() {
+                if let Ok(_parsed) = client_ip_str.parse::<std::net::IpAddr>() {
+                    return client_ip_str.to_string();
+                }
+                tracing::warn!(
+                    "Invalid IP address in X-Forwarded-For header: {}",
+                    sanitize_for_log(client_ip_str)
+                );
             }
         }
     }

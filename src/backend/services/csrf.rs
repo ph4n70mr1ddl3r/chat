@@ -31,6 +31,12 @@ struct CsrfClaims {
     nonce: String,
 }
 
+impl CsrfClaims {
+    fn validate_nonce(&self) -> bool {
+        !self.nonce.is_empty() && uuid::Uuid::parse_str(&self.nonce).is_ok()
+    }
+}
+
 impl CsrfService {
     pub fn new(secret: &str) -> Self {
         Self {
@@ -67,6 +73,10 @@ impl CsrfService {
                         "CSRF token expired"
                     );
                     return Err(CsrfValidationError::Expired);
+                }
+                if !data.claims.validate_nonce() {
+                    tracing::warn!("CSRF token has invalid or missing nonce");
+                    return Err(CsrfValidationError::InvalidToken);
                 }
                 if !bool::from(data.claims.sub.as_bytes().ct_eq(user_id.as_bytes())) {
                     tracing::warn!(
