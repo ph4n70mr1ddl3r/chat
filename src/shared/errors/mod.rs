@@ -79,7 +79,7 @@ impl ChatError {
         match self {
             ChatError::AuthError(_) => "AUTH_ERROR",
             ChatError::MessageError(_) => "MESSAGE_ERROR",
-            ChatError::DatabaseError { .. } => "INTERNAL_ERROR",
+            ChatError::DatabaseError { .. } | ChatError::InternalError { .. } => "INTERNAL_ERROR",
             ChatError::ValidationError(_) => "VALIDATION_ERROR",
             ChatError::NotFound(_) => "NOT_FOUND",
             ChatError::Conflict(_) => "CONFLICT",
@@ -87,7 +87,6 @@ impl ChatError {
             ChatError::TokenExpired => "TOKEN_EXPIRED",
             ChatError::TokenInvalid(_) => "TOKEN_INVALID",
             ChatError::Timeout => "TIMEOUT",
-            ChatError::InternalError { .. } => "INTERNAL_ERROR",
         }
     }
 
@@ -95,8 +94,7 @@ impl ChatError {
     #[must_use]
     pub fn http_status(&self) -> u16 {
         match self {
-            ChatError::AuthError(_) => 401,
-            ChatError::TokenExpired | ChatError::TokenInvalid(_) => 401,
+            ChatError::AuthError(_) | ChatError::TokenExpired | ChatError::TokenInvalid(_) => 401,
             ChatError::Timeout => 408,
             ChatError::MessageError(_) | ChatError::ValidationError(_) => 400,
             ChatError::DatabaseError { .. } | ChatError::InternalError { .. } => 500,
@@ -110,16 +108,16 @@ impl ChatError {
     #[must_use]
     pub fn client_message(&self) -> String {
         match self {
-            ChatError::DatabaseError { .. } => "An internal error occurred".to_string(),
-            ChatError::InternalError { .. } => "An internal error occurred".to_string(),
-            ChatError::AuthError(msg) => msg.clone(),
-            ChatError::MessageError(msg) => msg.clone(),
+            ChatError::DatabaseError { .. } | ChatError::InternalError { .. } => {
+                "An internal error occurred".to_string()
+            }
+            ChatError::AuthError(msg) | ChatError::MessageError(msg) => msg.clone(),
             ChatError::ValidationError(msg) => msg.clone(),
             ChatError::NotFound(msg) => msg.clone(),
             ChatError::Conflict(msg) => msg.clone(),
             ChatError::RateLimited(msg) => msg.clone(),
             ChatError::TokenExpired => "Token has expired".to_string(),
-            ChatError::TokenInvalid(msg) => format!("Invalid token: {}", msg),
+            ChatError::TokenInvalid(msg) => format!("Invalid token: {msg}"),
             ChatError::Timeout => "Request timed out".to_string(),
         }
     }
@@ -239,7 +237,8 @@ impl ErrorResponse {
         self
     }
 
-    /// Create from ChatError
+    /// Create from `ChatError`
+    #[must_use]
     pub fn from_error(err: &ChatError) -> Self {
         Self {
             error: err.code().to_string(),

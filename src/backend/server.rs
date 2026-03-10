@@ -1014,11 +1014,6 @@ mod tests {
             .reply(&routes)
             .await;
 
-        eprintln!(
-            "Response status: {}, body: {:?}",
-            resp.status(),
-            String::from_utf8_lossy(resp.body())
-        );
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 
