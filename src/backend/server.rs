@@ -681,7 +681,7 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
             }
         }
     }
-    info!("WebSocket read timeout for user: {}", user_id);
+    info!("WebSocket connection closed for user: {}", user_id);
 
     let _ = cancel_tx.send(());
 
