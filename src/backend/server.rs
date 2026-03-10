@@ -263,11 +263,11 @@ pub fn create_routes(
                     .and_then(handle_logout),
             )
             .or(
-                // POST /auth/refresh
+                // POST /auth/refresh - use auth rate limiter for stricter control
                 warp::post()
                     .and(warp::path("refresh"))
                     .and(warp::path::end())
-                    .and(rate_limit_filter.clone())
+                    .and(auth_rate_limit_filter.clone())
                     .and(warp::body::content_length_limit(MAX_BODY_SIZE))
                     .and(warp::header::exact("Content-Type", "application/json"))
                     .and(warp::body::json())

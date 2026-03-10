@@ -16,8 +16,8 @@ impl SettingsScreen {
         on_back: Box<dyn Fn() + Send + Sync>,
         on_account_deleted: Box<dyn Fn() + Send + Sync>,
     ) -> Self {
-        let ui = SettingsScreenComponent::new().expect("Failed to create settings screen UI");
-        let runtime = Arc::new(Runtime::new().expect("Failed to create async runtime"));
+        let ui = SettingsScreenComponent::new().map_err(|e| format!("Failed to create settings screen UI: {}", e)).unwrap_or_else(|e| panic!("{}", e));
+        let runtime = Arc::new(Runtime::new().map_err(|e| format!("Failed to create async runtime: {}", e)).unwrap_or_else(|e| panic!("{}", e)));
 
         ui.set_username(username.into());
 
@@ -29,7 +29,13 @@ impl SettingsScreen {
         let ui_weak = ui.as_weak();
         let runtime_clone = runtime.clone();
         ui.on_change_password(move || {
-            let ui = ui_weak.upgrade().expect("Failed to upgrade weak UI reference in change_password handler");
+            let ui = match ui_weak.upgrade() {
+                Some(ui) => ui,
+                None => {
+                    tracing::error!("UI reference lost during password change");
+                    return;
+                }
+            };
             let current = ui.get_current_password().to_string();
             let new = ui.get_new_password().to_string();
 
@@ -69,7 +75,13 @@ impl SettingsScreen {
         let runtime_clone = runtime.clone();
         let deleted_cb = Arc::new(on_account_deleted);
         ui.on_delete_account(move || {
-            let ui = ui_weak.upgrade().expect("Failed to upgrade weak UI reference in delete_account handler");
+            let ui = match ui_weak.upgrade() {
+                Some(ui) => ui,
+                None => {
+                    tracing::error!("UI reference lost during account deletion");
+                    return;
+                }
+            };
             let password = ui.get_delete_password().to_string();
 
             ui.set_is_loading(true);
@@ -84,7 +96,9 @@ impl SettingsScreen {
                         slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_weak_inner.upgrade() {
                                 ui.set_is_loading(false);
-                                ui.hide().expect("failed to hide settings window");
+                                if let Err(e) = ui.hide() {
+                                    tracing::error!("Failed to hide settings window: {}", e);
+                                }
                                 deleted_cb_inner();
                             }
                         })
@@ -108,7 +122,9 @@ impl SettingsScreen {
     }
 
     pub fn show(&self) {
-        self.ui.show().expect("Failed to show settings screen");
+        if let Err(e) = self.ui.show() {
+            tracing::error!("Failed to show settings screen: {}", e);
+        }
     }
 }
 

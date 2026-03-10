@@ -77,14 +77,23 @@ impl LoginAttemptService {
     }
 
     pub async fn is_locked(&self, username: &str) -> bool {
-        let mut attempts = self.attempts.write().await;
         let username_lower = username.to_lowercase();
         
+        {
+            let attempts = self.attempts.read().await;
+            if let Some(attempt) = attempts.get(&username_lower) {
+                if let Some(locked_until) = attempt.locked_until {
+                    if Instant::now() < locked_until {
+                        return true;
+                    }
+                }
+            }
+        }
+        
+        let mut attempts = self.attempts.write().await;
         if let Some(attempt) = attempts.get_mut(&username_lower) {
             if let Some(locked_until) = attempt.locked_until {
-                if Instant::now() < locked_until {
-                    return true;
-                } else {
+                if Instant::now() >= locked_until {
                     attempt.locked_until = None;
                     attempt.count = 0;
                     attempt.first_attempt = Instant::now();

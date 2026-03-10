@@ -358,12 +358,15 @@ pub async fn change_password(
         ));
     }
 
-    if req.current_password.is_empty() {
-        warn!("Change password request with empty current password");
+    if req.current_password.is_empty() || req.current_password.len() > MAX_PASSWORD_LENGTH {
         return Ok(reply::with_status(
             reply::json(&ErrorBody {
                 code: "VALIDATION_ERROR".to_string(),
-                message: "Current password is required".to_string(),
+                message: if req.current_password.is_empty() {
+                    "Current password is required"
+                } else {
+                    "Current password exceeds maximum length"
+                }.to_string(),
                 details: None,
             }),
             warp::http::StatusCode::BAD_REQUEST,

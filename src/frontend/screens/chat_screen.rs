@@ -80,7 +80,12 @@ impl ChatScreen {
         let session_token =
             crate::services::session::get_token().ok_or("No authentication token found")?;
         let ws_url = std::env::var("SERVER_WS_URL")
-            .unwrap_or_else(|_| "ws://localhost:8080/socket".to_string());
+            .unwrap_or_else(|_| {
+                #[cfg(debug_assertions)]
+                { "ws://localhost:8080/socket".to_string() }
+                #[cfg(not(debug_assertions))]
+                { "wss://localhost:8080/socket".to_string() }
+            });
         let (event_tx, event_rx) = mpsc::unbounded_channel::<crate::services::WebSocketEvent>();
         let websocket_client = Some(crate::services::WebSocketClient::connect(
             ws_url,
@@ -115,17 +120,21 @@ impl ChatScreen {
             let ws_client = ws_for_logout.clone();
 
             runtime.spawn(async move {
-                // 1. Call API logout
-                let _ = api_logout().await;
+                if let Err(e) = api_logout().await {
+                    tracing::warn!("API logout failed: {}", e);
+                }
 
-                // 2. Clear session locally
-                let _ = crate::services::session::get_session_manager()
+                if let Err(e) = crate::services::session::get_session_manager()
                     .clear_session()
-                    .await;
+                    .await
+                {
+                    tracing::warn!("Failed to clear session: {}", e);
+                }
 
-                // 3. Disconnect WebSocket
                 if let Some(ws) = ws_client.as_ref() {
-                    let _ = ws.disconnect();
+                    if let Err(e) = ws.disconnect() {
+                        tracing::warn!("WebSocket disconnect failed: {}", e);
+                    }
                 }
 
                 slint::invoke_from_event_loop(move || {
