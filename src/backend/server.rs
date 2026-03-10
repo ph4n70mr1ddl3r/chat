@@ -698,7 +698,7 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
             }
         }
     }
-    info!("WebSocket connection closed for user: {}", user_id);
+    tracing::info!("WebSocket connection cleanup complete for user: {}", user_id);
 }
 
 /// Handle signup request
