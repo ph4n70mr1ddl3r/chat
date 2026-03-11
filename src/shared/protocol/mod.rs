@@ -30,13 +30,13 @@ pub enum MessageStatus {
 
 impl MessageStatus {
     #[must_use]
-    pub fn as_str(&self) -> &str {
+    pub const fn as_str(&self) -> &str {
         match self {
-            MessageStatus::Pending => "pending",
-            MessageStatus::Sent => "sent",
-            MessageStatus::Delivered => "delivered",
-            MessageStatus::Read => "read",
-            MessageStatus::Failed => "failed",
+            Self::Pending => "pending",
+            Self::Sent => "sent",
+            Self::Delivered => "delivered",
+            Self::Read => "read",
+            Self::Failed => "failed",
         }
     }
 }
@@ -46,11 +46,11 @@ impl std::str::FromStr for MessageStatus {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "pending" => Ok(MessageStatus::Pending),
-            "sent" => Ok(MessageStatus::Sent),
-            "delivered" => Ok(MessageStatus::Delivered),
-            "read" => Ok(MessageStatus::Read),
-            "failed" => Ok(MessageStatus::Failed),
+            "pending" => Ok(Self::Pending),
+            "sent" => Ok(Self::Sent),
+            "delivered" => Ok(Self::Delivered),
+            "read" => Ok(Self::Read),
+            "failed" => Ok(Self::Failed),
             _ => Err(format!("Unknown status: {s}")),
         }
     }

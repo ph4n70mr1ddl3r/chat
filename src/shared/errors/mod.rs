@@ -62,46 +62,46 @@ impl std::error::Error for DatabaseErrorSource {}
 impl ChatError {
     /// Create a database error with internal context
     pub fn database(msg: impl Into<String>) -> Self {
-        ChatError::DatabaseError {
+        Self::DatabaseError {
             source: DatabaseErrorSource(msg.into()),
         }
     }
 
     /// Create an internal error with context
     pub fn internal(msg: impl Into<String>) -> Self {
-        ChatError::InternalError {
+        Self::InternalError {
             internal_message: msg.into(),
         }
     }
 
     /// Get error code for HTTP/WebSocket responses
     #[must_use]
-    pub fn code(&self) -> &str {
+    pub const fn code(&self) -> &str {
         match self {
-            ChatError::AuthError(_) => "AUTH_ERROR",
-            ChatError::MessageError(_) => "MESSAGE_ERROR",
-            ChatError::DatabaseError { .. } | ChatError::InternalError { .. } => "INTERNAL_ERROR",
-            ChatError::ValidationError(_) => "VALIDATION_ERROR",
-            ChatError::NotFound(_) => "NOT_FOUND",
-            ChatError::Conflict(_) => "CONFLICT",
-            ChatError::RateLimited(_) => "RATE_LIMITED",
-            ChatError::TokenExpired => "TOKEN_EXPIRED",
-            ChatError::TokenInvalid(_) => "TOKEN_INVALID",
-            ChatError::Timeout => "TIMEOUT",
+            Self::AuthError(_) => "AUTH_ERROR",
+            Self::MessageError(_) => "MESSAGE_ERROR",
+            Self::DatabaseError { .. } | Self::InternalError { .. } => "INTERNAL_ERROR",
+            Self::ValidationError(_) => "VALIDATION_ERROR",
+            Self::NotFound(_) => "NOT_FOUND",
+            Self::Conflict(_) => "CONFLICT",
+            Self::RateLimited(_) => "RATE_LIMITED",
+            Self::TokenExpired => "TOKEN_EXPIRED",
+            Self::TokenInvalid(_) => "TOKEN_INVALID",
+            Self::Timeout => "TIMEOUT",
         }
     }
 
     /// Get HTTP status code equivalent
     #[must_use]
-    pub fn http_status(&self) -> u16 {
+    pub const fn http_status(&self) -> u16 {
         match self {
-            ChatError::AuthError(_) | ChatError::TokenExpired | ChatError::TokenInvalid(_) => 401,
-            ChatError::Timeout => 408,
-            ChatError::MessageError(_) | ChatError::ValidationError(_) => 400,
-            ChatError::DatabaseError { .. } | ChatError::InternalError { .. } => 500,
-            ChatError::NotFound(_) => 404,
-            ChatError::Conflict(_) => 409,
-            ChatError::RateLimited(_) => 429,
+            Self::AuthError(_) | Self::TokenExpired | Self::TokenInvalid(_) => 401,
+            Self::Timeout => 408,
+            Self::MessageError(_) | Self::ValidationError(_) => 400,
+            Self::DatabaseError { .. } | Self::InternalError { .. } => 500,
+            Self::NotFound(_) => 404,
+            Self::Conflict(_) => 409,
+            Self::RateLimited(_) => 429,
         }
     }
 
@@ -109,17 +109,18 @@ impl ChatError {
     #[must_use]
     pub fn client_message(&self) -> String {
         match self {
-            ChatError::DatabaseError { .. } | ChatError::InternalError { .. } => {
+            Self::DatabaseError { .. } | Self::InternalError { .. } => {
                 "An internal error occurred".to_string()
             }
-            ChatError::AuthError(msg) | ChatError::MessageError(msg) => msg.clone(),
-            ChatError::ValidationError(msg) => msg.clone(),
-            ChatError::NotFound(msg) => msg.clone(),
-            ChatError::Conflict(msg) => msg.clone(),
-            ChatError::RateLimited(msg) => msg.clone(),
-            ChatError::TokenExpired => "Token has expired".to_string(),
-            ChatError::TokenInvalid(msg) => format!("Invalid token: {msg}"),
-            ChatError::Timeout => "Request timed out".to_string(),
+            Self::AuthError(msg)
+            | Self::MessageError(msg)
+            | Self::ValidationError(msg)
+            | Self::NotFound(msg)
+            | Self::Conflict(msg)
+            | Self::RateLimited(msg) => msg.clone(),
+            Self::TokenExpired => "Token has expired".to_string(),
+            Self::TokenInvalid(msg) => format!("Invalid token: {msg}"),
+            Self::Timeout => "Request timed out".to_string(),
         }
     }
 }

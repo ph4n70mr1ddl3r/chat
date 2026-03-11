@@ -18,12 +18,12 @@ pub enum AuthEventType {
 
 impl AuthEventType {
     #[must_use]
-    pub fn as_str(&self) -> &str {
+    pub const fn as_str(&self) -> &str {
         match self {
-            AuthEventType::LoginSuccess => "login_success",
-            AuthEventType::LoginFailed => "login_failed",
-            AuthEventType::Signup => "signup",
-            AuthEventType::Logout => "logout",
+            Self::LoginSuccess => "login_success",
+            Self::LoginFailed => "login_failed",
+            Self::Signup => "signup",
+            Self::Logout => "logout",
         }
     }
 }
