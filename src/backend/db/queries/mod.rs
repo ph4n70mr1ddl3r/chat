@@ -87,7 +87,7 @@ pub async fn get_failed_attempts(
     .await
     .map_err(|e| format!("Failed to get failed attempts: {}", e))?;
 
-    Ok(result as u32)
+    Ok(result.max(0) as u32)
 }
 
 /// Insert a new user into the database
