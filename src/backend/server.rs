@@ -1108,11 +1108,7 @@ mod tests {
         assert_eq!(second.status(), StatusCode::TOO_MANY_REQUESTS);
     }
 
-    // NOTE: This test is disabled as warp::test framework limitations prevent
-    // proper simulation of the auth rate limiter. The functionality works correctly
-    // in production as verified by integration tests. Consider replacing with
-    // integration tests or custom test framework when available.
-    #[ignore]
+    #[ignore = "warp::test framework limitations prevent proper simulation of auth rate limiter; functionality verified by integration tests"]
     #[tokio::test]
     async fn test_auth_rate_limit_blocks_after_failures() {
         let pool = init_test_pool().await;

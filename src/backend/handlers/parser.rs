@@ -307,7 +307,7 @@ mod tests {
         let envelope = MessageEnvelope {
             id: uuid::Uuid::new_v4().to_string(),
             msg_type: "message".to_string(),
-            timestamp: 1234567890,
+            timestamp: 1_234_567_890,
             data: json!({}),
         };
 
@@ -319,7 +319,7 @@ mod tests {
         let envelope = MessageEnvelope {
             id: "msg-123".to_string(),
             msg_type: "message".to_string(),
-            timestamp: 1234567890,
+            timestamp: 1_234_567_890,
             data: json!({
                 "recipientId": "user-456",
                 "content": "Hello"
@@ -338,7 +338,7 @@ mod tests {
         let envelope = MessageEnvelope {
             id: "msg-123".to_string(),
             msg_type: "message".to_string(),
-            timestamp: 1234567890,
+            timestamp: 1_234_567_890,
             data: json!({
                 "recipientId": "",
                 "content": ""
@@ -354,7 +354,7 @@ mod tests {
         let envelope = MessageEnvelope {
             id: "typing-123".to_string(),
             msg_type: "typing".to_string(),
-            timestamp: 1234567890,
+            timestamp: 1_234_567_890,
             data: json!({
                 "recipientId": "user-456",
                 "isTyping": true
@@ -371,7 +371,7 @@ mod tests {
         let envelope = MessageEnvelope {
             id: "typing-123".to_string(),
             msg_type: "typing".to_string(),
-            timestamp: 1234567890,
+            timestamp: 1_234_567_890,
             data: json!({
                 "recipientId": "",
                 "isTyping": true

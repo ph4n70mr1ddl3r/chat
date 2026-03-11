@@ -85,11 +85,10 @@ impl LoginAttemptService {
             if let Some(locked_until) = attempt.locked_until {
                 if now < locked_until {
                     return true;
-                } else {
-                    attempt.locked_until = None;
-                    attempt.count = 0;
-                    attempt.first_attempt = now;
                 }
+                attempt.locked_until = None;
+                attempt.count = 0;
+                attempt.first_attempt = now;
             }
         }
         
