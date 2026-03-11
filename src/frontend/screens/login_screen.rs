@@ -79,6 +79,7 @@ impl LoginScreen {
                             &response.token,
                             &response.username,
                             response.expires_in as i64,
+                            &response.csrf_token,
                         ) {
                             tracing::error!("Failed to save session: {}", e);
                         }

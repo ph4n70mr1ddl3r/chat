@@ -135,7 +135,10 @@ impl AuthService {
     /// Note: bcrypt::verify() internally uses constant-time comparison to prevent
     /// timing attacks, so no additional protection is needed here.
     pub fn verify_password(password: &str, hash: &str) -> Result<bool, String> {
-        verify(password, hash).map_err(|_| "Password verification failed".to_string())
+        verify(password, hash).map_err(|e| {
+            tracing::debug!("Password verification error: {}", e);
+            "Password verification failed".to_string()
+        })
     }
 
     /// Create a new user with validated password

@@ -443,10 +443,13 @@ fn build_typing_envelope(recipient_id: String, is_typing: bool) -> Result<Messag
 }
 
 fn current_timestamp_ms() -> u64 {
-    let now = std::time::SystemTime::now()
+    std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default();
-    now.as_millis() as u64
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or_else(|_| {
+            tracing::error!("System clock error - time is before Unix epoch");
+            0
+        })
 }
 
 /// Push a command to the pending queue with backpressure handling.

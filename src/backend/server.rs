@@ -602,8 +602,9 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
         match result {
             Some(Ok(msg)) => {
                 info!(
-                    "Received WebSocket message from user {}: {:?}",
-                    user_id, msg
+                    "Received WebSocket message from user {} (type: {})",
+                    user_id,
+                    if msg.is_text() { "text" } else if msg.is_binary() { "binary" } else { "other" }
                 );
 
                 // Per-connection rate limiting

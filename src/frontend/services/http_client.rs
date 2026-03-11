@@ -55,6 +55,15 @@ impl HttpClient {
         Self { base_url, client }
     }
 
+    pub fn try_new(base_url: String) -> Result<Self, String> {
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .connect_timeout(Duration::from_secs(10))
+            .build()
+            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+        Ok(Self { base_url, client })
+    }
+
     /// Sign up a new user
     pub async fn signup(&self, username: String, password: String) -> Result<AuthResponse, String> {
         let url = format!("{}/auth/signup", self.base_url);
