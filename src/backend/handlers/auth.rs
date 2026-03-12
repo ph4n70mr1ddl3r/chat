@@ -15,7 +15,7 @@ use crate::validators;
 use std::sync::Arc;
 
 /// Pre-computed dummy bcrypt hash for timing-attack resistant login.
-/// This is a hash of a dummy password ("DummyPassword123!") used to ensure
+/// This is a hash of a dummy password ("`DummyPassword123`!") used to ensure
 /// password verification always runs even when user doesn't exist.
 const DUMMY_BCRYPT_HASH: &str = "$2b$12$LQv8wJ1ZQ7H8G8bS5h8QeO0o1iHtKrN6CWmYrfVrY1BuBbbfvVVW9";
 
@@ -63,7 +63,12 @@ pub struct LogoutContext {
     pub ip_address: Option<String>,
 }
 
-/// Handle POST /auth/logout
+/// Handle POST /auth/logout.
+///
+/// # Errors
+///
+/// Returns a warp rejection if the CSRF token is missing, invalid, or expired.
+#[allow(clippy::too_many_lines)]
 pub async fn logout_handler(
     user_id: String,
     ctx: LogoutContext,
@@ -72,18 +77,15 @@ pub async fn logout_handler(
     csrf_service: CsrfService,
     pool: SqlitePool,
 ) -> Result<impl Reply, Rejection> {
-    info!("Logout request for user: {}", user_id);
+    info!("Logout request for user: {user_id}");
 
-    let csrf_token = match ctx.csrf_token {
-        Some(t) => t,
-        None => {
-            warn!("Missing CSRF token for logout request");
-            return Ok(error_response!(
-                "FORBIDDEN",
-                "CSRF token required for logout",
-                warp::http::StatusCode::FORBIDDEN
-            ));
-        }
+    let Some(csrf_token) = ctx.csrf_token else {
+        warn!("Missing CSRF token for logout request");
+        return Ok(error_response!(
+            "FORBIDDEN",
+            "CSRF token required for logout",
+            warp::http::StatusCode::FORBIDDEN
+        ));
     };
 
     if let Err(e) = csrf_service.validate_token(&csrf_token, &user_id) {
@@ -92,7 +94,7 @@ pub async fn logout_handler(
             crate::services::csrf::CsrfValidationError::UserMismatch => "CSRF token user mismatch",
             crate::services::csrf::CsrfValidationError::InvalidToken => "Invalid CSRF token",
         };
-        warn!("{} for logout request", error_msg);
+        warn!("{error_msg} for logout request");
         return Ok(error_response!(
             "FORBIDDEN",
             error_msg,
@@ -106,16 +108,16 @@ pub async fn logout_handler(
         None,
         queries::AuthEventType::Logout,
         None,
-        Some(&format!("User {} logged out", user_id)),
+        Some(&format!("User {user_id} logged out")),
     )
     .await
     {
-        warn!("Failed to log logout event: {}", e);
+        warn!("Failed to log logout event: {e}");
     }
 
     if let Some(token) = ctx.auth_token {
         auth_service.revoke_token(&token).await;
-        info!("Token revoked for user: {}", user_id);
+        info!("Token revoked for user: {user_id}");
     }
 
     connection_manager.disconnect_user(&user_id).await;
@@ -126,7 +128,12 @@ pub async fn logout_handler(
     ))
 }
 
-/// Handle POST /auth/signup
+/// Handle POST /auth/signup.
+///
+/// # Errors
+///
+/// Returns a warp rejection if validation fails, username is taken, or database operation fails.
+#[allow(clippy::too_many_lines)]
 pub async fn signup_handler(
     req: SignupRequest,
     pool: SqlitePool,
@@ -134,7 +141,7 @@ pub async fn signup_handler(
     csrf_service: CsrfService,
 ) -> Result<impl Reply, Rejection> {
     if let Err(e) = validators::validate_username(&req.username) {
-        warn!("Invalid username: {}", e);
+        warn!("Invalid username: {e}");
         return Ok(error_response!(
             "VALIDATION_ERROR",
             e,
@@ -143,7 +150,7 @@ pub async fn signup_handler(
     }
 
     if let Err(e) = validators::validate_password(&req.password) {
-        warn!("Invalid password: {}", e);
+        warn!("Invalid password: {e}");
         return Ok(error_response!(
             "VALIDATION_ERROR",
             e,
@@ -162,9 +169,8 @@ pub async fn signup_handler(
         }
         Err(e) => {
             warn!(
-                "Database error during user lookup for '{}': {}",
-                sanitize_for_log(&req.username),
-                e
+                "Database error during user lookup for '{}': {e}",
+                sanitize_for_log(&req.username)
             );
             return Ok(error_response!(
                 "INTERNAL_ERROR",
@@ -182,7 +188,7 @@ pub async fn signup_handler(
     {
         Ok(user) => user,
         Err(e) => {
-            warn!("Failed to create user '{}': {}", sanitize_for_log(&req.username), e);
+            warn!("Failed to create user '{}': {e}", sanitize_for_log(&req.username));
             return Ok(error_response!("AUTH_ERROR", e, warp::http::StatusCode::BAD_REQUEST));
         }
     };
@@ -190,7 +196,7 @@ pub async fn signup_handler(
     let user = match queries::insert_user(&pool, &user).await {
         Ok(user) => user,
         Err(e) => {
-            warn!("Failed to save user '{}' to database: {}", sanitize_for_log(&req.username), e);
+            warn!("Failed to save user '{}' to database: {e}", sanitize_for_log(&req.username));
             return Ok(error_response!(
                 "INTERNAL_ERROR",
                 "An error occurred while processing your request",
@@ -202,7 +208,7 @@ pub async fn signup_handler(
     let (token, expires_at) = match auth_service.generate_token(user.id.clone()) {
         Ok((token, expires_at)) => (token, expires_at),
         Err(e) => {
-            warn!("Failed to generate token: {}", e);
+            warn!("Failed to generate token: {e}");
             return Ok(error_response!(
                 "AUTH_ERROR",
                 "Failed to generate authentication token",
@@ -214,7 +220,7 @@ pub async fn signup_handler(
     let csrf_token = match csrf_service.generate_token(&user.id) {
         Ok(token) => token,
         Err(e) => {
-            warn!("Failed to generate CSRF token: {}", e);
+            warn!("Failed to generate CSRF token: {e}");
             return Ok(error_response!(
                 "AUTH_ERROR",
                 "Failed to generate security token",
@@ -237,7 +243,13 @@ pub async fn signup_handler(
     ))
 }
 
-/// Handle POST /auth/login
+/// Handle POST /auth/login.
+///
+/// # Errors
+///
+/// Returns a warp rejection if validation fails, credentials are invalid,
+/// account is locked, or database operation fails.
+#[allow(clippy::too_many_lines)]
 pub async fn login_handler(
     req: LoginRequest,
     pool: SqlitePool,
@@ -246,7 +258,7 @@ pub async fn login_handler(
     login_attempt_service: Arc<LoginAttemptService>,
 ) -> Result<impl Reply, Rejection> {
     if let Err(e) = validators::validate_username(&req.username) {
-        warn!("Login failed: invalid username ({}) - {}", sanitize_for_log(&req.username), e);
+        warn!("Login failed: invalid username ({}) - {e}", sanitize_for_log(&req.username));
         return Ok(error_response!(
             "VALIDATION_ERROR",
             e,
@@ -282,9 +294,8 @@ pub async fn login_handler(
         }
         Err(e) => {
             warn!(
-                "Database error during login lookup for '{}': {}",
-                sanitize_for_log(&req.username),
-                e
+                "Database error during login lookup for '{}': {e}",
+                sanitize_for_log(&req.username)
             );
             return Ok(error_response!(
                 "INTERNAL_ERROR",
@@ -299,7 +310,7 @@ pub async fn login_handler(
     let password_valid = match AuthService::verify_password(&req.password, &hash_to_verify) {
         Ok(valid) => valid,
         Err(e) => {
-            warn!("Password verification error for '{}': {}", sanitize_for_log(&req.username), e);
+            warn!("Password verification error for '{}': {e}", sanitize_for_log(&req.username));
             login_attempt_service.record_failed_attempt(&req.username).await;
             return Ok(error_response!(
                 "AUTH_ERROR",
@@ -310,23 +321,20 @@ pub async fn login_handler(
     };
 
     // Check both password validity AND user existence
-    let user = match (password_valid, user) {
-        (true, Some(u)) => u,
-        _ => {
-            warn!("Login failed: invalid credentials");
-            login_attempt_service.record_failed_attempt(&req.username).await;
-            return Ok(error_response!(
-                "AUTH_ERROR",
-                "Invalid credentials",
-                warp::http::StatusCode::UNAUTHORIZED
-            ));
-        }
+    let Some(user) = user.filter(|_| password_valid) else {
+        warn!("Login failed: invalid credentials");
+        login_attempt_service.record_failed_attempt(&req.username).await;
+        return Ok(error_response!(
+            "AUTH_ERROR",
+            "Invalid credentials",
+            warp::http::StatusCode::UNAUTHORIZED
+        ));
     };
 
     let (token, expires_at) = match auth_service.generate_token(user.id.clone()) {
         Ok((token, expires_at)) => (token, expires_at),
         Err(e) => {
-            warn!("Failed to generate token: {}", e);
+            warn!("Failed to generate token: {e}");
             return Ok(error_response!(
                 "AUTH_ERROR",
                 "Failed to generate authentication token",
@@ -338,7 +346,7 @@ pub async fn login_handler(
     let csrf_token = match csrf_service.generate_token(&user.id) {
         Ok(token) => token,
         Err(e) => {
-            warn!("Failed to generate CSRF token: {}", e);
+            warn!("Failed to generate CSRF token: {e}");
             return Ok(error_response!(
                 "AUTH_ERROR",
                 "Failed to generate security token",

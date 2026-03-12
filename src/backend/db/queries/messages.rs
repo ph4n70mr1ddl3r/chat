@@ -9,7 +9,11 @@ const SQL_SELECT_MESSAGE_FIELDS: &str =
 /// Valid message status values
 pub const VALID_STATUSES: &[&str] = &["pending", "sent", "delivered", "read", "failed"];
 
-/// Insert a new message (returns false if duplicate ID)
+/// Insert a new message (returns false if duplicate ID).
+///
+/// # Errors
+///
+/// Returns an error string if the database operation fails.
 pub async fn insert_message_or_ignore(
     pool: &SqlitePool,
     message: &Message,
@@ -30,12 +34,16 @@ pub async fn insert_message_or_ignore(
     .bind(message.is_anonymized)
     .execute(pool)
     .await
-    .map_err(|e| format!("Failed to insert message: {}", e))?;
+    .map_err(|e| format!("Failed to insert message: {e}"))?;
 
     Ok(result.rows_affected() > 0)
 }
 
-/// Insert a new message
+/// Insert a new message.
+///
+/// # Errors
+///
+/// Returns an error string if the database operation fails.
 pub async fn insert_message(pool: &SqlitePool, message: &Message) -> Result<Message, String> {
     sqlx::query(
         "INSERT INTO messages (id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, read_at, status, is_anonymized)
@@ -53,27 +61,34 @@ pub async fn insert_message(pool: &SqlitePool, message: &Message) -> Result<Mess
     .bind(message.is_anonymized)
     .execute(pool)
     .await
-    .map_err(|e| format!("Failed to insert message: {}", e))?;
+    .map_err(|e| format!("Failed to insert message: {e}"))?;
 
     Ok(message.clone())
 }
 
-/// Find message by ID
+/// Find message by ID.
+///
+/// # Errors
+///
+/// Returns an error string if the database operation fails.
 pub async fn find_message_by_id(
     pool: &SqlitePool,
     message_id: &str,
 ) -> Result<Option<Message>, String> {
     sqlx::query_as::<_, Message>(&format!(
-        "{} FROM messages WHERE id = ?",
-        SQL_SELECT_MESSAGE_FIELDS
+        "{SQL_SELECT_MESSAGE_FIELDS} FROM messages WHERE id = ?"
     ))
     .bind(message_id)
     .fetch_optional(pool)
     .await
-    .map_err(|e| format!("Failed to find message by id: {}", e))
+    .map_err(|e| format!("Failed to find message by id: {e}"))
 }
 
-/// Get messages by conversation (sorted by created_at DESC)
+/// Get messages by conversation (sorted by `created_at` DESC).
+///
+/// # Errors
+///
+/// Returns an error string if the database operation fails.
 pub async fn get_messages_by_conversation(
     pool: &SqlitePool,
     conversation_id: &str,
@@ -84,53 +99,60 @@ pub async fn get_messages_by_conversation(
     let offset = offset.min(10_000);
 
     sqlx::query_as::<_, Message>(&format!(
-        "{} FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
-        SQL_SELECT_MESSAGE_FIELDS
+        "{SQL_SELECT_MESSAGE_FIELDS} FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?"
     ))
     .bind(conversation_id)
     .bind(limit)
     .bind(offset)
     .fetch_all(pool)
     .await
-    .map_err(|e| format!("Failed to get messages by conversation: {}", e))
+    .map_err(|e| format!("Failed to get messages by conversation: {e}"))
 }
 
-/// Get pending messages for a recipient (status = 'pending' or 'failed')
+/// Get pending messages for a recipient (status = 'pending' or 'failed').
+///
+/// # Errors
+///
+/// Returns an error string if the database operation fails.
 pub async fn get_pending_messages(
     pool: &SqlitePool,
     recipient_id: &str,
 ) -> Result<Vec<Message>, String> {
-    sqlx::query_as::<_, Message>(
-        &format!(
-            "{} FROM messages WHERE recipient_id = ? AND (status = 'pending' OR status = 'failed') ORDER BY created_at ASC",
-            SQL_SELECT_MESSAGE_FIELDS
-        ),
-    )
+    sqlx::query_as::<_, Message>(&format!(
+        "{SQL_SELECT_MESSAGE_FIELDS} FROM messages WHERE recipient_id = ? AND (status = 'pending' OR status = 'failed') ORDER BY created_at ASC"
+    ))
     .bind(recipient_id)
     .fetch_all(pool)
     .await
-    .map_err(|e| format!("Failed to get pending messages: {}", e))
+    .map_err(|e| format!("Failed to get pending messages: {e}"))
 }
 
-/// Get all pending messages (for queue initialization)
+/// Get all pending messages (for queue initialization).
+///
+/// # Errors
+///
+/// Returns an error string if the database operation fails.
 pub async fn get_all_pending_messages(pool: &SqlitePool) -> Result<Vec<Message>, String> {
     sqlx::query_as::<_, Message>(&format!(
-        "{} FROM messages WHERE status = 'pending' OR status = 'failed' ORDER BY created_at ASC",
-        SQL_SELECT_MESSAGE_FIELDS
+        "{SQL_SELECT_MESSAGE_FIELDS} FROM messages WHERE status = 'pending' OR status = 'failed' ORDER BY created_at ASC"
     ))
     .fetch_all(pool)
     .await
-    .map_err(|e| format!("Failed to get all pending messages: {}", e))
+    .map_err(|e| format!("Failed to get all pending messages: {e}"))
 }
 
-/// Update message status
+/// Update message status.
+///
+/// # Errors
+///
+/// Returns an error string if the status is invalid or the database operation fails.
 pub async fn update_message_status(
     pool: &SqlitePool,
     message_id: &str,
     status: &str,
 ) -> Result<(), String> {
     if !VALID_STATUSES.contains(&status) {
-        return Err(format!("Invalid message status: {}", status));
+        return Err(format!("Invalid message status: {status}"));
     }
 
     sqlx::query("UPDATE messages SET status = ? WHERE id = ?")
@@ -138,12 +160,16 @@ pub async fn update_message_status(
         .bind(message_id)
         .execute(pool)
         .await
-        .map_err(|e| format!("Failed to update message status: {}", e))?;
+        .map_err(|e| format!("Failed to update message status: {e}"))?;
 
     Ok(())
 }
 
-/// Mark message as delivered
+/// Mark message as delivered.
+///
+/// # Errors
+///
+/// Returns an error string if the database operation fails.
 pub async fn mark_message_delivered(pool: &SqlitePool, message_id: &str) -> Result<(), String> {
     let now = chrono::Utc::now().timestamp_millis();
 
@@ -152,12 +178,16 @@ pub async fn mark_message_delivered(pool: &SqlitePool, message_id: &str) -> Resu
         .bind(message_id)
         .execute(pool)
         .await
-        .map_err(|e| format!("Failed to mark message delivered: {}", e))?;
+        .map_err(|e| format!("Failed to mark message delivered: {e}"))?;
 
     Ok(())
 }
 
-/// Anonymize all messages for a user (GDPR compliance)
+/// Anonymize all messages for a user (GDPR compliance).
+///
+/// # Errors
+///
+/// Returns an error string if the database operation fails.
 pub async fn anonymize_user_messages(pool: &SqlitePool, user_id: &str) -> Result<(), String> {
     sqlx::query(
         "UPDATE messages SET content = '[Message deleted]', is_anonymized = 1 WHERE sender_id = ?",
@@ -165,29 +195,32 @@ pub async fn anonymize_user_messages(pool: &SqlitePool, user_id: &str) -> Result
     .bind(user_id)
     .execute(pool)
     .await
-    .map_err(|e| format!("Failed to anonymize user messages: {}", e))?;
+    .map_err(|e| format!("Failed to anonymize user messages: {e}"))?;
 
     Ok(())
 }
 
-/// Search messages within a conversation
+/// Search messages within a conversation.
+///
+/// # Errors
+///
+/// Returns an error string if the database operation fails.
 pub async fn search_messages_in_conversation(
     pool: &SqlitePool,
     conversation_id: &str,
     query: &str,
     limit: u32,
 ) -> Result<Vec<Message>, String> {
-    let pattern = format!("%{}%", query);
+    let pattern = format!("%{query}%");
     let limit = limit.min(100);
 
     sqlx::query_as::<_, Message>(&format!(
-        "{} FROM messages WHERE conversation_id = ? AND content LIKE ? ORDER BY created_at DESC LIMIT ?",
-        SQL_SELECT_MESSAGE_FIELDS
+        "{SQL_SELECT_MESSAGE_FIELDS} FROM messages WHERE conversation_id = ? AND content LIKE ? ORDER BY created_at DESC LIMIT ?"
     ))
     .bind(conversation_id)
     .bind(pattern)
     .bind(limit)
     .fetch_all(pool)
     .await
-    .map_err(|e| format!("Failed to search messages: {}", e))
+    .map_err(|e| format!("Failed to search messages: {e}"))
 }

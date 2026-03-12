@@ -9,12 +9,20 @@ use tracing::info;
 
 pub mod queries;
 
-/// Initialize SQLite database and run migrations
+/// Initialize `SQLite` database and run migrations.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be initialized or migrations fail.
 pub async fn init_db(db_path: impl AsRef<Path>) -> Result<SqlitePool> {
     init_db_with_pool_settings(db_path, 5, 20).await
 }
 
-/// Initialize SQLite database with custom connection pool settings
+/// Initialize `SQLite` database with custom connection pool settings.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be initialized or migrations fail.
 pub async fn init_db_with_pool_settings(
     db_path: impl AsRef<Path>,
     min_connections: u32,
@@ -31,10 +39,9 @@ pub async fn init_db_with_pool_settings(
 
     let db_url = format!("sqlite://{}?mode=rwc", db_path.display());
 
-    info!("Initializing database: {}", db_url);
+    info!("Initializing database: {db_url}");
     info!(
-        "Connection pool settings: min={}, max={}",
-        min_connections, max_connections
+        "Connection pool settings: min={min_connections}, max={max_connections}"
     );
 
     // Create connection options with WAL mode for better concurrency.

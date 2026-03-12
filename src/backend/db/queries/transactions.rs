@@ -3,7 +3,12 @@
 use futures::future::BoxFuture;
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
-/// Execute a database transaction with automatic commit/rollback
+/// Execute a database transaction with automatic commit/rollback.
+///
+/// # Errors
+///
+/// Returns an error string if the transaction fails to begin, commit, or rollback,
+/// or if the provided closure returns an error.
 pub async fn execute_transaction<F, T>(
     pool: &SqlitePool,
     f: F,
@@ -14,7 +19,7 @@ where
     let mut tx = pool
         .begin()
         .await
-        .map_err(|e| format!("Failed to begin transaction: {}", e))?;
+        .map_err(|e| format!("Failed to begin transaction: {e}"))?;
 
     let result = f(&mut tx).await;
 
@@ -22,7 +27,7 @@ where
         Ok(value) => {
             tx.commit()
                 .await
-                .map_err(|e| format!("Failed to commit transaction: {}", e))?;
+                .map_err(|e| format!("Failed to commit transaction: {e}"))?;
             Ok(value)
         }
         Err(e) => {
@@ -30,8 +35,7 @@ where
                 .await
                 .map_err(|err| {
                     format!(
-                        "Failed to rollback transaction: {}. Original error: {}",
-                        err, e
+                        "Failed to rollback transaction: {err}. Original error: {e}"
                     )
                 })?;
             Err(e)
@@ -68,7 +72,7 @@ mod tests {
                 .bind(user.last_seen_at)
                 .execute(&mut **tx)
                 .await
-                .map_err(|e| format!("Insert failed: {}", e))?;
+                .map_err(|e| format!("Insert failed: {e}"))?;
 
                 Ok(username)
             })
@@ -105,7 +109,7 @@ mod tests {
                 .bind(user.last_seen_at)
                 .execute(&mut **tx)
                 .await
-                .map_err(|e| format!("Insert failed: {}", e))?;
+                .map_err(|e| format!("Insert failed: {e}"))?;
 
                 Err("Intentional rollback".to_string())
             })
