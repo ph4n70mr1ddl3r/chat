@@ -33,7 +33,7 @@ base64 = { workspace = true, features = ["std"] }
 sha2 = "0.10"
 ipnet = "2.10"
 unicode-normalization = { workspace = true }
-getrandom = "0.3"
+getrandom = { workspace = true }
 
 # Internal dependencies
 chat-shared = { path = "../shared" }

@@ -56,6 +56,7 @@ rand = { version = "0.10", features = ["std", "thread_rng"] }
 hex = "0.4"
 subtle = "2.6"
 unicode-normalization = "0.1"
+getrandom = "0.3"
 
 # JSON Schema validation
 jsonschema = "0.41"

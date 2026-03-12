@@ -171,36 +171,6 @@ impl RateLimiter {
 
     /// Start a background task that periodically cleans up expired entries
     ///
-    /// Returns a tuple containing the task handle and a shutdown sender.
-    /// When the shutdown sender is dropped or a message is sent, the task will terminate gracefully.
-    #[must_use]
-    pub fn start_periodic_cleanup_with_shutdown(&self) -> (tokio::task::JoinHandle<()>, tokio::sync::oneshot::Sender<()>) {
-        let limiter = self.clone();
-        let interval_duration = self.window_duration;
-        let (shutdown_tx, mut shutdown_rx) = tokio::sync::oneshot::channel::<()>();
-
-        let handle = tokio::spawn(async move {
-            let mut interval = tokio::time::interval(interval_duration);
-            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-
-            loop {
-                tokio::select! {
-                    _ = &mut shutdown_rx => {
-                        tracing::debug!("Rate limiter cleanup task shutting down");
-                        break;
-                    }
-                    _ = interval.tick() => {
-                        limiter.cleanup_expired().await;
-                    }
-                }
-            }
-        });
-
-        (handle, shutdown_tx)
-    }
-
-    /// Start a background task that periodically cleans up expired entries
-    ///
     /// This spawns a Tokio task that runs indefinitely. The task should not be
     /// cancelled unless the rate limiter is being dropped.
     #[must_use]
