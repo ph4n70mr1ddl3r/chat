@@ -295,7 +295,19 @@ pub async fn login_handler(
     };
 
     // Always verify password to maintain constant time (prevents user enumeration via timing)
-    let password_valid = AuthService::verify_password(&req.password, &hash_to_verify).unwrap_or_default();
+    // Properly handle bcrypt errors instead of silently converting to "wrong password"
+    let password_valid = match AuthService::verify_password(&req.password, &hash_to_verify) {
+        Ok(valid) => valid,
+        Err(e) => {
+            warn!("Password verification error for '{}': {}", sanitize_for_log(&req.username), e);
+            login_attempt_service.record_failed_attempt(&req.username).await;
+            return Ok(error_response!(
+                "AUTH_ERROR",
+                "Invalid credentials",
+                warp::http::StatusCode::UNAUTHORIZED
+            ));
+        }
+    };
 
     // Check both password validity AND user existence
     let user = match (password_valid, user) {

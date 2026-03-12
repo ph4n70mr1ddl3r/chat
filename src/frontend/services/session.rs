@@ -102,18 +102,28 @@ impl SessionManager {
         let json = serde_json::to_string_pretty(&session)
             .map_err(|e| format!("Failed to serialize session: {e}"))?;
 
-        // Write to file
-        std::fs::write(&self.session_file, json)
+        // Write to temp file first to avoid permission race condition
+        let temp_file = self.session_file.with_extension("tmp");
+        
+        // Write to temp file
+        std::fs::write(&temp_file, json)
             .map_err(|e| format!("Failed to write session file: {e}"))?;
 
-        // Set restrictive file permissions (owner read/write only)
+        // Set restrictive file permissions (owner read/write only) on temp file
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            if let Err(e) = std::fs::set_permissions(&self.session_file, std::fs::Permissions::from_mode(0o600)) {
-                tracing::warn!("Failed to set secure file permissions: {}", e);
-            }
+            std::fs::set_permissions(&temp_file, std::fs::Permissions::from_mode(0o600))
+                .map_err(|e| format!("Failed to set secure file permissions: {e}"))?;
         }
+
+        // Atomically rename temp file to final location
+        std::fs::rename(&temp_file, &self.session_file)
+            .map_err(|e| {
+                let _ = std::fs::remove_file(&temp_file);
+                format!("Failed to rename session file: {e}")
+            })?;
+
         #[cfg(not(unix))]
         {
             tracing::warn!("Session file permissions not enforced on non-Unix systems - ensure proper filesystem access controls");

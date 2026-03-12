@@ -229,9 +229,21 @@ impl AuthService {
         validation.set_audience(&["chat-app"]);
         validation.set_issuer(&["chat-app"]);
 
-        decode::<TokenClaims>(token, &key, &validation)
-            .map(|data| data.claims)
-            .map_err(|_| "Token verification failed".to_string())
+        match decode::<TokenClaims>(token, &key, &validation) {
+            Ok(data) => Ok(data.claims),
+            Err(e) => {
+                let error_detail = match e.kind() {
+                    jsonwebtoken::errors::ErrorKind::ExpiredSignature => "Token has expired",
+                    jsonwebtoken::errors::ErrorKind::InvalidSignature => "Invalid token signature",
+                    jsonwebtoken::errors::ErrorKind::InvalidToken => "Malformed token",
+                    jsonwebtoken::errors::ErrorKind::InvalidIssuer => "Invalid token issuer",
+                    jsonwebtoken::errors::ErrorKind::InvalidAudience => "Invalid token audience",
+                    _ => "Token verification failed",
+                };
+                warn!(target: "auth", event = "auth.token.verify_failed", error = ?e.kind(), "Token verification failed");
+                Err(error_detail.to_string())
+            }
+        }
     }
 }
 

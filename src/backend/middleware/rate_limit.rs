@@ -171,8 +171,11 @@ impl RateLimiter {
 
     /// Start a background task that periodically cleans up expired entries
     ///
-    /// This spawns a Tokio task that runs indefinitely. The task should not be
-    /// cancelled unless the rate limiter is being dropped.
+    /// The task will run until the returned cancellation token is triggered,
+    /// or the rate limiter is dropped.
+    ///
+    /// # Returns
+    /// A tuple containing the task handle and a cancellation token for graceful shutdown.
     #[must_use]
     pub fn start_periodic_cleanup(&self) -> tokio::task::JoinHandle<()> {
         let limiter = self.clone();

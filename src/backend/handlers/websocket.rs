@@ -7,6 +7,7 @@ use crate::models::MAX_MESSAGE_LENGTH;
 use chat_shared::protocol::MessageEnvelope;
 use serde_json::json;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::RwLock;
@@ -56,6 +57,8 @@ pub enum RegisterResult {
 /// WebSocket connection manager
 pub struct ConnectionManager {
     connections: Arc<RwLock<HashMap<String, Vec<ManagedConnection>>>>,
+    /// Atomic counter for total connections (avoids O(n) iteration)
+    total_connections: AtomicUsize,
     max_total: usize,
     max_per_user: usize,
 }
@@ -80,9 +83,15 @@ impl ConnectionManager {
     pub fn with_limits(max_total: usize, max_per_user: usize) -> Self {
         Self {
             connections: Arc::new(RwLock::new(HashMap::new())),
+            total_connections: AtomicUsize::new(0),
             max_total,
             max_per_user,
         }
+    }
+
+    /// Get the current total number of connections
+    pub fn total_connection_count(&self) -> usize {
+        self.total_connections.load(Ordering::Relaxed)
     }
 
     /// Register a new connection for a user
@@ -98,9 +107,16 @@ impl ConnectionManager {
         client: ClientConnection,
         sender: Sender<WsMessage>,
     ) -> RegisterResult {
+        // Fast path: check limit with atomic counter first (lock-free)
+        let current_total = self.total_connections.load(Ordering::Relaxed);
+        if current_total >= self.max_total {
+            return RegisterResult::MaxConnectionsReached;
+        }
+
         let mut conns = self.connections.write().await;
 
-        let total_count: usize = conns.values().map(|v| v.len()).sum();
+        // Double-check under lock to prevent race condition
+        let total_count = self.total_connections.load(Ordering::Relaxed);
         if total_count >= self.max_total {
             return RegisterResult::MaxConnectionsReached;
         }
@@ -117,6 +133,8 @@ impl ConnectionManager {
             .or_insert_with(Vec::new)
             .push(ManagedConnection { client, sender });
 
+        self.total_connections.fetch_add(1, Ordering::Relaxed);
+
         RegisterResult::Success { connection_id }
     }
 
@@ -128,7 +146,13 @@ impl ConnectionManager {
         let mut conns = self.connections.write().await;
 
         if let Some(user_conns) = conns.get_mut(user_id) {
+            let before_len = user_conns.len();
             user_conns.retain(|c| c.client.connection_id != connection_id);
+
+            // Decrement counter only if we actually removed a connection
+            if user_conns.len() < before_len {
+                self.total_connections.fetch_sub(1, Ordering::Relaxed);
+            }
 
             // Remove user entry if no connections remain
             if user_conns.is_empty() {
@@ -143,7 +167,9 @@ impl ConnectionManager {
     /// This is called during logout or when a user account is deleted.
     pub async fn disconnect_user(&self, user_id: &str) {
         let mut conns = self.connections.write().await;
-        conns.remove(user_id);
+        if let Some(user_conns) = conns.remove(user_id) {
+            self.total_connections.fetch_sub(user_conns.len(), Ordering::Relaxed);
+        }
     }
 
     /// Get all connections for a user

@@ -1,6 +1,7 @@
 //! Utility functions shared across the backend
 
 use std::net::IpAddr;
+use std::sync::OnceLock;
 
 /// Default trusted proxy CIDR ranges for extracting client IPs from X-Forwarded-For headers.
 const DEFAULT_TRUSTED_PROXIES: &[&str] = &[
@@ -11,18 +12,60 @@ const DEFAULT_TRUSTED_PROXIES: &[&str] = &[
     "::1/128",
 ];
 
-/// Check if an IP address belongs to a trusted proxy range.
+/// Cached list of trusted proxy networks loaded from environment.
+static TRUSTED_PROXIES: OnceLock<Vec<ipnet::IpNet>> = OnceLock::new();
+
+/// Load trusted proxies from environment variable or use defaults.
 ///
-/// Trusted proxies are internal network ranges (RFC 1918) and localhost.
-/// Used to determine whether to trust X-Forwarded-For headers.
-pub fn is_trusted_proxy(remote_ip: &IpAddr) -> bool {
-    for cidr in DEFAULT_TRUSTED_PROXIES {
-        if cidr.contains('/') {
-            if let Ok(network) = cidr.parse::<ipnet::IpNet>() {
-                if network.contains(remote_ip) {
-                    return true;
+/// The `TRUSTED_PROXIES` environment variable should contain a comma-separated
+/// list of CIDR ranges. Example: `TRUSTED_PROXIES=10.0.0.0/8,192.168.0.0/16`
+///
+/// For cloud deployments with load balancers that have public IPs, configure
+/// this variable with your load balancer's IP range.
+fn get_trusted_proxies() -> &'static Vec<ipnet::IpNet> {
+    TRUSTED_PROXIES.get_or_init(|| {
+        let mut proxies = Vec::new();
+
+        if let Ok(env_proxies) = std::env::var("TRUSTED_PROXIES") {
+            for cidr in env_proxies.split(',') {
+                let cidr = cidr.trim();
+                if cidr.is_empty() {
+                    continue;
+                }
+                match cidr.parse::<ipnet::IpNet>() {
+                    Ok(net) => {
+                        tracing::info!("Added trusted proxy range: {}", net);
+                        proxies.push(net);
+                    }
+                    Err(e) => {
+                        tracing::warn!("Invalid CIDR in TRUSTED_PROXIES '{}': {}", cidr, e);
+                    }
                 }
             }
+        }
+
+        if proxies.is_empty() {
+            for cidr in DEFAULT_TRUSTED_PROXIES {
+                if let Ok(net) = cidr.parse::<ipnet::IpNet>() {
+                    proxies.push(net);
+                }
+            }
+            tracing::debug!("Using default trusted proxy ranges (RFC1918 + localhost)");
+        }
+
+        proxies
+    })
+}
+
+/// Check if an IP address belongs to a trusted proxy range.
+///
+/// Trusted proxies are internal network ranges (RFC 1918) and localhost by default,
+/// or custom ranges from the `TRUSTED_PROXIES` environment variable.
+/// Used to determine whether to trust X-Forwarded-For headers.
+pub fn is_trusted_proxy(remote_ip: &IpAddr) -> bool {
+    for network in get_trusted_proxies() {
+        if network.contains(remote_ip) {
+            return true;
         }
     }
     false
