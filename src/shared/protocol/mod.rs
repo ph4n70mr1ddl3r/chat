@@ -153,14 +153,14 @@ impl TokenClaims {
     /// Check if the token has expired
     #[must_use]
     pub fn is_expired(&self) -> bool {
-        let now = chrono::Utc::now().timestamp().max(0) as u64;
+        let now = chrono::Utc::now().timestamp().max(0).cast_unsigned();
         self.exp < now
     }
 
     /// Check if the token is valid (not expired and issued before now)
     #[must_use]
     pub fn is_valid(&self) -> bool {
-        let now = chrono::Utc::now().timestamp().max(0) as u64;
+        let now = chrono::Utc::now().timestamp().max(0).cast_unsigned();
         self.iat <= now && self.exp > now
     }
 

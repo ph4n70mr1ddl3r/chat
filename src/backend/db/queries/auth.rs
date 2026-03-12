@@ -25,6 +25,10 @@ impl AuthEventType {
 }
 
 /// Insert an auth log entry
+///
+/// # Errors
+///
+/// Returns an error string if the database insert fails.
 pub async fn insert_auth_log(
     pool: &SqlitePool,
     ip_address: &str,
@@ -49,12 +53,16 @@ pub async fn insert_auth_log(
     .bind(details)
     .execute(pool)
     .await
-    .map_err(|e| format!("Failed to insert auth log: {}", e))?;
+    .map_err(|e| format!("Failed to insert auth log: {e}"))?;
 
     Ok(())
 }
 
 /// Get failed login attempts for an IP address within a time window
+///
+/// # Errors
+///
+/// Returns an error string if the database query fails.
 pub async fn get_failed_attempts(
     pool: &SqlitePool,
     ip_address: &str,
@@ -71,7 +79,7 @@ pub async fn get_failed_attempts(
     .bind(window_start)
     .fetch_one(pool)
     .await
-    .map_err(|e| format!("Failed to get failed attempts: {}", e))?;
+    .map_err(|e| format!("Failed to get failed attempts: {e}"))?;
 
-    Ok(result.max(0) as u32)
+    Ok(u32::try_from(result.max(0)).unwrap_or(u32::MAX))
 }
