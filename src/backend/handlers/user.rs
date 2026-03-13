@@ -143,8 +143,11 @@ pub async fn search_users(
         ));
     }
 
-    // Validate query doesn't contain suspicious patterns
-    let suspicious_patterns = ["<script", "javascript:", "onerror", "onload"];
+    // Validate query doesn't contain suspicious patterns (XSS prevention)
+    let suspicious_patterns = [
+        "<script", "javascript:", "onerror", "onload", "onclick",
+        "<img", "<svg", "<iframe", "data:", "vbscript:",
+    ];
     let query_lower = query.q.to_lowercase();
     for pattern in suspicious_patterns {
         if query_lower.contains(pattern) {
