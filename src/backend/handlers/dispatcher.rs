@@ -278,7 +278,7 @@ mod tests {
     #[test]
     fn test_dispatcher_missing_recipient() {
         let json = json!({
-            "id": "msg-123",
+            "id": uuid::Uuid::new_v4().to_string(),
             "type": "message",
             "timestamp": chrono::Utc::now().timestamp_millis(),
             "data": {
@@ -298,7 +298,7 @@ mod tests {
     #[test]
     fn test_dispatcher_empty_message() {
         let json = json!({
-            "id": "msg-123",
+            "id": uuid::Uuid::new_v4().to_string(),
             "type": "message",
             "timestamp": chrono::Utc::now().timestamp_millis(),
             "data": {

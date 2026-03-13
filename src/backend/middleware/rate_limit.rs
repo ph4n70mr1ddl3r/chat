@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use warp::{self, addr::remote, reject, Filter, Rejection};
 
-const MAX_RATE_LIMIT_ENTRIES: usize = 100_000;
+const DEFAULT_MAX_ENTRIES: usize = 100_000;
 
 /// Rate limit entry tracking attempts and reset time
 ///
@@ -27,12 +27,10 @@ struct RateLimitEntry {
 /// and API abuse. Uses in-memory storage with periodic cleanup.
 #[derive(Clone)]
 pub struct RateLimiter {
-    /// Map of IP addresses to rate limit entries
     entries: Arc<Mutex<HashMap<String, RateLimitEntry>>>,
-    /// Maximum attempts allowed per window
     max_attempts: u32,
-    /// Time window for rate limiting (in seconds)
     window_duration: Duration,
+    max_entries: usize,
 }
 
 impl Default for RateLimiter {
@@ -42,20 +40,24 @@ impl Default for RateLimiter {
 }
 
 impl RateLimiter {
-    /// Create a new rate limiter
-    ///
-    /// # Arguments
-    /// * `max_attempts` - Maximum failed attempts allowed (default: 5)
-    /// * `window_secs` - Time window in seconds (default: 900 = 15 minutes)
     pub fn new(max_attempts: u32, window_secs: u64) -> Self {
         Self {
             entries: Arc::new(Mutex::new(HashMap::new())),
             max_attempts,
             window_duration: Duration::from_secs(window_secs),
+            max_entries: DEFAULT_MAX_ENTRIES,
         }
     }
 
-    /// Convenience constructor for global requests (1000 req/min)
+    pub fn with_max_entries(max_attempts: u32, window_secs: u64, max_entries: usize) -> Self {
+        Self {
+            entries: Arc::new(Mutex::new(HashMap::new())),
+            max_attempts,
+            window_duration: Duration::from_secs(window_secs),
+            max_entries,
+        }
+    }
+
     pub fn global() -> Self {
         Self::new(1000, 60)
     }
@@ -130,18 +132,18 @@ impl RateLimiter {
             return Ok(());
         }
 
-        if entries.len() >= MAX_RATE_LIMIT_ENTRIES {
+        if entries.len() >= self.max_entries {
             let now = Instant::now();
             let window_duration = self.window_duration;
             
             entries.retain(|_, entry| now.duration_since(entry.window_start) <= window_duration);
 
-            if entries.len() >= MAX_RATE_LIMIT_ENTRIES {
+            if entries.len() >= self.max_entries {
                 let keys_to_remove: Vec<String> = {
                     let mut entries_vec: Vec<_> = entries.iter().collect();
                     entries_vec.sort_by_key(|(_, entry)| entry.window_start);
                     entries_vec.into_iter()
-                        .take(entries.len().saturating_sub(MAX_RATE_LIMIT_ENTRIES - 10))
+                        .take(entries.len().saturating_sub(self.max_entries - 10))
                         .map(|(ip, _)| ip.clone())
                         .collect()
                 };
