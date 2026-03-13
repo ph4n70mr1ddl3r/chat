@@ -299,7 +299,7 @@ pub async fn login_handler(
             }
         }
         Ok(None) => {
-            (None, DUMMY_BCRYPT_HASH.to_string())
+            (None, DUMMY_BCRYPT_HASH_FOR_SIGNUP.to_string())
         }
         Err(e) => {
             warn!(
@@ -330,7 +330,7 @@ pub async fn login_handler(
     };
 
     // Check both password validity AND user existence
-    let Some(user) = user.filter(|_| password_valid) else {
+    let Some(user) = user.filter(|_: &User| password_valid) else {
         warn!("Login failed: invalid credentials");
         login_attempt_service.record_failed_attempt(&req.username).await;
         return Ok(error_response!(

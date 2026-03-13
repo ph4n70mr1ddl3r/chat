@@ -1,10 +1,12 @@
 //! Message queue service for offline delivery with exponential backoff
 //!
 //! Handles retry logic for messages sent to offline recipients.
-//! Implements exponential backoff: 0.5s, 1.5s, 3s, 7s, 15s, 30s, 60s (max)
+//! Implements exponential backoff: 0s, 1s, 3s, 7s, 15s, 30s, 60s (max)
 //! Retries indefinitely until recipient comes online or is deleted.
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::Arc;
 
 use tokio::sync::RwLock;
 use tokio::time::{sleep, Duration};
@@ -16,21 +18,6 @@ use crate::services::message_service::MessageService;
 use chat_shared::protocol::{MessageEnvelope, MessageStatus};
 use serde_json::json;
 use sqlx::SqlitePool;
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use tokio::sync::RwLock;
-use tokio::time::{sleep, Duration};
-use warp::ws::Message as WsMessage;
-
-/// Retry schedule in seconds
-const RETRY_SCHEDULE: &[u64] = &[0, 3, 7, 15, 30, 60);
-
-/// Maximum queued messages per recipient to prevent memory exhaustion
-const MAX_queued_messages_per_user: usize = 100;
-
-/// Maximum total queued messages across all recipients
-const MAX_TOTAL_QUEUED_MESSAGES: usize = 50_000;
 
 /// Retry schedule in seconds
 const RETRY_SCHEDULE: &[u64] = &[0, 1, 3, 7, 15, 30, 60];
@@ -47,7 +34,7 @@ struct QueuedMessage {
     message_id: String,
     recipient_id: String,
     retry_count: usize,
-    next_retry_at: u64, // Unix timestamp in seconds
+    next_retry_at: u64,
 }
 
 /// Message queue service
@@ -83,6 +70,7 @@ impl MessageQueueService {
         let connection_manager = self.connection_manager.clone();
         let message_service = MessageService::new(pool.clone());
         let is_running = self.is_running.clone();
+        let total_queued = self.total_queued.clone();
 
         tokio::spawn(async move {
             loop {
@@ -121,11 +109,12 @@ impl MessageQueueService {
                                     connection_manager.as_ref(),
                                     queue.clone(),
                                     queued_messages,
+                                    total_queued.clone(),
                                 )
                                 .await;
                             } else {
                                 for msg in queued_messages {
-                                    if !Self::requeue_message(queue.clone(), msg).await {
+                                    if !Self::requeue_message(queue.clone(), msg, total_queued.clone()).await {
                                         tracing::warn!(
                                             "Dropped message for recipient {} due to queue overflow",
                                             recipient_id
@@ -148,37 +137,7 @@ impl MessageQueueService {
     ///
     /// Returns `true` if message was queued successfully.
     /// Returns `false` if the per-user queue or the global queue is full (message dropped).
-    /// When `false` is returned, the message remains in the database with 'pending'
-    /// status and will be loaded on next server restart via `load_pending_messages`.
     pub async fn queue_message(&self, message_id: String, recipient_id: String) -> bool {
-        let queued_msg = QueuedMessage {
-            message_id,
-            recipient_id: recipient_id.clone(),
-            retry_count: 0,
-            next_retry_at: chrono::Utc::now().timestamp() as u64,
-        };
-
-        let mut queue = self.queue.write().await;
-        let user_queue = queue.entry(recipient_id.clone()).or_insert_with(Vec::new);
-
-        // Check per-user limit
-        if user_queue.len() >= MAX_QUEUED_MESSAGES_PER_USER {
-            self.total_queued.fetch_add(1, Ordering::SeqCst);
-            return false;
-        }
-
-        // Check global limit
-        let current_total = self.total_queued.load(Ordering::SeqCst);
-        if current_total >= MAX_TOTAL_QUEUED_MESSAGES {
-            self.total_queued.fetch_add(1, Ordering::SeqCst);
-            return false;
-        }
-        user_queue.push(queued_msg);
-        self.total_queued.fetch_add(1, Ordering::SeqCst);
-        true
-    }
-    pub async fn queue_message(&self, message_id: String, recipient_id: String) -> bool {
-        // Check global limit first (fast atomic check)
         let current_total = self.total_queued.load(Ordering::SeqCst);
         if current_total >= MAX_TOTAL_QUEUED_MESSAGES {
             tracing::warn!(
@@ -218,25 +177,21 @@ impl MessageQueueService {
         connection_manager: &ConnectionManager,
         message_id: &str,
     ) -> Result<(), String> {
-        // Load message from database
         let message = queries::find_message_by_id(pool, message_id)
             .await?
             .ok_or_else(|| "Message not found".to_string())?;
 
-        // Verify recipient exists and is not deleted
         let recipient = queries::find_user_by_id(pool, &message.recipient_id)
             .await?
             .ok_or_else(|| "Recipient not found".to_string())?;
 
         if recipient.is_deleted() {
-            // Mark message as failed
             message_service
                 .update_message_status(message_id, MessageStatus::Failed)
                 .await?;
             return Err("Recipient deleted".to_string());
         }
 
-        // Build delivery payload
         let sender = queries::find_user_by_id(pool, &message.sender_id)
             .await?
             .ok_or_else(|| "Sender not found".to_string())?;
@@ -260,7 +215,6 @@ impl MessageQueueService {
                 .map_err(|e| format!("Failed to serialize message: {}", e))?,
         );
 
-        // Attempt to send to recipient
         let delivered = connection_manager
             .send_to_user(&recipient.id, outbound.clone())
             .await;
@@ -268,7 +222,6 @@ impl MessageQueueService {
             return Err("Recipient offline".to_string());
         }
 
-        // Mark delivered and send ack to sender if connected
         message_service.mark_delivered(&message.id).await?;
 
         let ack = MessageEnvelope {
@@ -290,13 +243,14 @@ impl MessageQueueService {
         Ok(())
     }
 
-    /// Deliver a batch of messages to a single recipient (sequentially) to reduce queue churn
+    /// Deliver a batch of messages to a single recipient
     async fn deliver_batch(
         pool: &SqlitePool,
         message_service: &MessageService,
         connection_manager: &ConnectionManager,
         queue: Arc<RwLock<HashMap<String, Vec<QueuedMessage>>>>,
         messages: Vec<QueuedMessage>,
+        total_queued: Arc<AtomicUsize>,
     ) {
         for queued_msg in messages {
             match Self::deliver_message(
@@ -307,11 +261,14 @@ impl MessageQueueService {
             )
             .await
             {
-                Ok(_) => {}
+                Ok(_) => {
+                    total_queued.fetch_sub(1, Ordering::SeqCst);
+                }
                 Err(reason) => {
-                    // Recipient offline handled by caller; if we hit a transient failure, requeue
                     if reason != "Recipient deleted" && reason != "Recipient not found" {
-                        Self::requeue_message(queue.clone(), queued_msg).await;
+                        Self::requeue_message(queue.clone(), queued_msg, total_queued.clone()).await;
+                    } else {
+                        total_queued.fetch_sub(1, Ordering::SeqCst);
                     }
                 }
             }
@@ -319,13 +276,11 @@ impl MessageQueueService {
     }
 
     /// Requeue a message with exponential backoff
-    ///
-    /// Returns true if message was requeued, false if queue was full
     async fn requeue_message(
         queue: Arc<RwLock<HashMap<String, Vec<QueuedMessage>>>>,
         mut queued_msg: QueuedMessage,
+        total_queued: Arc<AtomicUsize>,
     ) -> bool {
-        // Calculate next retry time with exponential backoff
         let retry_index = queued_msg.retry_count.min(RETRY_SCHEDULE.len() - 1);
         let delay_seconds = RETRY_SCHEDULE[retry_index];
 
@@ -335,17 +290,14 @@ impl MessageQueueService {
         let mut queue_lock = queue.write().await;
         let user_queue = queue_lock
             .entry(queued_msg.recipient_id.clone())
-            .or_insert_with(Vec::new());
+            .or_insert_with(Vec::new);
 
-        // Check both per-user and global limits
         if user_queue.len() >= MAX_QUEUED_MESSAGES_PER_USER {
-            self.total_queued.fetch_sub(1, Ordering::SeqCst);
+            total_queued.fetch_sub(1, Ordering::SeqCst);
             return false;
         }
         user_queue.push(queued_msg);
-        self.total_queued.fetch_add(1, Ordering::SeqCst);
         true
-    }
     }
 
     /// Load pending messages from database on startup
@@ -370,6 +322,7 @@ impl MessageQueueService {
             };
 
             user_queue.push(queued_msg);
+            self.total_queued.fetch_add(1, Ordering::SeqCst);
         }
 
         Ok(())
@@ -378,10 +331,9 @@ impl MessageQueueService {
     /// Get queue statistics (for monitoring/debugging)
     pub async fn get_queue_stats(&self) -> HashMap<String, usize> {
         let queue = self.queue.read().await;
-        let stats: HashMap<String, usize> = HashMap::new();
-        for (recipient_id, messages.len() {
-            let current_total = self.total_queued.load(Ordering::SeqCst);
-            stats.insert(recipient_id, messages.len());
+        let mut stats: HashMap<String, usize> = HashMap::new();
+        for (recipient_id, messages) in queue.iter() {
+            stats.insert(recipient_id.clone(), messages.len());
         }
         stats
     }
@@ -427,11 +379,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_exponential_backoff() {
-        // Verify retry schedule increases exponentially
         assert_eq!(RETRY_SCHEDULE[0], 0);
         assert_eq!(RETRY_SCHEDULE[1], 1);
         assert_eq!(RETRY_SCHEDULE[2], 3);
-        assert_eq!(RETRY_SCHEDULE[6], 60); // Max cap
+        assert_eq!(RETRY_SCHEDULE[6], 60);
     }
 
     #[tokio::test]
@@ -440,14 +391,12 @@ mod tests {
         let conn_mgr = Arc::new(ConnectionManager::new());
         let queue_service = MessageQueueService::new(pool.clone(), conn_mgr);
 
-        // Create users and conversation
         let user1 = User::new("alice".to_string(), "hash1".to_string());
         let user2 = User::new("bob".to_string(), "hash2".to_string());
 
         queries::insert_user(&pool, &user1).await.unwrap();
         queries::insert_user(&pool, &user2).await.unwrap();
 
-        // Sort user IDs to satisfy database constraint
         let (user1_id, user2_id) = if user1.id < user2.id {
             (user1.id.clone(), user2.id.clone())
         } else {
@@ -456,7 +405,6 @@ mod tests {
         let conv = Conversation::new(user1_id, user2_id);
         queries::insert_conversation(&pool, &conv).await.unwrap();
 
-        // Create pending message
         let message = crate::models::Message::new(
             conv.id.clone(),
             user1.id.clone(),
@@ -465,7 +413,6 @@ mod tests {
         );
         queries::insert_message(&pool, &message).await.unwrap();
 
-        // Load pending messages
         queue_service.load_pending_messages().await.unwrap();
 
         let stats = queue_service.get_queue_stats().await;
