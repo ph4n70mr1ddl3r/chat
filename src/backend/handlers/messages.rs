@@ -225,7 +225,7 @@ impl MessageHandler {
                 .await
             {
                 // Deliver to recipient immediately
-                let delivery_message = self.build_message_envelope(MessageParams {
+                let delivery_message = Self::build_message_envelope(MessageParams {
                     message_id: &message.id,
                     sender_id: &sender.user_id,
                     sender_username: &sender.username,
@@ -282,7 +282,7 @@ impl MessageHandler {
         } else {
             crate::models::status::SENT
         };
-        let ack = self.build_ack_envelope(&envelope.id, &conversation_id, &message.id, ack_status);
+        let ack = Self::build_ack_envelope(&envelope.id, &conversation_id, &message.id, ack_status);
         responses.push(WsMessage::text(
             serde_json::to_string(&ack).map_err(|e| format!("Failed to serialize ack: {}", e))?,
         ));
@@ -300,7 +300,7 @@ impl MessageHandler {
     /// * `content` - Message text content
     /// * `conversation_id` - Conversation identifier
     /// * `status` - Message delivery status (e.g., "delivered", "sent")
-    fn build_message_envelope(&self, params: MessageParams<'_>) -> MessageEnvelope {
+    fn build_message_envelope(params: MessageParams<'_>) -> MessageEnvelope {
         MessageEnvelope {
             id: params.message_id.to_string(),
             msg_type: "message".to_string(),
@@ -317,17 +317,16 @@ impl MessageHandler {
     }
 
     fn build_ack_envelope(
-        &self,
         original_message_id: &str,
         conversation_id: &str,
         stored_message_id: &str,
         status: &str,
     ) -> MessageEnvelope {
-        let now_ms = chrono::Utc::now().timestamp_millis();
+        let now_ms = chrono::Utc::now().timestamp_millis().max(0) as u64;
         MessageEnvelope {
             id: uuid::Uuid::new_v4().to_string(),
             msg_type: "ack".to_string(),
-            timestamp: now_ms as u64,
+            timestamp: now_ms,
             data: json!({
                 "status": status,
                 "conversationId": conversation_id,
