@@ -258,9 +258,16 @@ impl MessageHandler {
                 }
             } else {
                 // Recipient offline - queue for retry
-                self.message_queue
+                if !self.message_queue
                     .queue_message(message.id.clone(), data.recipient_id.clone())
-                    .await;
+                    .await
+                {
+                    tracing::warn!(
+                        message_id = %message.id,
+                        recipient_id = %data.recipient_id,
+                        "Message queue full for recipient - message will be delivered when they come online"
+                    );
+                }
             }
         }
 

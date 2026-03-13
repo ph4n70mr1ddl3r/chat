@@ -127,7 +127,10 @@ impl MessageQueueService {
 
     /// Queue a message for delivery
     ///
-    /// Returns true if message was queued, false if queue was full (message dropped)
+    /// Returns `true` if message was queued successfully.
+    /// Returns `false` if the per-user queue is full (message dropped).
+    /// When `false` is returned, the message remains in the database with 'pending'
+    /// status and will be loaded on next server restart via `load_pending_messages`.
     pub async fn queue_message(&self, message_id: String, recipient_id: String) -> bool {
         let queued_msg = QueuedMessage {
             message_id,
