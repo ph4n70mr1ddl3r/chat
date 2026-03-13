@@ -228,6 +228,7 @@ impl AuthService {
         let mut validation = Validation::new(Algorithm::HS256);
         validation.set_audience(&["chat-app"]);
         validation.set_issuer(&["chat-app"]);
+        validation.validate_nbf = true;
 
         match decode::<TokenClaims>(token, &key, &validation) {
             Ok(data) => Ok(data.claims),

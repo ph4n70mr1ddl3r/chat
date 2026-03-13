@@ -200,6 +200,13 @@ pub async fn anonymize_user_messages(pool: &SqlitePool, user_id: &str) -> Result
     Ok(())
 }
 
+/// Escape SQL LIKE wildcards to prevent wildcard injection
+fn escape_like_pattern(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
 /// Search messages within a conversation.
 ///
 /// # Errors
@@ -211,11 +218,12 @@ pub async fn search_messages_in_conversation(
     query: &str,
     limit: u32,
 ) -> Result<Vec<Message>, String> {
-    let pattern = format!("%{query}%");
+    let escaped = escape_like_pattern(query);
+    let pattern = format!("%{escaped}%");
     let limit = limit.min(100);
 
     sqlx::query_as::<_, Message>(&format!(
-        "{SQL_SELECT_MESSAGE_FIELDS} FROM messages WHERE conversation_id = ? AND content LIKE ? ORDER BY created_at DESC LIMIT ?"
+        "{SQL_SELECT_MESSAGE_FIELDS} FROM messages WHERE conversation_id = ? AND content LIKE ? ESCAPE '\\' ORDER BY created_at DESC LIMIT ?"
     ))
     .bind(conversation_id)
     .bind(pattern)

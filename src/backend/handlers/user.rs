@@ -145,8 +145,11 @@ pub async fn search_users(
 
     // Validate query doesn't contain suspicious patterns (XSS prevention)
     let suspicious_patterns = [
-        "<script", "javascript:", "onerror", "onload", "onclick",
-        "<img", "<svg", "<iframe", "data:", "vbscript:",
+        "<script", "</script", "javascript:", "onerror", "onload", "onclick",
+        "onmouseover", "onfocus", "onblur", "<img", "<svg", "<iframe",
+        "data:", "vbscript:", "expression(", "<body", "<html", "<link",
+        "<style", "<object", "<embed", "<form", "<input", "<meta",
+        "&#x3c", "&#x3e", "&#60", "&#62", "%3c", "%3e", "&lt;", "&gt;",
     ];
     let query_lower = query.q.to_lowercase();
     for pattern in suspicious_patterns {

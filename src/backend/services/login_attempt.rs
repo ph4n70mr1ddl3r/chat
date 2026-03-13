@@ -26,6 +26,17 @@ pub struct LoginAttemptService {
     max_attempts: u32,
     lockout_duration: Duration,
     attempt_window: Duration,
+    cleanup_handle: Option<Arc<tokio::task::JoinHandle<()>>>,
+}
+
+impl Drop for LoginAttemptService {
+    fn drop(&mut self) {
+        if let Some(handle) = self.cleanup_handle.take() {
+            if let Some(handle) = Arc::into_inner(handle) {
+                handle.abort();
+            }
+        }
+    }
 }
 
 impl LoginAttemptService {
@@ -35,6 +46,7 @@ impl LoginAttemptService {
             max_attempts: MAX_FAILED_ATTEMPTS,
             lockout_duration: Duration::from_secs(LOCKOUT_DURATION_SECS),
             attempt_window: Duration::from_secs(ATTEMPT_WINDOW_SECS),
+            cleanup_handle: None,
         }
     }
 
@@ -44,6 +56,50 @@ impl LoginAttemptService {
             max_attempts,
             lockout_duration: Duration::from_secs(lockout_duration_secs),
             attempt_window: Duration::from_secs(attempt_window_secs),
+            cleanup_handle: None,
+        }
+    }
+
+    pub fn with_cleanup() -> Self {
+        let attempts: Arc<RwLock<HashMap<String, LoginAttempt>>> = Arc::new(RwLock::new(HashMap::new()));
+        let attempts_clone = attempts.clone();
+        let attempt_window = Duration::from_secs(ATTEMPT_WINDOW_SECS);
+
+        let cleanup_handle = tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(300));
+            loop {
+                interval.tick().await;
+                let mut attempts = attempts_clone.write().await;
+                let now = Instant::now();
+                let before_count = attempts.len();
+
+                attempts.retain(|_, attempt| {
+                    if let Some(locked_until) = attempt.locked_until {
+                        if now < locked_until {
+                            return true;
+                        }
+                    }
+                    now.duration_since(attempt.last_attempt) <= attempt_window
+                });
+
+                let removed = before_count - attempts.len();
+                if removed > 0 {
+                    tracing::info!(
+                        target: "login_attempt",
+                        removed = removed,
+                        remaining = attempts.len(),
+                        "Cleaned up expired login attempts"
+                    );
+                }
+            }
+        });
+
+        Self {
+            attempts,
+            max_attempts: MAX_FAILED_ATTEMPTS,
+            lockout_duration: Duration::from_secs(LOCKOUT_DURATION_SECS),
+            attempt_window: Duration::from_secs(ATTEMPT_WINDOW_SECS),
+            cleanup_handle: Some(Arc::new(cleanup_handle)),
         }
     }
 

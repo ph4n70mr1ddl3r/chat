@@ -228,6 +228,13 @@ pub async fn delete_user_conversations(pool: &SqlitePool, user_id: &str) -> Resu
     Ok(())
 }
 
+/// Escape SQL LIKE wildcards to prevent wildcard injection
+fn escape_like_pattern(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
 /// Search users by username prefix (case-insensitive).
 ///
 /// # Errors
@@ -238,10 +245,11 @@ pub async fn search_users_by_prefix(
     query: &str,
     limit: u32,
 ) -> Result<Vec<User>, String> {
-    let pattern = format!("{}%", query.to_lowercase());
+    let escaped = escape_like_pattern(&query.to_lowercase());
+    let pattern = format!("{}%", escaped);
 
     sqlx::query_as::<_, User>(&format!(
-        "{SQL_SELECT_USER_FIELDS} FROM users WHERE LOWER(username) LIKE ? AND deleted_at IS NULL ORDER BY username LIMIT ?"
+        "{SQL_SELECT_USER_FIELDS} FROM users WHERE LOWER(username) LIKE ? ESCAPE '\\' AND deleted_at IS NULL ORDER BY username LIMIT ?"
     ))
     .bind(pattern)
     .bind(limit)
@@ -261,10 +269,11 @@ pub async fn search_users_excluding_self(
     requester_id: &str,
     limit: u32,
 ) -> Result<Vec<User>, String> {
-    let pattern = format!("{}%", query.to_lowercase());
+    let escaped = escape_like_pattern(&query.to_lowercase());
+    let pattern = format!("{}%", escaped);
 
     sqlx::query_as::<_, User>(&format!(
-        "{SQL_SELECT_USER_FIELDS} FROM users WHERE LOWER(username) LIKE ? AND deleted_at IS NULL AND id != ? ORDER BY username LIMIT ?"
+        "{SQL_SELECT_USER_FIELDS} FROM users WHERE LOWER(username) LIKE ? ESCAPE '\\' AND deleted_at IS NULL AND id != ? ORDER BY username LIMIT ?"
     ))
     .bind(pattern)
     .bind(requester_id)
