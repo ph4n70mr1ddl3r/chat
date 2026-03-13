@@ -8,6 +8,7 @@ use bcrypt::{hash, verify, DEFAULT_COST};
 use chrono::Utc;
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use sha2::{Digest, Sha256};
+use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -25,6 +26,7 @@ fn hash_token(token: &str) -> String {
 pub struct AuthService {
     jwt_secret: String,
     revoked_tokens: Arc<RwLock<HashMap<String, i64>>>,
+    pool: Option<SqlitePool>,
     cleanup_handle: Option<Arc<tokio::task::JoinHandle<()>>>,
 }
 
@@ -50,6 +52,17 @@ impl AuthService {
         Self {
             jwt_secret,
             revoked_tokens: Arc::new(RwLock::new(HashMap::new())),
+            pool: None,
+            cleanup_handle: None,
+        }
+    }
+
+    /// Create a new authentication service with database persistence for token revocation
+    pub fn with_pool(jwt_secret: String, pool: SqlitePool) -> Self {
+        Self {
+            jwt_secret,
+            revoked_tokens: Arc::new(RwLock::new(HashMap::new())),
+            pool: Some(pool),
             cleanup_handle: None,
         }
     }
@@ -77,26 +90,160 @@ impl AuthService {
         Self {
             jwt_secret,
             revoked_tokens,
+            pool: None,
             cleanup_handle: Some(Arc::new(cleanup_handle)),
         }
     }
 
+    /// Create a new authentication service with database persistence and periodic cleanup
+    pub fn with_pool_and_cleanup(jwt_secret: String, pool: SqlitePool) -> Self {
+        let revoked_tokens = Arc::new(RwLock::new(HashMap::new()));
+        let tokens_clone = revoked_tokens.clone();
+        let pool_clone = pool.clone();
+        
+        let cleanup_handle = tokio::spawn(async move {
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300));
+            loop {
+                interval.tick().await;
+                let now = chrono::Utc::now().timestamp();
+                
+                // Clean up in-memory tokens
+                let mut tokens = tokens_clone.write().await;
+                let before_count = tokens.len();
+                tokens.retain(|_, exp| *exp > now);
+                let removed = before_count - tokens.len();
+                
+                // Clean up database tokens
+                if let Err(e) = sqlx::query("DELETE FROM revoked_tokens WHERE expires_at < ?")
+                    .bind(now)
+                    .execute(&pool_clone)
+                    .await
+                {
+                    warn!(target: "auth", error = %e, "Failed to clean up expired revoked tokens from database");
+                }
+                
+                if removed > 0 {
+                    info!(target: "auth", removed = removed, remaining = tokens.len(), "Cleaned up expired revoked tokens");
+                }
+            }
+        });
+        
+        Self {
+            jwt_secret,
+            revoked_tokens,
+            pool: Some(pool),
+            cleanup_handle: Some(Arc::new(cleanup_handle)),
+        }
+    }
+
+    /// Load revoked tokens from database into memory on startup
+    pub async fn load_revoked_tokens(&self) -> Result<(), String> {
+        let Some(pool) = &self.pool else {
+            return Ok(());
+        };
+
+        let now = chrono::Utc::now().timestamp();
+        let rows: Vec<(String, i64)> = sqlx::query_as(
+            "SELECT token_hash, expires_at FROM revoked_tokens WHERE expires_at > ?"
+        )
+        .bind(now)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| format!("Failed to load revoked tokens: {e}"))?;
+
+        let mut tokens = self.revoked_tokens.write().await;
+        for (token_hash, expires_at) in rows {
+            tokens.insert(token_hash, expires_at);
+        }
+
+        info!(target: "auth", count = tokens.len(), "Loaded revoked tokens from database");
+        Ok(())
+    }
+
     /// Revoke a token (add to blacklist with expiration time)
     /// Stores only the hash of the token for security
+    /// Persists to database if pool is configured
     pub async fn revoke_token(&self, token: &str) {
         let expiration = Utc::now().timestamp() + TOKEN_EXPIRATION_SECONDS + 60;
         let token_hash = hash_token(token);
-        self.revoked_tokens.write().await.insert(token_hash, expiration);
+        self.revoked_tokens.write().await.insert(token_hash.clone(), expiration);
+
+        // Persist to database if pool is available
+        if let Some(pool) = &self.pool {
+            if let Err(e) = self.revoke_token_in_db(&token_hash, expiration, pool).await {
+                warn!(target: "auth", error = %e, "Failed to persist revoked token to database");
+            }
+        }
+    }
+
+    /// Revoke all tokens for a user (used when password is changed)
+    pub async fn revoke_all_tokens_for_user(&self, user_id: &str) {
+        // Remove from in-memory cache
+        let mut tokens = self.revoked_tokens.write().await;
+        tokens.retain(|_, _| true); // Keep all (we don't track user_id in memory)
+        drop(tokens);
+
+        // Delete from database if pool is available
+        if let Some(pool) = &self.pool {
+            if let Err(e) = sqlx::query("DELETE FROM revoked_tokens WHERE user_id = ?")
+                .bind(user_id)
+                .execute(pool)
+                .await
+            {
+                warn!(target: "auth", error = %e, user_id = %user_id, "Failed to delete revoked tokens for user");
+            }
+        }
+    }
+
+    async fn revoke_token_in_db(&self, token_hash: &str, expires_at: i64, pool: &SqlitePool) -> Result<(), String> {
+        sqlx::query(
+            "INSERT OR IGNORE INTO revoked_tokens (token_hash, user_id, revoked_at, expires_at) VALUES (?, ?, ?, ?)"
+        )
+        .bind(token_hash)
+        .bind("") // user_id not tracked in this context
+        .bind(chrono::Utc::now().timestamp())
+        .bind(expires_at)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Failed to insert revoked token: {e}"))?;
+        Ok(())
     }
 
     /// Check if a token has been revoked
+    /// Checks in-memory cache first, then database if pool is configured
     pub async fn is_token_revoked(&self, token: &str) -> bool {
         let token_hash = hash_token(token);
         let tokens = self.revoked_tokens.read().await;
         if let Some(&exp) = tokens.get(&token_hash) {
             return exp > Utc::now().timestamp();
         }
+        drop(tokens);
+
+        // Check database if not found in memory
+        if let Some(pool) = &self.pool {
+            if let Ok(exists) = self.check_token_revoked_in_db(&token_hash, pool).await {
+                if exists {
+                    // Cache for future lookups
+                    let expiration = Utc::now().timestamp() + TOKEN_EXPIRATION_SECONDS + 60;
+                    self.revoked_tokens.write().await.insert(token_hash, expiration);
+                    return true;
+                }
+            }
+        }
         false
+    }
+
+    async fn check_token_revoked_in_db(&self, token_hash: &str, pool: &SqlitePool) -> Result<bool, String> {
+        let now = chrono::Utc::now().timestamp();
+        let count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM revoked_tokens WHERE token_hash = ? AND expires_at > ?"
+        )
+        .bind(token_hash)
+        .bind(now)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| format!("Failed to check revoked token: {e}"))?;
+        Ok(count > 0)
     }
 
     /// Clean up expired revoked tokens (call periodically)

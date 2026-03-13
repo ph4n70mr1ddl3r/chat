@@ -9,15 +9,15 @@ use warp::{reply, Rejection, Reply};
 
 use crate::db::queries;
 use crate::handlers::{websocket::ConnectionManager, ErrorBody};
+use crate::models::User;
 use crate::services::{AuthService, CsrfService, LoginAttemptService};
 use crate::utils::sanitize_for_log;
 use crate::validators;
 use std::sync::Arc;
 
-/// Pre-computed dummy bcrypt hash for timing-attack resistant login.
-/// This is a hash of a dummy password ("`DummyPassword123`!") used to ensure
-/// password verification always runs even when user doesn't exist.
-const DUMMY_BCRYPT_HASH: &str = "$2b$12$LQv8wJ1ZQ7H8G8bS5h8QeO0o1iHtKrN6CWmYrfVrY1BuBbbfvVVW9";
+/// Pre-computed dummy bcrypt hash for timing-attack resistant signup.
+/// This ensures password hashing always runs even when username exists.
+const DUMMY_BCRYPT_HASH_FOR_SIGNUP: &str = "$2b$12$LQv8wJ1ZQ7H8G8bS5h8QeO0o1iHtKrN6CWmYrfVrY1BuBbbfvVVW9";
 
 macro_rules! error_response {
     ($code:expr, $message:expr, $status:expr) => {
@@ -158,15 +158,8 @@ pub async fn signup_handler(
         ));
     }
 
-    match queries::find_user_by_username(&pool, &req.username).await {
-        Ok(Some(_)) => {
-            warn!("Signup failed: username taken ({})", sanitize_for_log(&req.username));
-            return Ok(error_response!(
-                "CONFLICT",
-                "Unable to create account",
-                warp::http::StatusCode::CONFLICT
-            ));
-        }
+    let username_taken = match queries::find_user_by_username(&pool, &req.username).await {
+        Ok(Some(_)) => true,
         Err(e) => {
             warn!(
                 "Database error during user lookup for '{}': {e}",
@@ -178,20 +171,35 @@ pub async fn signup_handler(
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR
             ));
         }
-        Ok(None) => {}
-    }
+        Ok(None) => false,
+    };
 
-    let auth_service = AuthService::new(jwt_secret);
-    let user = match auth_service
-        .create_user(req.username.clone(), req.password)
-        .await
-    {
-        Ok(user) => user,
+    // Always perform password hashing to prevent timing attacks
+    // This ensures consistent response time whether username exists or not
+    let password_hash = match AuthService::hash_password(&req.password) {
+        Ok(hash) => hash,
         Err(e) => {
-            warn!("Failed to create user '{}': {e}", sanitize_for_log(&req.username));
-            return Ok(error_response!("AUTH_ERROR", e, warp::http::StatusCode::BAD_REQUEST));
+            warn!("Password hashing failed for '{}': {e}", sanitize_for_log(&req.username));
+            // If username was taken, return generic error; otherwise return validation error
+            return Ok(error_response!(
+                if username_taken { "INTERNAL_ERROR" } else { "VALIDATION_ERROR" },
+                if username_taken { "An error occurred while processing your request" } else { &e },
+                if username_taken { warp::http::StatusCode::INTERNAL_SERVER_ERROR } else { warp::http::StatusCode::BAD_REQUEST }
+            ));
         }
     };
+
+    // Now check if username was taken (after password hashing to prevent timing attack)
+    if username_taken {
+        warn!("Signup failed: username taken ({})", sanitize_for_log(&req.username));
+        return Ok(error_response!(
+            "CONFLICT",
+            "Unable to create account",
+            warp::http::StatusCode::CONFLICT
+        ));
+    }
+
+    let user = User::new(req.username.clone(), password_hash);
 
     let user = match queries::insert_user(&pool, &user).await {
         Ok(user) => user,
@@ -205,6 +213,7 @@ pub async fn signup_handler(
         }
     };
 
+    let auth_service = AuthService::new(jwt_secret);
     let (token, expires_at) = match auth_service.generate_token(user.id.clone()) {
         Ok((token, expires_at)) => (token, expires_at),
         Err(e) => {

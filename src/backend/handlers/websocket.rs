@@ -91,7 +91,7 @@ impl ConnectionManager {
 
     /// Get the current total number of connections
     pub fn total_connection_count(&self) -> usize {
-        self.total_connections.load(Ordering::Relaxed)
+        self.total_connections.load(Ordering::SeqCst)
     }
 
     /// Register a new connection for a user
@@ -108,7 +108,8 @@ impl ConnectionManager {
         sender: Sender<WsMessage>,
     ) -> RegisterResult {
         // Fast path: check limit with atomic counter first (lock-free)
-        let current_total = self.total_connections.load(Ordering::Relaxed);
+        // Use SeqCst to ensure we see the most recent writes from other threads
+        let current_total = self.total_connections.load(Ordering::SeqCst);
         if current_total >= self.max_total {
             return RegisterResult::MaxConnectionsReached;
         }
@@ -116,7 +117,8 @@ impl ConnectionManager {
         let mut conns = self.connections.write().await;
 
         // Double-check under lock to prevent race condition
-        let total_count = self.total_connections.load(Ordering::Relaxed);
+        // Use SeqCst for proper synchronization with other threads
+        let total_count = self.total_connections.load(Ordering::SeqCst);
         if total_count >= self.max_total {
             return RegisterResult::MaxConnectionsReached;
         }
@@ -133,7 +135,8 @@ impl ConnectionManager {
             .or_insert_with(Vec::new)
             .push(ManagedConnection { client, sender });
 
-        self.total_connections.fetch_add(1, Ordering::Relaxed);
+        // Use SeqCst to ensure the increment is visible to all threads
+        self.total_connections.fetch_add(1, Ordering::SeqCst);
 
         RegisterResult::Success { connection_id }
     }
@@ -151,7 +154,7 @@ impl ConnectionManager {
 
             // Decrement counter only if we actually removed a connection
             if user_conns.len() < before_len {
-                self.total_connections.fetch_sub(1, Ordering::Relaxed);
+                self.total_connections.fetch_sub(1, Ordering::SeqCst);
             }
 
             // Remove user entry if no connections remain
@@ -168,7 +171,7 @@ impl ConnectionManager {
     pub async fn disconnect_user(&self, user_id: &str) {
         let mut conns = self.connections.write().await;
         if let Some(user_conns) = conns.remove(user_id) {
-            self.total_connections.fetch_sub(user_conns.len(), Ordering::Relaxed);
+            self.total_connections.fetch_sub(user_conns.len(), Ordering::SeqCst);
         }
     }
 
