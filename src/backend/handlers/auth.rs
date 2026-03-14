@@ -291,12 +291,12 @@ pub async fn login_handler(
     let auth_service = AuthService::new(jwt_secret);
 
     let (user, hash_to_verify) = match queries::find_user_by_username(&pool, &req.username).await {
+        Ok(Some(user)) if user.is_deleted() => {
+            (None, user.password_hash)
+        }
         Ok(Some(user)) => {
-            if user.is_deleted() {
-                (None, user.password_hash.clone())
-            } else {
-                (Some(user.clone()), user.password_hash.clone())
-            }
+            let cloned = user.clone();
+            (Some(cloned), user.password_hash)
         }
         Ok(None) => {
             (None, DUMMY_BCRYPT_HASH_FOR_SIGNUP.to_string())

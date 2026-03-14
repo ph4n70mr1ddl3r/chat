@@ -153,6 +153,7 @@ impl TokenClaims {
     /// Check if the token has expired
     #[must_use]
     pub fn is_expired(&self) -> bool {
+        #[allow(clippy::cast_sign_loss)]
         let now: u64 = chrono::Utc::now().timestamp().max(0) as u64;
         self.exp < now
     }
@@ -160,6 +161,7 @@ impl TokenClaims {
     /// Check if the token is valid (not expired and issued before now)
     #[must_use]
     pub fn is_valid(&self) -> bool {
+        #[allow(clippy::cast_sign_loss)]
         let now: u64 = chrono::Utc::now().timestamp().max(0) as u64;
         self.iat <= now && self.exp > now
     }

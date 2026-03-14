@@ -50,7 +50,7 @@ pub struct ConversationsQuery {
     pub offset: u32,
 }
 
-fn default_limit() -> u32 {
+const fn default_limit() -> u32 {
     20
 }
 
@@ -63,7 +63,7 @@ pub struct MessagesQuery {
     pub offset: u32,
 }
 
-fn default_messages_limit() -> u32 {
+const fn default_messages_limit() -> u32 {
     50
 }
 
@@ -182,7 +182,7 @@ pub async fn start_conversation(
     Ok(reply::with_status(
         reply::json(&ConversationResponse {
             conversation_id: conversation.id,
-            participant_id: participant_id.clone(),
+            participant_id,
             participant_username: other_user.username,
             participant_is_online: other_user.is_online,
             created_at: conversation.created_at,
