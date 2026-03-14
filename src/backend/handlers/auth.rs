@@ -116,7 +116,7 @@ pub async fn logout_handler(
     }
 
     if let Some(token) = ctx.auth_token {
-        auth_service.revoke_token(&token).await;
+        auth_service.revoke_token(&token, &user_id).await;
         info!("Token revoked for user: {user_id}");
     }
 

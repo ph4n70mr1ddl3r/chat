@@ -25,7 +25,8 @@ fn hash_token(token: &str) -> String {
 /// Authentication service with token revocation support
 pub struct AuthService {
     jwt_secret: String,
-    revoked_tokens: Arc<RwLock<HashMap<String, i64>>>,
+    /// Maps token_hash -> (user_id, expiration_timestamp)
+    revoked_tokens: Arc<RwLock<HashMap<String, (String, i64)>>>,
     pool: Option<SqlitePool>,
     cleanup_handle: Option<Arc<tokio::task::JoinHandle<()>>>,
 }
@@ -82,7 +83,7 @@ impl AuthService {
                 let mut tokens = tokens_clone.write().await;
                 let now = chrono::Utc::now().timestamp();
                 let before_count = tokens.len();
-                tokens.retain(|_, exp| *exp > now);
+                tokens.retain(|_, (_, exp)| *exp > now);
                 let removed = before_count - tokens.len();
                 if removed > 0 {
                     info!(target: "auth", removed = removed, remaining = tokens.len(), "Cleaned up expired revoked tokens");
@@ -113,7 +114,7 @@ impl AuthService {
                 // Clean up in-memory tokens
                 let mut tokens = tokens_clone.write().await;
                 let before_count = tokens.len();
-                tokens.retain(|_, exp| *exp > now);
+                tokens.retain(|_, (_, exp)| *exp > now);
                 let removed = before_count - tokens.len();
                 
                 // Clean up database tokens
@@ -146,8 +147,8 @@ impl AuthService {
         };
 
         let now = chrono::Utc::now().timestamp();
-        let rows: Vec<(String, i64)> = sqlx::query_as(
-            "SELECT token_hash, expires_at FROM revoked_tokens WHERE expires_at > ?"
+        let rows: Vec<(String, String, i64)> = sqlx::query_as(
+            "SELECT token_hash, user_id, expires_at FROM revoked_tokens WHERE expires_at > ?"
         )
         .bind(now)
         .fetch_all(pool)
@@ -155,8 +156,8 @@ impl AuthService {
         .map_err(|e| format!("Failed to load revoked tokens: {e}"))?;
 
         let mut tokens = self.revoked_tokens.write().await;
-        for (token_hash, expires_at) in rows {
-            tokens.insert(token_hash, expires_at);
+        for (token_hash, user_id, expires_at) in rows {
+            tokens.insert(token_hash, (user_id, expires_at));
         }
 
         info!(target: "auth", count = tokens.len(), "Loaded revoked tokens from database");
@@ -166,14 +167,14 @@ impl AuthService {
     /// Revoke a token (add to blacklist with expiration time)
     /// Stores only the hash of the token for security
     /// Persists to database if pool is configured
-    pub async fn revoke_token(&self, token: &str) {
+    pub async fn revoke_token(&self, token: &str, user_id: &str) {
         let expiration = Utc::now().timestamp() + TOKEN_EXPIRATION_SECONDS + 60;
         let token_hash = hash_token(token);
-        self.revoked_tokens.write().await.insert(token_hash.clone(), expiration);
+        self.revoked_tokens.write().await.insert(token_hash.clone(), (user_id.to_string(), expiration));
 
         // Persist to database if pool is available
         if let Some(pool) = &self.pool {
-            if let Err(e) = self.revoke_token_in_db(&token_hash, expiration, pool).await {
+            if let Err(e) = self.revoke_token_in_db(&token_hash, user_id, expiration, pool).await {
                 warn!(target: "auth", error = %e, "Failed to persist revoked token to database");
             }
         }
@@ -181,10 +182,16 @@ impl AuthService {
 
     /// Revoke all tokens for a user (used when password is changed)
     pub async fn revoke_all_tokens_for_user(&self, user_id: &str) {
-        // Remove from in-memory cache
+        // Remove from in-memory cache - filter by user_id
         let mut tokens = self.revoked_tokens.write().await;
-        tokens.retain(|_, _| true); // Keep all (we don't track user_id in memory)
+        let before_count = tokens.len();
+        tokens.retain(|_, (uid, _)| uid != user_id);
+        let removed = before_count - tokens.len();
         drop(tokens);
+
+        if removed > 0 {
+            info!(target: "auth", user_id = %user_id, removed = removed, "Revoked tokens for user in memory");
+        }
 
         // Delete from database if pool is available
         if let Some(pool) = &self.pool {
@@ -198,12 +205,12 @@ impl AuthService {
         }
     }
 
-    async fn revoke_token_in_db(&self, token_hash: &str, expires_at: i64, pool: &SqlitePool) -> Result<(), String> {
+    async fn revoke_token_in_db(&self, token_hash: &str, user_id: &str, expires_at: i64, pool: &SqlitePool) -> Result<(), String> {
         sqlx::query(
             "INSERT OR IGNORE INTO revoked_tokens (token_hash, user_id, revoked_at, expires_at) VALUES (?, ?, ?, ?)"
         )
         .bind(token_hash)
-        .bind("") // user_id not tracked in this context
+        .bind(user_id)
         .bind(chrono::Utc::now().timestamp())
         .bind(expires_at)
         .execute(pool)
@@ -217,36 +224,33 @@ impl AuthService {
     pub async fn is_token_revoked(&self, token: &str) -> bool {
         let token_hash = hash_token(token);
         let tokens = self.revoked_tokens.read().await;
-        if let Some(&exp) = tokens.get(&token_hash) {
-            return exp > Utc::now().timestamp();
+        if let Some((_, exp)) = tokens.get(&token_hash) {
+            return *exp > Utc::now().timestamp();
         }
         drop(tokens);
 
         // Check database if not found in memory
         if let Some(pool) = &self.pool {
-            if let Ok(exists) = self.check_token_revoked_in_db(&token_hash, pool).await {
-                if exists {
-                    // Cache for future lookups
-                    let expiration = Utc::now().timestamp() + TOKEN_EXPIRATION_SECONDS + 60;
-                    self.revoked_tokens.write().await.insert(token_hash, expiration);
-                    return true;
-                }
+            if let Ok(Some((user_id, exp))) = self.check_token_revoked_in_db(&token_hash, pool).await {
+                // Cache for future lookups
+                self.revoked_tokens.write().await.insert(token_hash, (user_id, exp));
+                return true;
             }
         }
         false
     }
 
-    async fn check_token_revoked_in_db(&self, token_hash: &str, pool: &SqlitePool) -> Result<bool, String> {
+    async fn check_token_revoked_in_db(&self, token_hash: &str, pool: &SqlitePool) -> Result<Option<(String, i64)>, String> {
         let now = chrono::Utc::now().timestamp();
-        let count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM revoked_tokens WHERE token_hash = ? AND expires_at > ?"
+        let result: Option<(String, i64)> = sqlx::query_as(
+            "SELECT user_id, expires_at FROM revoked_tokens WHERE token_hash = ? AND expires_at > ?"
         )
         .bind(token_hash)
         .bind(now)
-        .fetch_one(pool)
+        .fetch_optional(pool)
         .await
         .map_err(|e| format!("Failed to check revoked token: {e}"))?;
-        Ok(count > 0)
+        Ok(result)
     }
 
     /// Clean up expired revoked tokens (call periodically)
@@ -254,7 +258,7 @@ impl AuthService {
         let mut tokens = self.revoked_tokens.write().await;
         let now = Utc::now().timestamp();
         let before_count = tokens.len();
-        tokens.retain(|_, exp| *exp > now);
+        tokens.retain(|_, (_, exp)| *exp > now);
         let removed = before_count - tokens.len();
         if removed > 0 {
             info!(target: "auth", removed = removed, remaining = tokens.len(), "Cleaned up expired revoked tokens");
@@ -512,7 +516,7 @@ mod tests {
 
         assert!(auth.verify_token(&token).await.is_ok());
 
-        auth.revoke_token(&token).await;
+        auth.revoke_token(&token, "user123").await;
 
         let result = auth.verify_token(&token).await;
         assert!(result.is_err());
