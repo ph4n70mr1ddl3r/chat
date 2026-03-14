@@ -17,7 +17,7 @@ pub struct MessageService {
 }
 
 impl MessageService {
-    /// Create a new message service
+    #[must_use]
     pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
     }

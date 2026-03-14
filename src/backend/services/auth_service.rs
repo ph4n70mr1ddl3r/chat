@@ -48,6 +48,7 @@ const DEFAULT_SCOPES: [&str; 2] = ["send", "receive"];
 
 impl AuthService {
     /// Create a new authentication service with the given secret key
+    #[must_use]
     pub fn new(jwt_secret: String) -> Self {
         Self {
             jwt_secret,
@@ -58,6 +59,7 @@ impl AuthService {
     }
 
     /// Create a new authentication service with database persistence for token revocation
+    #[must_use]
     pub fn with_pool(jwt_secret: String, pool: SqlitePool) -> Self {
         Self {
             jwt_secret,
@@ -68,6 +70,7 @@ impl AuthService {
     }
 
     /// Create a new authentication service with periodic cleanup of revoked tokens
+    #[must_use]
     pub fn with_cleanup(jwt_secret: String) -> Self {
         let revoked_tokens = Arc::new(RwLock::new(HashMap::new()));
         let tokens_clone = revoked_tokens.clone();

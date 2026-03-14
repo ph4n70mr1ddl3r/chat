@@ -33,6 +33,7 @@ pub struct ClientConnection {
 }
 
 impl ClientConnection {
+    #[must_use]
     pub fn new(user_id: String, username: String) -> Self {
         let connection_id = uuid::Uuid::new_v4().to_string();
         let connected_at = chrono::Utc::now().timestamp_millis() as u64;
@@ -76,10 +77,12 @@ impl Default for ConnectionManager {
 }
 
 impl ConnectionManager {
+    #[must_use]
     pub fn new() -> Self {
         Self::with_limits(MAX_TOTAL_CONNECTIONS, MAX_CONNECTIONS_PER_USER)
     }
 
+    #[must_use]
     pub fn with_limits(max_total: usize, max_per_user: usize) -> Self {
         Self {
             connections: Arc::new(RwLock::new(HashMap::new())),
@@ -90,6 +93,7 @@ impl ConnectionManager {
     }
 
     /// Get the current total number of connections
+    #[must_use]
     pub fn total_connection_count(&self) -> usize {
         self.total_connections.load(Ordering::SeqCst)
     }
@@ -190,6 +194,7 @@ impl ConnectionManager {
     /// Check if user is online (has any active connections)
     ///
     /// Returns true if the user has at least one active WebSocket connection.
+    #[must_use]
     pub async fn is_user_online(&self, user_id: &str) -> bool {
         let conns = self.connections.read().await;
         conns.contains_key(user_id)
@@ -346,6 +351,7 @@ impl MessageValidator {
 pub struct ErrorResponse;
 
 impl ErrorResponse {
+    #[must_use]
     pub fn create_error_response(
         code: &str,
         message: &str,
@@ -370,6 +376,7 @@ impl ErrorResponse {
         WsMessage::text(error.to_string())
     }
 
+    #[must_use]
     pub fn invalid_message_length(sent_length: usize, max_length: usize) -> WsMessage {
         Self::create_error_response(
             "INVALID_MESSAGE_LENGTH",
@@ -381,6 +388,7 @@ impl ErrorResponse {
         )
     }
 
+    #[must_use]
     pub fn recipient_not_found(_recipient_id: &str) -> WsMessage {
         Self::create_error_response(
             "RECIPIENT_NOT_FOUND",
@@ -389,18 +397,22 @@ impl ErrorResponse {
         )
     }
 
+    #[must_use]
     pub fn unauthorized(reason: &str) -> WsMessage {
         Self::create_error_response("UNAUTHORIZED", reason, None)
     }
 
+    #[must_use]
     pub fn invalid_json() -> WsMessage {
         Self::create_error_response("INVALID_JSON", "Message is not valid JSON", None)
     }
 
+    #[must_use]
     pub fn server_error(reason: &str) -> WsMessage {
         Self::create_error_response("SERVER_ERROR", reason, None)
     }
 
+    #[must_use]
     pub fn authorization_failure() -> WsMessage {
         Self::create_error_response(
             "AUTHORIZATION_FAILURE",
@@ -409,6 +421,7 @@ impl ErrorResponse {
         )
     }
 
+    #[must_use]
     pub fn invalid_message(reason: &str) -> WsMessage {
         Self::create_error_response("INVALID_MESSAGE", reason, None)
     }

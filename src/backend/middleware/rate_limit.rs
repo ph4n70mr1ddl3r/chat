@@ -40,6 +40,7 @@ impl Default for RateLimiter {
 }
 
 impl RateLimiter {
+    #[must_use]
     pub fn new(max_attempts: u32, window_secs: u64) -> Self {
         Self {
             entries: Arc::new(Mutex::new(HashMap::new())),
@@ -49,6 +50,7 @@ impl RateLimiter {
         }
     }
 
+    #[must_use]
     pub fn with_max_entries(max_attempts: u32, window_secs: u64, max_entries: usize) -> Self {
         Self {
             entries: Arc::new(Mutex::new(HashMap::new())),
@@ -58,11 +60,13 @@ impl RateLimiter {
         }
     }
 
+    #[must_use]
     pub fn global() -> Self {
         Self::new(1000, 60)
     }
 
     /// Get remaining attempts for an IP address
+    #[must_use]
     pub async fn get_remaining_attempts(&self, ip: &str) -> u32 {
         let entries = self.entries.lock().await;
 
@@ -86,6 +90,7 @@ impl RateLimiter {
     }
 
     /// Determine how long until the window resets for a given key
+    #[must_use]
     pub async fn retry_after_seconds(&self, ip: &str) -> u64 {
         let entries = self.entries.lock().await;
 
@@ -200,6 +205,18 @@ impl RateLimiter {
 pub struct RateLimitExceeded {
     pub retry_after_secs: u64,
 }
+
+impl std::fmt::Display for RateLimitExceeded {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Rate limit exceeded. Retry after {} seconds.",
+            self.retry_after_secs
+        )
+    }
+}
+
+impl std::error::Error for RateLimitExceeded {}
 
 impl reject::Reject for RateLimitExceeded {}
 

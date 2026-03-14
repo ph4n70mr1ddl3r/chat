@@ -31,6 +31,7 @@ pub struct ApiError {
 }
 
 impl ApiError {
+    #[must_use]
     pub fn new(status: StatusCode, code: &'static str, message: impl Into<String>) -> Self {
         Self {
             status,
@@ -40,6 +41,7 @@ impl ApiError {
         }
     }
 
+    #[must_use]
     pub fn with_details(
         status: StatusCode,
         code: &'static str,
@@ -54,30 +56,37 @@ impl ApiError {
         }
     }
 
+    #[must_use]
     pub fn bad_request(message: impl Into<String>) -> Self {
         Self::new(StatusCode::BAD_REQUEST, "BAD_REQUEST", message)
     }
 
+    #[must_use]
     pub fn unauthorized(message: impl Into<String>) -> Self {
         Self::new(StatusCode::UNAUTHORIZED, "UNAUTHORIZED", message)
     }
 
+    #[must_use]
     pub fn forbidden(message: impl Into<String>) -> Self {
         Self::new(StatusCode::FORBIDDEN, "FORBIDDEN", message)
     }
 
+    #[must_use]
     pub fn not_found(message: impl Into<String>) -> Self {
         Self::new(StatusCode::NOT_FOUND, "NOT_FOUND", message)
     }
 
+    #[must_use]
     pub fn conflict(message: impl Into<String>) -> Self {
         Self::new(StatusCode::CONFLICT, "CONFLICT", message)
     }
 
+    #[must_use]
     pub fn too_many_requests(message: impl Into<String>) -> Self {
         Self::new(StatusCode::TOO_MANY_REQUESTS, "RATE_LIMITED", message)
     }
 
+    #[must_use]
     pub fn internal(message: impl Into<String>) -> Self {
         Self::new(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", message)
     }
