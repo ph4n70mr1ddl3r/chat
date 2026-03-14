@@ -246,7 +246,7 @@ pub async fn search_users_by_prefix(
     limit: u32,
 ) -> Result<Vec<User>, String> {
     let escaped = escape_like_pattern(&query.to_lowercase());
-    let pattern = format!("{}%", escaped);
+    let pattern = format!("{escaped}%");
 
     sqlx::query_as::<_, User>(&format!(
         "{SQL_SELECT_USER_FIELDS} FROM users WHERE LOWER(username) LIKE ? ESCAPE '\\' AND deleted_at IS NULL ORDER BY username LIMIT ?"
@@ -270,7 +270,7 @@ pub async fn search_users_excluding_self(
     limit: u32,
 ) -> Result<Vec<User>, String> {
     let escaped = escape_like_pattern(&query.to_lowercase());
-    let pattern = format!("{}%", escaped);
+    let pattern = format!("{escaped}%");
 
     sqlx::query_as::<_, User>(&format!(
         "{SQL_SELECT_USER_FIELDS} FROM users WHERE LOWER(username) LIKE ? ESCAPE '\\' AND deleted_at IS NULL AND id != ? ORDER BY username LIMIT ?"

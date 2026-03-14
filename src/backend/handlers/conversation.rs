@@ -15,7 +15,7 @@ fn validate_uuid(id: &str, field_name: &str) -> Result<(), (String, String)> {
     if Uuid::parse_str(id).is_err() {
         Err((
             "INVALID_ID".to_string(),
-            format!("Invalid {} format", field_name),
+            format!("Invalid {field_name} format"),
         ))
     } else {
         Ok(())
