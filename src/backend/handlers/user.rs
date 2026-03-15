@@ -331,6 +331,7 @@ pub async fn change_password(
     req: ChangePasswordRequest,
     csrf_service: CsrfService,
     pool: SqlitePool,
+    auth_service: Arc<AuthService>,
 ) -> Result<impl Reply, Rejection> {
     let csrf_token = match csrf_token {
         Some(token) => token,
@@ -466,6 +467,9 @@ pub async fn change_password(
             warp::http::StatusCode::INTERNAL_SERVER_ERROR,
         ));
     }
+
+    // Invalidate all existing tokens for this user (security best practice)
+    auth_service.revoke_all_tokens_for_user(&user_id).await;
 
     Ok(reply::with_status(
         reply::json(&serde_json::json!({ "message": "Password changed successfully" })),

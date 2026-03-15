@@ -27,6 +27,9 @@ pub struct AuthService {
     jwt_secret: String,
     /// Maps token_hash -> (user_id, expiration_timestamp)
     revoked_tokens: Arc<RwLock<HashMap<String, (String, i64)>>>,
+    /// Maps user_id -> timestamp after which tokens are valid
+    /// Used to invalidate all tokens for a user (e.g., on password change)
+    tokens_valid_after: Arc<RwLock<HashMap<String, i64>>>,
     pool: Option<SqlitePool>,
     cleanup_handle: Option<Arc<tokio::task::JoinHandle<()>>>,
 }
@@ -54,6 +57,7 @@ impl AuthService {
         Self {
             jwt_secret,
             revoked_tokens: Arc::new(RwLock::new(HashMap::new())),
+            tokens_valid_after: Arc::new(RwLock::new(HashMap::new())),
             pool: None,
             cleanup_handle: None,
         }
@@ -65,6 +69,7 @@ impl AuthService {
         Self {
             jwt_secret,
             revoked_tokens: Arc::new(RwLock::new(HashMap::new())),
+            tokens_valid_after: Arc::new(RwLock::new(HashMap::new())),
             pool: Some(pool),
             cleanup_handle: None,
         }
@@ -74,6 +79,7 @@ impl AuthService {
     #[must_use]
     pub fn with_cleanup(jwt_secret: String) -> Self {
         let revoked_tokens = Arc::new(RwLock::new(HashMap::new()));
+        let tokens_valid_after = Arc::new(RwLock::new(HashMap::new()));
         let tokens_clone = revoked_tokens.clone();
         
         let cleanup_handle = tokio::spawn(async move {
@@ -94,6 +100,7 @@ impl AuthService {
         Self {
             jwt_secret,
             revoked_tokens,
+            tokens_valid_after,
             pool: None,
             cleanup_handle: Some(Arc::new(cleanup_handle)),
         }
@@ -102,6 +109,7 @@ impl AuthService {
     /// Create a new authentication service with database persistence and periodic cleanup
     pub fn with_pool_and_cleanup(jwt_secret: String, pool: SqlitePool) -> Self {
         let revoked_tokens = Arc::new(RwLock::new(HashMap::new()));
+        let tokens_valid_after = Arc::new(RwLock::new(HashMap::new()));
         let tokens_clone = revoked_tokens.clone();
         let pool_clone = pool.clone();
         
@@ -135,6 +143,7 @@ impl AuthService {
         Self {
             jwt_secret,
             revoked_tokens,
+            tokens_valid_after,
             pool: Some(pool),
             cleanup_handle: Some(Arc::new(cleanup_handle)),
         }
@@ -180,28 +189,30 @@ impl AuthService {
         }
     }
 
-    /// Revoke all tokens for a user (used when password is changed)
+    /// Invalidate all tokens for a user (used when password is changed).
+    ///
+    /// This sets a "tokens valid after" timestamp for the user. Any token
+    /// issued before this timestamp will be rejected during verification.
     pub async fn revoke_all_tokens_for_user(&self, user_id: &str) {
-        // Remove from in-memory cache - filter by user_id
-        let mut tokens = self.revoked_tokens.write().await;
-        let before_count = tokens.len();
-        tokens.retain(|_, (uid, _)| uid != user_id);
-        let removed = before_count - tokens.len();
-        drop(tokens);
-
-        if removed > 0 {
-            info!(target: "auth", user_id = %user_id, removed = removed, "Revoked tokens for user in memory");
-        }
-
-        // Delete from database if pool is available
-        if let Some(pool) = &self.pool {
-            if let Err(e) = sqlx::query("DELETE FROM revoked_tokens WHERE user_id = ?")
-                .bind(user_id)
-                .execute(pool)
-                .await
-            {
-                warn!(target: "auth", error = %e, user_id = %user_id, "Failed to delete revoked tokens for user");
+        let now = Utc::now().timestamp();
+        
+        self.tokens_valid_after.write().await.insert(user_id.to_string(), now);
+        
+        info!(target: "auth", user_id = %user_id, "Invalidated all tokens for user");
+    }
+    
+    /// Check if a token was issued before the user's "tokens valid after" timestamp
+    fn is_token_issued_before_invalidation(&self, user_id: &str, token_iat: u64) -> bool {
+        let tokens_valid_after = self.tokens_valid_after.try_read();
+        match tokens_valid_after {
+            Ok(map) => {
+                if let Some(&valid_after) = map.get(user_id) {
+                    let token_iat_secs = (token_iat / 1000) as i64;
+                    return token_iat_secs < valid_after;
+                }
+                false
             }
+            Err(_) => false,
         }
     }
 
@@ -384,8 +395,8 @@ impl AuthService {
         validation.set_issuer(&["chat-app"]);
         validation.validate_nbf = true;
 
-        match decode::<TokenClaims>(token, &key, &validation) {
-            Ok(data) => Ok(data.claims),
+        let claims = match decode::<TokenClaims>(token, &key, &validation) {
+            Ok(data) => data.claims,
             Err(e) => {
                 let error_detail = match e.kind() {
                     jsonwebtoken::errors::ErrorKind::ExpiredSignature => "Token has expired",
@@ -396,9 +407,17 @@ impl AuthService {
                     _ => "Token verification failed",
                 };
                 warn!(target: "auth", event = "auth.token.verify_failed", error = ?e.kind(), "Token verification failed");
-                Err(error_detail.to_string())
+                return Err(error_detail.to_string());
             }
+        };
+
+        // Check if token was issued before user's invalidation timestamp
+        if self.is_token_issued_before_invalidation(&claims.sub, claims.iat) {
+            warn!(target: "auth", user_id = %claims.sub, "Token rejected due to user-wide invalidation");
+            return Err("Token has been invalidated".to_string());
         }
+
+        Ok(claims)
     }
 }
 
@@ -521,5 +540,60 @@ mod tests {
         let result = auth.verify_token(&token).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("revoked"));
+    }
+
+    #[tokio::test]
+    async fn test_revoke_all_tokens_for_user() {
+        let auth = AuthService::new(uuid::Uuid::new_v4().to_string());
+        
+        // Generate multiple tokens for the same user
+        let (token1, _) = auth.generate_token("user123".to_string()).unwrap();
+        let (token2, _) = auth.generate_token("user123".to_string()).unwrap();
+        
+        // Both should be valid initially
+        assert!(auth.verify_token(&token1).await.is_ok());
+        assert!(auth.verify_token(&token2).await.is_ok());
+        
+        // Invalidate all tokens for user
+        auth.revoke_all_tokens_for_user("user123").await;
+        
+        // Both should now be invalid
+        let result1 = auth.verify_token(&token1).await;
+        let result2 = auth.verify_token(&token2).await;
+        assert!(result1.is_err());
+        assert!(result1.unwrap_err().contains("invalidated"));
+        assert!(result2.is_err());
+        assert!(result2.unwrap_err().contains("invalidated"));
+    }
+    
+    #[tokio::test]
+    async fn test_revoke_all_tokens_does_not_affect_other_users() {
+        let auth = AuthService::new(uuid::Uuid::new_v4().to_string());
+        
+        let (token_user1, _) = auth.generate_token("user1".to_string()).unwrap();
+        let (token_user2, _) = auth.generate_token("user2".to_string()).unwrap();
+        
+        // Revoke all tokens for user1
+        auth.revoke_all_tokens_for_user("user1").await;
+        
+        // user1's token should be invalid
+        assert!(auth.verify_token(&token_user1).await.is_err());
+        
+        // user2's token should still be valid
+        assert!(auth.verify_token(&token_user2).await.is_ok());
+    }
+    
+    #[tokio::test]
+    async fn test_new_token_after_revoke_all_is_valid() {
+        let auth = AuthService::new(uuid::Uuid::new_v4().to_string());
+        
+        // Generate and then invalidate
+        let (old_token, _) = auth.generate_token("user123".to_string()).unwrap();
+        auth.revoke_all_tokens_for_user("user123").await;
+        assert!(auth.verify_token(&old_token).await.is_err());
+        
+        // Generate new token after invalidation
+        let (new_token, _) = auth.generate_token("user123".to_string()).unwrap();
+        assert!(auth.verify_token(&new_token).await.is_ok());
     }
 }
