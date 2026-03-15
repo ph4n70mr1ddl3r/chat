@@ -46,6 +46,7 @@ impl Default for HeartbeatState {
 }
 
 impl HeartbeatState {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             last_ping_sent: None,
@@ -56,6 +57,7 @@ impl HeartbeatState {
     }
 
     /// Check if PONG response is overdue
+    #[must_use]
     pub fn is_pong_overdue(&self, pong_timeout: u64) -> bool {
         if let Some(last_ping) = self.last_ping_sent {
             let elapsed = Instant::now().duration_since(last_ping).as_secs();
@@ -83,6 +85,7 @@ pub struct HeartbeatManager {
 }
 
 impl HeartbeatManager {
+    #[must_use]
     pub fn new(config: HeartbeatConfig) -> Self {
         Self {
             config,
@@ -91,6 +94,7 @@ impl HeartbeatManager {
     }
 
     /// Generate a PING message
+    #[must_use]
     pub fn generate_ping() -> WsMessage {
         WsMessage::Ping(Vec::new().into())
     }
@@ -138,16 +142,19 @@ pub struct HeartbeatScheduler {
 }
 
 impl HeartbeatScheduler {
+    #[must_use]
     pub fn new(config: HeartbeatConfig) -> Self {
         Self { config }
     }
 
     /// Get interval duration for PING messages
+    #[must_use]
     pub fn get_ping_interval(&self) -> Duration {
         Duration::from_secs(self.config.ping_interval)
     }
 
     /// Get timeout duration for PONG responses
+    #[must_use]
     pub fn get_pong_timeout(&self) -> Duration {
         Duration::from_secs(self.config.pong_timeout)
     }
