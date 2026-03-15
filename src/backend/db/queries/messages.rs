@@ -1,6 +1,7 @@
 //! Message database queries
 
 use crate::models::Message;
+use crate::utils::escape_like_pattern;
 use sqlx::SqlitePool;
 
 const SQL_SELECT_MESSAGE_FIELDS: &str =
@@ -198,13 +199,6 @@ pub async fn anonymize_user_messages(pool: &SqlitePool, user_id: &str) -> Result
     .map_err(|e| format!("Failed to anonymize user messages: {e}"))?;
 
     Ok(())
-}
-
-/// Escape SQL LIKE wildcards to prevent wildcard injection
-fn escape_like_pattern(s: &str) -> String {
-    s.replace('\\', "\\\\")
-        .replace('%', "\\%")
-        .replace('_', "\\_")
 }
 
 /// Search messages within a conversation.

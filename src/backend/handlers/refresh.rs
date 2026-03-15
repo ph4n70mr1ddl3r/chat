@@ -82,9 +82,6 @@ pub async fn refresh_token_handler(
         }
     }
 
-    shared_auth_service.revoke_token(&req.token, &claims.sub).await;
-    info!("Old token revoked for user: {}", claims.sub);
-
     let (new_token, expires_at) = match auth_service.generate_token(claims.sub.clone()) {
         Ok((token, expires_at)) => (token, expires_at),
         Err(e) => {
@@ -114,6 +111,9 @@ pub async fn refresh_token_handler(
             ));
         }
     };
+
+    shared_auth_service.revoke_token(&req.token, &claims.sub).await;
+    info!("Old token revoked for user: {}", claims.sub);
 
     info!("Token refreshed for user: {}", claims.sub);
 

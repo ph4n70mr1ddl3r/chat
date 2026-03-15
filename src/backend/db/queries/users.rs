@@ -1,6 +1,7 @@
 //! User database queries
 
 use crate::models::User;
+use crate::utils::escape_like_pattern;
 use sqlx::SqlitePool;
 use tracing::warn;
 use uuid::Uuid;
@@ -226,13 +227,6 @@ pub async fn delete_user_conversations(pool: &SqlitePool, user_id: &str) -> Resu
         .map_err(|e| format!("Failed to delete user conversations: {e}"))?;
 
     Ok(())
-}
-
-/// Escape SQL LIKE wildcards to prevent wildcard injection
-fn escape_like_pattern(s: &str) -> String {
-    s.replace('\\', "\\\\")
-        .replace('%', "\\%")
-        .replace('_', "\\_")
 }
 
 /// Search users by username prefix (case-insensitive).

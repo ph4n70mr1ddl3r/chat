@@ -82,6 +82,16 @@ pub fn sanitize_for_log(s: &str) -> String {
         .collect()
 }
 
+/// Escape SQL LIKE wildcards to prevent wildcard injection.
+///
+/// Escapes backslash, percent, and underscore characters which have
+/// special meaning in SQL LIKE patterns.
+pub fn escape_like_pattern(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -109,5 +119,30 @@ mod tests {
     #[test]
     fn test_sanitize_for_log_empty() {
         assert_eq!(sanitize_for_log(""), "");
+    }
+
+    #[test]
+    fn test_escape_like_pattern_no_special() {
+        assert_eq!(escape_like_pattern("hello"), "hello");
+    }
+
+    #[test]
+    fn test_escape_like_pattern_percent() {
+        assert_eq!(escape_like_pattern("100%"), "100\\%");
+    }
+
+    #[test]
+    fn test_escape_like_pattern_underscore() {
+        assert_eq!(escape_like_pattern("user_name"), "user\\_name");
+    }
+
+    #[test]
+    fn test_escape_like_pattern_backslash() {
+        assert_eq!(escape_like_pattern("path\\to\\file"), "path\\\\to\\\\file");
+    }
+
+    #[test]
+    fn test_escape_like_pattern_all_special() {
+        assert_eq!(escape_like_pattern("%_\\test"), "\\%\\_\\\\test");
     }
 }
