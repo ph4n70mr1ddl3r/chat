@@ -14,6 +14,14 @@ use tracing::{info, warn};
 use warp::{reply, Rejection, Reply};
 
 /// Enhanced login handler with rate limiting
+///
+/// # Errors
+///
+/// Returns a warp rejection if:
+/// - Rate limit is exceeded
+/// - Database operations fail
+/// - Token generation fails
+#[allow(clippy::too_many_lines)]
 pub async fn login_with_rate_limit(
     req: LoginRequest,
     pool: SqlitePool,

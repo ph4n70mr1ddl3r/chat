@@ -91,6 +91,13 @@ pub struct MessageResponse {
 /// Handle POST /conversations/start
 ///
 /// Creates or retrieves existing conversation between current user and other user
+///
+/// # Errors
+///
+/// Returns a warp rejection if:
+/// - User is not found
+/// - Database operations fail
+/// - User attempts to create conversation with themselves
 pub async fn start_conversation(
     user_id: String,
     request: StartConversationRequest,
@@ -197,6 +204,12 @@ pub async fn start_conversation(
 /// Handle GET /conversations?limit=20&offset=0
 ///
 /// Returns list of conversations for the current user
+///
+/// # Errors
+///
+/// Returns a warp rejection if:
+/// - Database operations fail
+/// - Participant information cannot be retrieved
 pub async fn get_conversations(
     user_id: String,
     query: ConversationsQuery,
@@ -287,6 +300,14 @@ pub async fn get_conversations(
 /// Handle GET /conversations/{id}/messages?limit=50&offset=0
 ///
 /// Returns paginated messages for a conversation
+///
+/// # Errors
+///
+/// Returns a warp rejection if:
+/// - Conversation ID is invalid
+/// - Conversation is not found
+/// - User is not a participant
+/// - Database operations fail
 pub async fn get_conversation_messages(
     user_id: String,
     conversation_id: String,
@@ -410,6 +431,16 @@ pub async fn get_conversation_messages(
 /// Handle GET /conversations/{id}/search?q=keyword
 ///
 /// Searches messages within a conversation by keyword
+///
+/// # Errors
+///
+/// Returns a warp rejection if:
+/// - Conversation ID is invalid
+/// - Search query is empty
+/// - Conversation is not found
+/// - User is not a participant
+/// - Database operations fail
+#[allow(clippy::too_many_lines)]
 pub async fn search_messages(
     user_id: String,
     conversation_id: String,

@@ -9,6 +9,13 @@ use chat_shared::protocol::MessageEnvelope;
 use serde_json::json;
 use warp::ws::Message as WsMessage;
 
+fn timestamp_millis_as_u64() -> u64 {
+    #[allow(clippy::cast_sign_loss)]
+    {
+        chrono::Utc::now().timestamp_millis() as u64
+    }
+}
+
 /// Message dispatcher routes incoming WebSocket messages to appropriate handlers
 pub struct MessageDispatcher;
 
@@ -62,7 +69,7 @@ impl MessageDispatcher {
                 envelope: MessageEnvelope {
                     id: uuid::Uuid::new_v4().to_string(),
                     msg_type: "ping".to_string(),
-                    timestamp: chrono::Utc::now().timestamp_millis() as u64,
+                    timestamp: timestamp_millis_as_u64(),
                     data: json!({}),
                 },
             };
@@ -74,7 +81,7 @@ impl MessageDispatcher {
                 envelope: MessageEnvelope {
                     id: uuid::Uuid::new_v4().to_string(),
                     msg_type: "pong".to_string(),
-                    timestamp: chrono::Utc::now().timestamp_millis() as u64,
+                    timestamp: timestamp_millis_as_u64(),
                     data: json!({}),
                 },
             };
@@ -100,7 +107,7 @@ impl MessageDispatcher {
         // Validate envelope structure
         if let Err(e) = MessageValidator::validate_envelope(&envelope) {
             return DispatchResult::Error {
-                error_msg: ErrorResponse::server_error(&format!("Invalid envelope: {}", e)),
+                error_msg: ErrorResponse::server_error(&format!("Invalid envelope: {e}")),
             };
         }
 

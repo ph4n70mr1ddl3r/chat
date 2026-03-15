@@ -18,6 +18,7 @@ use warp::http::StatusCode;
 /// Extract JWT token from Sec-WebSocket-Protocol header
 ///
 /// The token is expected as a subprotocol in the format: "jwt.<token>"
+#[must_use]
 pub fn extract_token_from_protocol_header(header_value: &str) -> Option<String> {
     for protocol in header_value.split(',') {
         let protocol = protocol.trim();
@@ -36,6 +37,7 @@ pub struct HandshakeValidator {
 }
 
 impl HandshakeValidator {
+    #[must_use]
     pub fn new(jwt_secret: String) -> Self {
         Self {
             auth_service: AuthService::new(jwt_secret),
@@ -45,6 +47,13 @@ impl HandshakeValidator {
     /// Validate WebSocket upgrade request and extract user claims
     ///
     /// Token must be provided in Sec-WebSocket-Protocol header as "jwt.<token>"
+    ///
+    /// # Errors
+    ///
+    /// Returns an error tuple with status code and message if:
+    /// - Token is missing from the protocol header
+    /// - Token is invalid, expired, or revoked
+    /// - Token is missing required claims (sub, aud)
     pub async fn validate_upgrade(
         &self,
         protocol_header: Option<&str>,
