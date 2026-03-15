@@ -27,7 +27,7 @@ pub struct AuthService {
     jwt_secret: String,
     /// Maps token_hash -> (user_id, expiration_timestamp)
     revoked_tokens: Arc<RwLock<HashMap<String, (String, i64)>>>,
-    /// Maps user_id -> timestamp after which tokens are valid
+    /// Maps user_id -> timestamp (milliseconds) after which tokens are valid
     /// Used to invalidate all tokens for a user (e.g., on password change)
     tokens_valid_after: Arc<RwLock<HashMap<String, i64>>>,
     pool: Option<SqlitePool>,
@@ -193,27 +193,23 @@ impl AuthService {
     ///
     /// This sets a "tokens valid after" timestamp for the user. Any token
     /// issued before this timestamp will be rejected during verification.
+    /// We add 1ms to the current time to ensure tokens generated in the
+    /// same millisecond as revocation are also invalidated.
     pub async fn revoke_all_tokens_for_user(&self, user_id: &str) {
-        let now = Utc::now().timestamp();
+        let now_ms = Utc::now().timestamp_millis() + 1;
         
-        self.tokens_valid_after.write().await.insert(user_id.to_string(), now);
+        self.tokens_valid_after.write().await.insert(user_id.to_string(), now_ms);
         
         info!(target: "auth", user_id = %user_id, "Invalidated all tokens for user");
     }
     
     /// Check if a token was issued before the user's "tokens valid after" timestamp
-    fn is_token_issued_before_invalidation(&self, user_id: &str, token_iat: u64) -> bool {
-        let tokens_valid_after = self.tokens_valid_after.try_read();
-        match tokens_valid_after {
-            Ok(map) => {
-                if let Some(&valid_after) = map.get(user_id) {
-                    let token_iat_secs = (token_iat / 1000) as i64;
-                    return token_iat_secs < valid_after;
-                }
-                false
-            }
-            Err(_) => false,
+    async fn is_token_issued_before_invalidation(&self, user_id: &str, token_iat: u64) -> bool {
+        let tokens_valid_after = self.tokens_valid_after.read().await;
+        if let Some(&valid_after_ms) = tokens_valid_after.get(user_id) {
+            return (token_iat as i64) < valid_after_ms;
         }
+        false
     }
 
     async fn revoke_token_in_db(&self, token_hash: &str, user_id: &str, expires_at: i64, pool: &SqlitePool) -> Result<(), String> {
@@ -412,7 +408,7 @@ impl AuthService {
         };
 
         // Check if token was issued before user's invalidation timestamp
-        if self.is_token_issued_before_invalidation(&claims.sub, claims.iat) {
+        if self.is_token_issued_before_invalidation(&claims.sub, claims.iat).await {
             warn!(target: "auth", user_id = %claims.sub, "Token rejected due to user-wide invalidation");
             return Err("Token has been invalidated".to_string());
         }
@@ -591,6 +587,11 @@ mod tests {
         let (old_token, _) = auth.generate_token("user123".to_string()).unwrap();
         auth.revoke_all_tokens_for_user("user123").await;
         assert!(auth.verify_token(&old_token).await.is_err());
+        
+        // Wait for at least 2ms to ensure new token has a later timestamp
+        // The revocation sets valid_after = now + 1ms, so we need to generate
+        // the new token at least 2ms after the old token for it to be valid
+        tokio::time::sleep(tokio::time::Duration::from_millis(2)).await;
         
         // Generate new token after invalidation
         let (new_token, _) = auth.generate_token("user123".to_string()).unwrap();
