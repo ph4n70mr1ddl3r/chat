@@ -6,7 +6,7 @@ use crate::utils::is_trusted_proxy;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, broadcast};
 use warp::{self, addr::remote, reject, Filter, Rejection};
 
 const DEFAULT_MAX_ENTRIES: usize = 100_000;
@@ -31,6 +31,7 @@ pub struct RateLimiter {
     max_attempts: u32,
     window_duration: Duration,
     max_entries: usize,
+    shutdown_tx: broadcast::Sender<()>,
 }
 
 impl Default for RateLimiter {
@@ -42,27 +43,36 @@ impl Default for RateLimiter {
 impl RateLimiter {
     #[must_use]
     pub fn new(max_attempts: u32, window_secs: u64) -> Self {
+        let (shutdown_tx, _) = broadcast::channel(1);
         Self {
             entries: Arc::new(Mutex::new(HashMap::new())),
             max_attempts,
             window_duration: Duration::from_secs(window_secs),
             max_entries: DEFAULT_MAX_ENTRIES,
+            shutdown_tx,
         }
     }
 
     #[must_use]
     pub fn with_max_entries(max_attempts: u32, window_secs: u64, max_entries: usize) -> Self {
+        let (shutdown_tx, _) = broadcast::channel(1);
         Self {
             entries: Arc::new(Mutex::new(HashMap::new())),
             max_attempts,
             window_duration: Duration::from_secs(window_secs),
             max_entries,
+            shutdown_tx,
         }
     }
 
     #[must_use]
     pub fn global() -> Self {
         Self::new(1000, 60)
+    }
+
+    /// Signal the cleanup task to shut down gracefully
+    pub fn shutdown(&self) {
+        let _ = self.shutdown_tx.send(());
     }
 
     /// Get remaining attempts for an IP address
@@ -183,23 +193,31 @@ impl RateLimiter {
 
     /// Start a background task that periodically cleans up expired entries
     ///
-    /// The task will run until the returned cancellation token is triggered,
+    /// The task will run until `shutdown()` is called on the rate limiter,
     /// or the rate limiter is dropped.
     ///
     /// # Returns
-    /// A tuple containing the task handle and a cancellation token for graceful shutdown.
+    /// A task handle for graceful shutdown.
     #[must_use]
     pub fn start_periodic_cleanup(&self) -> tokio::task::JoinHandle<()> {
         let limiter = self.clone();
         let interval_duration = self.window_duration;
+        let mut shutdown_rx = self.shutdown_tx.subscribe();
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(interval_duration);
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
             loop {
-                interval.tick().await;
-                limiter.cleanup_expired().await;
+                tokio::select! {
+                    _ = shutdown_rx.recv() => {
+                        tracing::debug!("Rate limiter cleanup task shutting down");
+                        break;
+                    }
+                    _ = interval.tick() => {
+                        limiter.cleanup_expired().await;
+                    }
+                }
             }
         })
     }

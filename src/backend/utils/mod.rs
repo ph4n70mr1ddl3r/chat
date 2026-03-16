@@ -62,6 +62,7 @@ fn get_trusted_proxies() -> &'static Vec<ipnet::IpNet> {
 /// Trusted proxies are internal network ranges (RFC 1918) and localhost by default,
 /// or custom ranges from the `TRUSTED_PROXIES` environment variable.
 /// Used to determine whether to trust X-Forwarded-For headers.
+#[must_use]
 pub fn is_trusted_proxy(remote_ip: &IpAddr) -> bool {
     for network in get_trusted_proxies() {
         if network.contains(remote_ip) {
@@ -75,6 +76,7 @@ pub fn is_trusted_proxy(remote_ip: &IpAddr) -> bool {
 ///
 /// Limits length to 50 characters and only allows alphanumeric,
 /// underscore, and hyphen characters to prevent log injection.
+#[must_use]
 pub fn sanitize_for_log(s: &str) -> String {
     s.chars()
         .take(50)
@@ -86,6 +88,7 @@ pub fn sanitize_for_log(s: &str) -> String {
 ///
 /// Escapes backslash, percent, and underscore characters which have
 /// special meaning in SQL LIKE patterns.
+#[must_use]
 pub fn escape_like_pattern(s: &str) -> String {
     s.replace('\\', "\\\\")
         .replace('%', "\\%")

@@ -501,23 +501,35 @@ struct WebSocketAuthError {
 
 impl warp::reject::Reject for WebSocketAuthError {}
 
-/// Handle WebSocket connection after upgrade
-async fn handle_websocket_connection(socket: WebSocket, state: ServerState, claims: TokenClaims) {
-    let user_id = claims.sub.clone();
-    info!("WebSocket connection established for user: {}", user_id);
+/// Per-connection rate limiter state
+struct ConnectionRateLimit {
+    message_count: u32,
+    window_start: Instant,
+}
 
-    struct ConnectionRateLimit {
-        message_count: u32,
-        window_start: Instant,
+impl ConnectionRateLimit {
+    fn new() -> Self {
+        Self {
+            message_count: 0,
+            window_start: Instant::now(),
+        }
     }
 
-    let mut rate_limit = ConnectionRateLimit {
-        message_count: 0,
-        window_start: Instant::now(),
-    };
+    /// Check and record a message. Returns true if rate limit exceeded.
+    fn check_and_record(&mut self) -> bool {
+        let now = Instant::now();
+        if now.duration_since(self.window_start) > Duration::from_secs(60) {
+            self.message_count = 0;
+            self.window_start = now;
+        }
+        self.message_count += 1;
+        self.message_count > WS_MAX_MESSAGES_PER_MINUTE
+    }
+}
 
-    // Lookup username from database
-    let username = match crate::db::queries::find_user_by_id(&state.pool, &user_id).await {
+/// Lookup username from database, returning "unknown" on any error
+async fn lookup_username(pool: &SqlitePool, user_id: &str) -> String {
+    match crate::db::queries::find_user_by_id(pool, user_id).await {
         Ok(Some(user)) => user.username,
         Ok(None) => {
             warn!("User not found for ID: {}", user_id);
@@ -527,7 +539,17 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
             warn!("Database error fetching user {}: {}", user_id, e);
             "unknown".to_string()
         }
-    };
+    }
+}
+
+/// Handle WebSocket connection after upgrade
+async fn handle_websocket_connection(socket: WebSocket, state: ServerState, claims: TokenClaims) {
+    let user_id = claims.sub.clone();
+    info!("WebSocket connection established for user: {}", user_id);
+
+    let mut rate_limit = ConnectionRateLimit::new();
+
+    let username = lookup_username(&state.pool, &user_id).await;
 
     let connection = websocket::ClientConnection::new(user_id.clone(), username);
 
@@ -612,14 +634,7 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
                     if msg.is_text() { "text" } else if msg.is_binary() { "binary" } else { "other" }
                 );
 
-                // Per-connection rate limiting
-                let now = Instant::now();
-                if now.duration_since(rate_limit.window_start) > Duration::from_secs(60) {
-                    rate_limit.message_count = 0;
-                    rate_limit.window_start = now;
-                }
-                rate_limit.message_count += 1;
-                if rate_limit.message_count > WS_MAX_MESSAGES_PER_MINUTE {
+                if rate_limit.check_and_record() {
                     warn!("Rate limiting user {} for message flood ({} messages/min)", user_id, rate_limit.message_count);
                     let mut sender = ws_tx.lock().await;
                     let _ = sender.send(websocket::ErrorResponse::server_error(
@@ -697,7 +712,6 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
             .unregister(&user_id, conn_id)
             .await;
 
-        // Only mark offline if no other connections remain for this user
         if !state.connection_manager.is_user_online(&user_id).await {
             if let Err(e) = state.presence_service.mark_offline(&user_id).await {
                 warn!("Failed to mark presence offline: {}", e);
