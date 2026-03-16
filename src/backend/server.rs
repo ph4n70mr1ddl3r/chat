@@ -43,6 +43,9 @@ const WS_READ_TIMEOUT_SECS: u64 = 300;
 /// Per-connection message rate limit: max messages per minute
 const WS_MAX_MESSAGES_PER_MINUTE: u32 = 60;
 
+/// Maximum queued messages per WebSocket connection
+const WS_MAX_QUEUED_MESSAGES: usize = 100;
+
 /// Auth rate limit: max attempts per window
 const AUTH_RATE_LIMIT_MAX_ATTEMPTS: u32 = 5;
 /// Auth rate limit window in seconds (15 minutes)
@@ -525,8 +528,7 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
 
     let connection = websocket::ClientConnection::new(user_id.clone(), username);
 
-    const MAX_QUEUED_MESSAGES: usize = 100;
-    let (tx, mut rx) = mpsc::channel::<warp::ws::Message>(MAX_QUEUED_MESSAGES);
+    let (tx, mut rx) = mpsc::channel::<warp::ws::Message>(WS_MAX_QUEUED_MESSAGES);
 
     let register_result = state
         .connection_manager

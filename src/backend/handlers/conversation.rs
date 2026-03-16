@@ -22,6 +22,14 @@ fn validate_uuid(id: &str, field_name: &str) -> Result<(), (String, String)> {
     }
 }
 
+fn get_other_participant_id(conv: &crate::models::Conversation, user_id: &str) -> String {
+    if conv.user1_id == user_id {
+        conv.user2_id.clone()
+    } else {
+        conv.user1_id.clone()
+    }
+}
+
 /// Start conversation request
 #[derive(Debug, Deserialize)]
 pub struct StartConversationRequest {
@@ -241,13 +249,7 @@ pub async fn get_conversations(
     // Collect all participant IDs for batch lookup
     let participant_ids: Vec<String> = conversations
         .iter()
-        .map(|conv| {
-            if conv.user1_id == user_id {
-                conv.user2_id.clone()
-            } else {
-                conv.user1_id.clone()
-            }
-        })
+        .map(|conv| get_other_participant_id(conv, &user_id))
         .collect();
 
     // Batch fetch all participant info
@@ -270,11 +272,7 @@ pub async fn get_conversations(
     let responses: Vec<ConversationResponse> = conversations
         .into_iter()
         .filter_map(|conv| {
-            let participant_id = if conv.user1_id == user_id {
-                conv.user2_id.clone()
-            } else {
-                conv.user1_id.clone()
-            };
+            let participant_id = get_other_participant_id(&conv, &user_id);
 
             users_map
                 .get(&participant_id)
