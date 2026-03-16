@@ -144,17 +144,22 @@ impl RateLimiter {
             entries.retain(|_, entry| now.duration_since(entry.window_start) <= window_duration);
 
             if entries.len() >= self.max_entries {
+                let eviction_count = (entries.len() / 10).max(100);
                 let keys_to_remove: Vec<String> = {
                     let mut entries_vec: Vec<_> = entries.iter().collect();
                     entries_vec.sort_by_key(|(_, entry)| entry.window_start);
                     entries_vec.into_iter()
-                        .take(entries.len().saturating_sub(self.max_entries - 10))
+                        .take(eviction_count)
                         .map(|(ip, _)| ip.clone())
                         .collect()
                 };
                 for ip in keys_to_remove {
                     entries.remove(&ip);
                 }
+                tracing::debug!(
+                    "Rate limiter evicted {} entries due to memory pressure",
+                    eviction_count
+                );
             }
         }
 

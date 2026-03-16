@@ -2,13 +2,13 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Maximum nesting depth for JSON structures to prevent stack overflow attacks
+#[allow(dead_code)]
 pub const MAX_JSON_DEPTH: usize = 32;
 
-/// Maximum number of items in batch operations to prevent memory exhaustion
+#[allow(dead_code)]
 pub const MAX_BATCH_SIZE: usize = 100;
 
-/// Maximum size for the data payload in bytes (64KB)
+#[allow(dead_code)]
 pub const MAX_DATA_SIZE: usize = 64 * 1024;
 
 /// Message status lifecycle

@@ -101,25 +101,28 @@ impl ServerConfig {
             }
         }
 
-        let (jwt_secret, is_ephemeral_secret) = std::env::var("JWT_SECRET").map(|s| (s, false)).unwrap_or_else(|_| {
-            #[cfg(not(debug_assertions))]
-            {
-                panic!(
-                    "JWT_SECRET environment variable must be set in production (release builds). \
-                    Generate a secure random secret with at least 32 characters and set it before starting the server."
-                );
+        let (jwt_secret, is_ephemeral_secret) = match std::env::var("JWT_SECRET") {
+            Ok(s) => (s, false),
+            Err(_) => {
+                #[cfg(not(debug_assertions))]
+                {
+                    anyhow::bail!(
+                        "JWT_SECRET environment variable must be set in production (release builds). \
+                        Generate a secure random secret with at least 32 characters and set it before starting the server."
+                    );
+                }
+                #[cfg(debug_assertions)]
+                {
+                    tracing::warn!("SECURITY WARNING: JWT_SECRET not set, generating cryptographically secure secret for development.");
+                    tracing::warn!("For production deployments, ALWAYS set the JWT_SECRET environment variable.");
+                    tracing::warn!("Generated secrets are not persisted between restarts and will invalidate all existing tokens.");
+                    tracing::warn!("To avoid this warning, set a JWT_SECRET environment variable with at least 32 random characters.");
+                    let mut secret = [0u8; 64];
+                    getrandom::fill(&mut secret).expect("Failed to generate random secret");
+                    (BASE64_STANDARD.encode(secret), true)
+                }
             }
-            #[cfg(debug_assertions)]
-            {
-                tracing::warn!("SECURITY WARNING: JWT_SECRET not set, generating cryptographically secure secret for development.");
-                tracing::warn!("For production deployments, ALWAYS set the JWT_SECRET environment variable.");
-                tracing::warn!("Generated secrets are not persisted between restarts and will invalidate all existing tokens.");
-                tracing::warn!("To avoid this warning, set a JWT_SECRET environment variable with at least 32 random characters.");
-                let mut secret = [0u8; 64];
-                getrandom::fill(&mut secret).expect("Failed to generate random secret");
-                (BASE64_STANDARD.encode(secret), true)
-            }
-        });
+        };
 
         Ok(Self {
             jwt_secret,
