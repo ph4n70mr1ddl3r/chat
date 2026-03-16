@@ -23,13 +23,11 @@ pub struct RefreshRequest {
 pub async fn refresh_token_handler(
     req: RefreshRequest,
     pool: SqlitePool,
-    jwt_secret: String,
+    _jwt_secret: String,
     csrf_service: CsrfService,
     shared_auth_service: Arc<AuthService>,
 ) -> Result<impl Reply, Rejection> {
-    let auth_service = AuthService::new(jwt_secret.clone());
-
-    let claims = match auth_service.verify_token(&req.token).await {
+    let claims = match shared_auth_service.verify_token(&req.token).await {
         Ok(claims) => claims,
         Err(e) => {
             warn!("Token verification failed: {}", e);
@@ -82,7 +80,7 @@ pub async fn refresh_token_handler(
         }
     }
 
-    let (new_token, expires_at) = match auth_service.generate_token(claims.sub.clone()) {
+    let (new_token, expires_at) = match shared_auth_service.generate_token(claims.sub.clone()) {
         Ok((token, expires_at)) => (token, expires_at),
         Err(e) => {
             warn!("Failed to generate new token: {}", e);

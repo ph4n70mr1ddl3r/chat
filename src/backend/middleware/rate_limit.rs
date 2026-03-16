@@ -226,10 +226,6 @@ impl std::error::Error for RateLimitExceeded {}
 impl reject::Reject for RateLimitExceeded {}
 
 impl RateLimiter {
-    fn parse_ip(s: &str) -> Option<String> {
-        s.parse::<std::net::IpAddr>().ok().map(|ip| ip.to_string())
-    }
-
     fn extract_client_ip(x_forwarded_for: &str, remote_ip: Option<std::net::SocketAddr>) -> String {
         let ips: Vec<&str> = x_forwarded_for
             .split(',')
@@ -256,11 +252,9 @@ impl RateLimiter {
         }
 
         for ip_str in ips.iter().rev() {
-            if let Some(parsed_ip) = Self::parse_ip(ip_str) {
-                if let Ok(ip_addr) = ip_str.parse::<std::net::IpAddr>() {
-                    if !is_trusted_proxy(&ip_addr) {
-                        return parsed_ip;
-                    }
+            if let Ok(ip_addr) = ip_str.parse::<std::net::IpAddr>() {
+                if !is_trusted_proxy(&ip_addr) {
+                    return ip_addr.to_string();
                 }
             }
         }

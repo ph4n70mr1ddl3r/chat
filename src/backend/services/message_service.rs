@@ -111,7 +111,7 @@ impl MessageService {
             conversation_id: conversation_id.clone(),
             sender_id: sender_id.clone(),
             recipient_id: recipient_id.clone(),
-            content: content.clone(),
+            content,
             created_at: now,
             delivered_at: None,
             read_at: None,
