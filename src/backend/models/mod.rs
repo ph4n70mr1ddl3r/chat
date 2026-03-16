@@ -155,8 +155,7 @@ impl Message {
         let len = self.content.len();
         if len > MAX_MESSAGE_LENGTH {
             return Err(format!(
-                "Message content exceeds {} character limit",
-                MAX_MESSAGE_LENGTH
+                "Message content exceeds {MAX_MESSAGE_LENGTH} character limit"
             ));
         }
         if self.sender_id == self.recipient_id {

@@ -380,7 +380,7 @@ impl ErrorResponse {
     pub fn invalid_message_length(sent_length: usize, max_length: usize) -> WsMessage {
         Self::create_error_response(
             "INVALID_MESSAGE_LENGTH",
-            &format!("Message content exceeds {} character limit", max_length),
+            &format!("Message content exceeds {max_length} character limit"),
             Some(serde_json::json!({
                 "sentLength": sent_length,
                 "maxLength": max_length

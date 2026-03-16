@@ -97,7 +97,7 @@ impl FrameParser {
         // Validate envelope structure
         if let Err(e) = MessageValidator::validate_envelope(&envelope) {
             return ParseResult::Error {
-                error_msg: ErrorResponse::server_error(&format!("Invalid envelope: {}", e)),
+                error_msg: ErrorResponse::server_error(&format!("Invalid envelope: {e}")),
             };
         }
 
@@ -110,10 +110,10 @@ impl FrameParser {
     /// Parse raw JSON string into message envelope (for testing)
     pub fn parse_json(text: &str) -> Result<MessageEnvelope, String> {
         let envelope: MessageEnvelope =
-            serde_json::from_str(text).map_err(|e| format!("Invalid JSON: {}", e))?;
+            serde_json::from_str(text).map_err(|e| format!("Invalid JSON: {e}"))?;
 
         MessageValidator::validate_envelope(&envelope)
-            .map_err(|e| format!("Invalid envelope: {}", e))?;
+            .map_err(|e| format!("Invalid envelope: {e}"))?;
 
         Ok(envelope)
     }
@@ -142,8 +142,7 @@ impl FrameParser {
             .to_string();
 
         MessageValidator::validate_text_message(&content, &recipient_id)
-            .map(|_| (recipient_id, content))
-            .map_err(|e| e.to_string())
+            .map(|()| (recipient_id, content))
     }
 
     /// Validate typing indicator data
@@ -156,9 +155,7 @@ impl FrameParser {
             .unwrap_or("")
             .to_string();
 
-        MessageValidator::validate_typing(&recipient_id)
-            .map(|_| recipient_id)
-            .map_err(|e| e.to_string())
+        MessageValidator::validate_typing(&recipient_id).map(|()| recipient_id)
     }
 
     /// Create error response for invalid message

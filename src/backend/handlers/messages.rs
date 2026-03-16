@@ -109,7 +109,7 @@ impl MessageHandler {
     ) -> Result<Vec<WsMessage>, String> {
         // Extract message data
         let data: TextMessageData = serde_json::from_value(envelope.data.clone())
-            .map_err(|e| format!("Invalid message data: {}", e))?;
+            .map_err(|e| format!("Invalid message data: {e}"))?;
 
         // Validate message content
         if data.content.trim().is_empty() {
@@ -119,8 +119,7 @@ impl MessageHandler {
         }
         if data.content.len() > MAX_MESSAGE_LENGTH {
             return Ok(vec![ErrorResponse::invalid_message(&format!(
-                "Message content exceeds {} character limit",
-                MAX_MESSAGE_LENGTH
+                "Message content exceeds {MAX_MESSAGE_LENGTH} character limit"
             ))]);
         }
         
@@ -152,7 +151,7 @@ impl MessageHandler {
         // Validate recipient exists
         let recipient = queries::find_user_by_id(&self.pool, &data.recipient_id)
             .await
-            .map_err(|e| format!("Database error: {}", e))?
+                .map_err(|e| format!("Database error: {e}"))?
             .ok_or_else(|| "Recipient not found".to_string())?;
 
         if recipient.is_deleted() {
@@ -173,7 +172,7 @@ impl MessageHandler {
             // Verify sender is a participant in the conversation
             let conversation = queries::get_conversation_by_id(&self.pool, &conversation_id)
                 .await
-                .map_err(|e| format!("Database error: {}", e))?
+            .map_err(|e| format!("Database error: {e}"))?
                 .ok_or_else(|| "Conversation not found".to_string())?;
 
             // Verify sender is a participant and recipient is the other participant
@@ -241,7 +240,7 @@ impl MessageHandler {
                         &data.recipient_id,
                         WsMessage::text(
                             serde_json::to_string(&delivery_message)
-                                .map_err(|e| format!("Failed to serialize message: {}", e))?,
+                                .map_err(|e| format!("Failed to serialize message: {e}"))?,
                         ),
                     )
                     .await;
@@ -284,7 +283,7 @@ impl MessageHandler {
         };
         let ack = Self::build_ack_envelope(&envelope.id, &conversation_id, &message.id, ack_status);
         responses.push(WsMessage::text(
-            serde_json::to_string(&ack).map_err(|e| format!("Failed to serialize ack: {}", e))?,
+            serde_json::to_string(&ack).map_err(|e| format!("Failed to serialize ack: {e}"))?,
         ));
 
         Ok(responses)
@@ -355,8 +354,7 @@ impl MessageHandler {
 
         if updates.len() > MAX_DELIVERY_STATUS_BATCH {
             return Err(format!(
-                "Too many updates in batch (max {})",
-                MAX_DELIVERY_STATUS_BATCH
+                "Too many updates in batch (max {MAX_DELIVERY_STATUS_BATCH})"
             ));
         }
 
@@ -405,7 +403,7 @@ impl MessageHandler {
                 };
 
                 let event_json = serde_json::to_string(&event)
-                    .map_err(|e| format!("Failed to serialize event: {}", e))?;
+                    .map_err(|e| format!("Failed to serialize event: {e}"))?;
                 self.connection_manager
                     .send_to_user(&current.sender_id, WsMessage::text(event_json.clone()))
                     .await;
@@ -427,7 +425,7 @@ impl MessageHandler {
         };
         responses.push(WsMessage::text(
             serde_json::to_string(&completion)
-                .map_err(|e| format!("Failed to serialize completion: {}", e))?,
+                .map_err(|e| format!("Failed to serialize completion: {e}"))?,
         ));
 
         Ok(responses)

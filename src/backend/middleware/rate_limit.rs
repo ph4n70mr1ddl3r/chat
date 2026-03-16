@@ -228,7 +228,7 @@ impl RateLimiter {
     fn extract_client_ip(x_forwarded_for: &str, remote_ip: Option<std::net::SocketAddr>) -> String {
         let ips: Vec<&str> = x_forwarded_for
             .split(',')
-            .map(|s| s.trim())
+            .map(str::trim)
             .filter(|s| !s.is_empty())
             .collect();
 
@@ -239,8 +239,7 @@ impl RateLimiter {
         }
 
         let should_trust_header = remote_ip
-            .map(|addr| is_trusted_proxy(&addr.ip()))
-            .unwrap_or(false);
+            .is_some_and(|addr| is_trusted_proxy(&addr.ip()));
 
         if !should_trust_header {
             tracing::warn!(
@@ -248,8 +247,7 @@ impl RateLimiter {
                 remote_ip
             );
             return remote_ip
-                .map(|a| a.ip().to_string())
-                .unwrap_or_else(|| "unknown".to_string());
+                .map_or_else(|| "unknown".to_string(), |a| a.ip().to_string());
         }
 
         for ip_str in ips.iter().rev() {
@@ -263,8 +261,7 @@ impl RateLimiter {
         }
 
         remote_ip
-            .map(|a| a.ip().to_string())
-            .unwrap_or_else(|| "unknown".to_string())
+            .map_or_else(|| "unknown".to_string(), |a| a.ip().to_string())
     }
 }
 
@@ -283,8 +280,7 @@ pub fn rate_limit_filter(
                     RateLimiter::extract_client_ip(&header, remote_ip)
                 } else {
                     remote_ip
-                        .map(|a| a.ip().to_string())
-                        .unwrap_or_else(|| "unknown".to_string())
+                        .map_or_else(|| "unknown".to_string(), |a| a.ip().to_string())
                 };
                 limiter.check_and_record(&ip).await.map_err(reject::custom)
             },
