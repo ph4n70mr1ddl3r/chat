@@ -302,7 +302,7 @@ pub fn create_routes(
                     .and(warp::path::end())
                     .and(with_auth.clone())
                     .and(warp::header::optional::<String>("X-CSRF-Token"))
-                    .and(rate_limit_filter.clone())
+                    .and(auth_rate_limit_filter.clone())
                     .and(warp::body::json())
                     .and(state_filter.clone())
                     .and_then(handle_delete_account),

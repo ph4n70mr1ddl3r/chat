@@ -34,6 +34,12 @@ pub struct RateLimiter {
     shutdown_tx: broadcast::Sender<()>,
 }
 
+impl Drop for RateLimiter {
+    fn drop(&mut self) {
+        self.shutdown();
+    }
+}
+
 impl Default for RateLimiter {
     fn default() -> Self {
         Self::new(5, 900)

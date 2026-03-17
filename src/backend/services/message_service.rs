@@ -104,6 +104,42 @@ impl MessageService {
         recipient_id: String,
         content: String,
     ) -> Result<(Message, bool), String> {
+        // Validate content length (1-MAX_MESSAGE_LENGTH characters)
+        if content.is_empty() || content.len() > MAX_MESSAGE_LENGTH {
+            warn!(
+                target: "message",
+                event = "message.send",
+                conversation_id = %conversation_id,
+                sender_id = %sender_id,
+                recipient_id = %recipient_id,
+                outcome = "failed",
+                reason = "invalid_length",
+                content_length = content.len()
+            );
+            return Err(format!(
+                "Message content must be between 1 and {} characters",
+                MAX_MESSAGE_LENGTH
+            ));
+        }
+
+        // Verify recipient exists and is not deleted
+        let recipient = queries::find_user_by_id(&self.pool, &recipient_id)
+            .await?
+            .ok_or("Recipient not found".to_string())?;
+
+        if recipient.is_deleted() {
+            return Err("Cannot send message to deleted user".to_string());
+        }
+
+        // Verify sender is not deleted
+        let sender = queries::find_user_by_id(&self.pool, &sender_id)
+            .await?
+            .ok_or("Sender not found".to_string())?;
+
+        if sender.is_deleted() {
+            return Err("Cannot send message from deleted account".to_string());
+        }
+
         let now = chrono::Utc::now().timestamp_millis();
 
         let message = Message {

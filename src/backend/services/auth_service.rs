@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{broadcast, RwLock};
 use tracing::{info, warn};
 
 use chat_shared::protocol::TokenClaims;
@@ -32,14 +32,16 @@ pub struct AuthService {
     tokens_valid_after: Arc<RwLock<HashMap<String, i64>>>,
     pool: Option<SqlitePool>,
     cleanup_handle: Option<Arc<tokio::task::JoinHandle<()>>>,
+    shutdown_tx: Option<broadcast::Sender<()>>,
 }
 
 impl Drop for AuthService {
     fn drop(&mut self) {
+        if let Some(tx) = &self.shutdown_tx {
+            let _ = tx.send(());
+        }
         if let Some(handle) = self.cleanup_handle.take() {
-            if let Some(handle) = Arc::into_inner(handle) {
-                handle.abort();
-            }
+            handle.abort();
         }
     }
 }
@@ -54,24 +56,28 @@ impl AuthService {
     /// Create a new authentication service with the given secret key
     #[must_use]
     pub fn new(jwt_secret: String) -> Self {
+        let (shutdown_tx, _) = broadcast::channel(1);
         Self {
             jwt_secret,
             revoked_tokens: Arc::new(RwLock::new(HashMap::new())),
             tokens_valid_after: Arc::new(RwLock::new(HashMap::new())),
             pool: None,
             cleanup_handle: None,
+            shutdown_tx: Some(shutdown_tx),
         }
     }
 
     /// Create a new authentication service with database persistence for token revocation
     #[must_use]
     pub fn with_pool(jwt_secret: String, pool: SqlitePool) -> Self {
+        let (shutdown_tx, _) = broadcast::channel(1);
         Self {
             jwt_secret,
             revoked_tokens: Arc::new(RwLock::new(HashMap::new())),
             tokens_valid_after: Arc::new(RwLock::new(HashMap::new())),
             pool: Some(pool),
             cleanup_handle: None,
+            shutdown_tx: Some(shutdown_tx),
         }
     }
 
@@ -81,18 +87,42 @@ impl AuthService {
         let revoked_tokens = Arc::new(RwLock::new(HashMap::new()));
         let tokens_valid_after = Arc::new(RwLock::new(HashMap::new()));
         let tokens_clone = revoked_tokens.clone();
+        let tokens_valid_after_clone = tokens_valid_after.clone();
+        let (shutdown_tx, mut shutdown_rx) = broadcast::channel(1);
         
         let cleanup_handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300));
             loop {
-                interval.tick().await;
-                let mut tokens = tokens_clone.write().await;
-                let now = chrono::Utc::now().timestamp();
-                let before_count = tokens.len();
-                tokens.retain(|_, (_, exp)| *exp > now);
-                let removed = before_count - tokens.len();
-                if removed > 0 {
-                    info!(target: "auth", removed = removed, remaining = tokens.len(), "Cleaned up expired revoked tokens");
+                tokio::select! {
+                    _ = shutdown_rx.recv() => {
+                        info!(target: "auth", "Cleanup task shutting down");
+                        break;
+                    }
+                    _ = interval.tick() => {
+                        let now = chrono::Utc::now().timestamp();
+                        
+                        // Clean up expired revoked tokens
+                        let mut tokens = tokens_clone.write().await;
+                        let before_count = tokens.len();
+                        tokens.retain(|_, (_, exp)| *exp > now);
+                        let removed = before_count - tokens.len();
+                        if removed > 0 {
+                            info!(target: "auth", removed = removed, remaining = tokens.len(), "Cleaned up expired revoked tokens");
+                        }
+                        drop(tokens);
+                        
+                        // Clean up stale tokens_valid_after entries
+                        // Entries older than TOKEN_EXPIRATION_SECONDS are no longer needed
+                        // since all tokens they would invalidate have already expired
+                        let mut valid_after = tokens_valid_after_clone.write().await;
+                        let before_count = valid_after.len();
+                        let cutoff = now - TOKEN_EXPIRATION_SECONDS;
+                        valid_after.retain(|_, ts| *ts > cutoff);
+                        let removed = before_count - valid_after.len();
+                        if removed > 0 {
+                            info!(target: "auth", removed = removed, remaining = valid_after.len(), "Cleaned up stale token invalidation timestamps");
+                        }
+                    }
                 }
             }
         });
@@ -103,6 +133,7 @@ impl AuthService {
             tokens_valid_after,
             pool: None,
             cleanup_handle: Some(Arc::new(cleanup_handle)),
+            shutdown_tx: Some(shutdown_tx),
         }
     }
 
@@ -111,31 +142,51 @@ impl AuthService {
         let revoked_tokens = Arc::new(RwLock::new(HashMap::new()));
         let tokens_valid_after = Arc::new(RwLock::new(HashMap::new()));
         let tokens_clone = revoked_tokens.clone();
+        let tokens_valid_after_clone = tokens_valid_after.clone();
         let pool_clone = pool.clone();
+        let (shutdown_tx, mut shutdown_rx) = broadcast::channel(1);
         
         let cleanup_handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300));
             loop {
-                interval.tick().await;
-                let now = chrono::Utc::now().timestamp();
-                
-                // Clean up in-memory tokens
-                let mut tokens = tokens_clone.write().await;
-                let before_count = tokens.len();
-                tokens.retain(|_, (_, exp)| *exp > now);
-                let removed = before_count - tokens.len();
-                
-                // Clean up database tokens
-                if let Err(e) = sqlx::query("DELETE FROM revoked_tokens WHERE expires_at < ?")
-                    .bind(now)
-                    .execute(&pool_clone)
-                    .await
-                {
-                    warn!(target: "auth", error = %e, "Failed to clean up expired revoked tokens from database");
-                }
-                
-                if removed > 0 {
-                    info!(target: "auth", removed = removed, remaining = tokens.len(), "Cleaned up expired revoked tokens");
+                tokio::select! {
+                    _ = shutdown_rx.recv() => {
+                        info!(target: "auth", "Cleanup task shutting down");
+                        break;
+                    }
+                    _ = interval.tick() => {
+                        let now = chrono::Utc::now().timestamp();
+                        
+                        // Clean up in-memory revoked tokens
+                        let mut tokens = tokens_clone.write().await;
+                        let before_count = tokens.len();
+                        tokens.retain(|_, (_, exp)| *exp > now);
+                        let removed = before_count - tokens.len();
+                        drop(tokens);
+                        
+                        // Clean up database tokens
+                        if let Err(e) = sqlx::query("DELETE FROM revoked_tokens WHERE expires_at < ?")
+                            .bind(now)
+                            .execute(&pool_clone)
+                            .await
+                        {
+                            warn!(target: "auth", error = %e, "Failed to clean up expired revoked tokens from database");
+                        }
+                        
+                        if removed > 0 {
+                            info!(target: "auth", removed = removed, "Cleaned up expired revoked tokens");
+                        }
+                        
+                        // Clean up stale tokens_valid_after entries
+                        let mut valid_after = tokens_valid_after_clone.write().await;
+                        let before_count = valid_after.len();
+                        let cutoff = now - TOKEN_EXPIRATION_SECONDS;
+                        valid_after.retain(|_, ts| *ts > cutoff);
+                        let removed = before_count - valid_after.len();
+                        if removed > 0 {
+                            info!(target: "auth", removed = removed, remaining = valid_after.len(), "Cleaned up stale token invalidation timestamps");
+                        }
+                    }
                 }
             }
         });
@@ -146,6 +197,7 @@ impl AuthService {
             tokens_valid_after,
             pool: Some(pool),
             cleanup_handle: Some(Arc::new(cleanup_handle)),
+            shutdown_tx: Some(shutdown_tx),
         }
     }
 

@@ -28,7 +28,7 @@ const MAX_EMAIL_DOMAIN_LENGTH: usize = 255;
 pub fn validate_uuid(id: &str) -> Result<(), String> {
     Uuid::parse_str(id)
         .map(|_| ())
-        .map_err(|_| "Invalid UUID format".to_string())
+        .map_err(|e| format!("Invalid UUID: {}", e))
 }
 
 /// Validate username
@@ -39,7 +39,7 @@ pub fn validate_uuid(id: &str) -> Result<(), String> {
 /// - Can contain alphanumeric, underscore, hyphen, and dot
 /// - Case-sensitive
 pub fn validate_username(username: &str) -> Result<(), String> {
-    if username.is_empty() || username.len() > MAX_USERNAME_LENGTH {
+    if username.len() < MIN_USERNAME_LENGTH || username.len() > MAX_USERNAME_LENGTH {
         return Err(format!(
             "Username must be between {} and {} characters",
             MIN_USERNAME_LENGTH, MAX_USERNAME_LENGTH
