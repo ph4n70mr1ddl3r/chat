@@ -152,8 +152,8 @@ impl Message {
 
     /// Validate message content
     pub fn validate(&self) -> Result<(), String> {
-        let len = self.content.len();
-        if len > MAX_MESSAGE_LENGTH {
+        let char_count = self.content.chars().count();
+        if char_count > MAX_MESSAGE_LENGTH {
             return Err(format!(
                 "Message content exceeds {MAX_MESSAGE_LENGTH} character limit"
             ));

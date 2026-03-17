@@ -66,34 +66,24 @@ impl SignupScreen {
             let username = ui_handle.get_username().to_string();
             let password = ui_handle.get_password().to_string();
             let confirm_password = ui_handle.get_confirm_password().to_string();
-            tracing::debug!(
-                "Got form values - username: {}, password len: {}",
-                username,
-                password.len()
-            );
+            tracing::debug!("Got form values - username: {}", username);
 
             // Validate inputs
-            if password != confirm_password {
-                tracing::debug!("Passwords don't match");
-                ui_handle.set_error_message("Passwords do not match".into());
-                return;
-            }
-
             if username.is_empty() {
                 tracing::debug!("Username is empty");
                 ui_handle.set_error_message("Username cannot be empty".into());
                 return;
             }
 
-            if let Err(e) = validate_password_strength(&password) {
-                tracing::debug!("Password validation failed: {}", e);
-                ui_handle.set_error_message(e.into());
-                return;
-            }
-
             if password != confirm_password {
                 tracing::debug!("Passwords don't match");
                 ui_handle.set_error_message("Passwords do not match".into());
+                return;
+            }
+
+            if let Err(e) = validate_password_strength(&password) {
+                tracing::debug!("Password validation failed: {}", e);
+                ui_handle.set_error_message(e.into());
                 return;
             }
 
