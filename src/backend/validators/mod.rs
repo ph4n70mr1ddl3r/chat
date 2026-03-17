@@ -35,6 +35,7 @@ pub fn validate_uuid(id: &str) -> Result<(), String> {
 ///
 /// Rules:
 /// - 1-50 characters
+/// - ASCII-only (prevents homograph attacks with lookalike Unicode characters)
 /// - Must start with alphanumeric or underscore
 /// - Can contain alphanumeric, underscore, hyphen, and dot
 /// - Case-sensitive
@@ -50,16 +51,18 @@ pub fn validate_username(username: &str) -> Result<(), String> {
     let Some(first_char) = first_char else {
         return Err("Username cannot be empty".to_string());
     };
-    if !first_char.is_alphanumeric() && first_char != '_' {
-        return Err("Username must start with a letter or underscore".to_string());
+
+    // Enforce ASCII-only to prevent homograph attacks (e.g., Cyrillic 'а' looks like Latin 'a')
+    if !first_char.is_ascii_alphanumeric() && first_char != '_' {
+        return Err("Username must start with an ASCII letter or underscore".to_string());
     }
 
     if !username
         .chars()
-        .all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.')
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.')
     {
         return Err(
-            "Username can only contain alphanumeric characters, underscore, hyphen, and dot"
+            "Username can only contain ASCII alphanumeric characters, underscore, hyphen, and dot"
                 .to_string(),
         );
     }
@@ -272,5 +275,16 @@ mod tests {
         assert!(validate_uuid("not-a-uuid").is_err());
         assert!(validate_uuid("").is_err());
         assert!(validate_uuid("550e8400-e29b-41d4-a716").is_err());
+    }
+
+    #[test]
+    fn test_validate_username_homograph_attack() {
+        // Cyrillic 'а' (U+0430) looks like Latin 'a' but should be rejected
+        assert!(validate_username("аdmin").is_err());
+        // Mixed script should be rejected
+        assert!(validate_username("user\u{0430}").is_err());
+        // Unicode characters should be rejected
+        assert!(validate_username("usérname").is_err());
+        assert!(validate_username("用户名").is_err());
     }
 }

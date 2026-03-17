@@ -8,7 +8,6 @@
 //! - POST /auth/login - user authentication
 //! - GET /conversations/* - conversation management (stubs for Phase 3+)
 
-use anyhow::Error;
 use base64::prelude::*;
 use futures::{SinkExt, StreamExt};
 use sqlx::SqlitePool;
@@ -118,7 +117,9 @@ impl ServerConfig {
                     tracing::warn!("Generated secrets are not persisted between restarts and will invalidate all existing tokens.");
                     tracing::warn!("To avoid this warning, set a JWT_SECRET environment variable with at least 32 random characters.");
                     let mut secret = [0u8; 64];
-                    getrandom::fill(&mut secret).expect("Failed to generate random secret");
+                    getrandom::fill(&mut secret).map_err(|e| {
+                        anyhow::anyhow!("Failed to generate secure random secret: {}", e)
+                    })?;
                     (BASE64_STANDARD.encode(secret), true)
                 }
             }
@@ -130,12 +131,6 @@ impl ServerConfig {
             max_message_size: 10 * 1024, // 10 KB
             allowed_origins: origins,
         })
-    }
-}
-
-impl Default for ServerConfig {
-    fn default() -> Self {
-        Self::from_env().expect("Failed to create server config")
     }
 }
 
@@ -971,14 +966,17 @@ pub async fn start_server(
     config: Option<ServerConfig>,
     mut shutdown_rx: tokio::sync::watch::Receiver<bool>,
 ) -> anyhow::Result<()> {
-    let config = config.unwrap_or_default();
+    let config = match config {
+        Some(c) => c,
+        None => ServerConfig::from_env()?,
+    };
     let state = ServerState::new(pool, config);
 
     state
         .message_queue
         .load_pending_messages()
         .await
-        .map_err(Error::msg)?;
+        .map_err(|e| anyhow::anyhow!("Failed to load pending messages: {}", e))?;
     state.message_queue.start().await;
 
     let routes = create_routes(state);

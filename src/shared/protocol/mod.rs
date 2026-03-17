@@ -131,6 +131,9 @@ pub struct TokenClaims {
     pub iat: u64,
     /// Expires at
     pub exp: u64,
+    /// JWT ID (unique identifier for this token)
+    #[serde(default = "default_jti")]
+    pub jti: String,
     /// Scopes
     #[serde(default)]
     pub scopes: Vec<String>,
@@ -138,6 +141,10 @@ pub struct TokenClaims {
 
 fn default_issuer() -> String {
     "chat-app".to_string()
+}
+
+fn default_jti() -> String {
+    String::new()
 }
 
 impl TokenClaims {

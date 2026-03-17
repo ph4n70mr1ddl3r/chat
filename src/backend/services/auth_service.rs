@@ -225,15 +225,45 @@ impl AuthService {
         Ok(())
     }
 
+    /// Revoke a token by its JTI (add to blacklist with expiration time)
+    /// Persists to database if pool is configured
+    pub async fn revoke_token_by_jti(&self, jti: &str, user_id: &str) {
+        let expiration = Utc::now().timestamp() + TOKEN_EXPIRATION_SECONDS + 60;
+        self.revoked_tokens.write().await.insert(jti.to_string(), (user_id.to_string(), expiration));
+
+        // Persist to database if pool is available
+        if let Some(pool) = &self.pool {
+            if let Err(e) = self.revoke_token_in_db(jti, user_id, expiration, pool).await {
+                warn!(target: "auth", error = %e, "Failed to persist revoked token to database");
+            }
+        }
+    }
+
     /// Revoke a token (add to blacklist with expiration time)
-    /// Stores only the hash of the token for security
+    /// For new tokens with JTI, revokes by JTI for efficiency.
+    /// For legacy tokens without JTI, revokes by token hash.
     /// Persists to database if pool is configured
     pub async fn revoke_token(&self, token: &str, user_id: &str) {
         let expiration = Utc::now().timestamp() + TOKEN_EXPIRATION_SECONDS + 60;
+        
+        // Try to extract JTI and revoke by it for new tokens
+        if let Ok(claims) = self.decode_token_without_verification(token) {
+            if !claims.jti.is_empty() {
+                self.revoked_tokens.write().await.insert(claims.jti.clone(), (user_id.to_string(), expiration));
+                
+                if let Some(pool) = &self.pool {
+                    if let Err(e) = self.revoke_token_in_db(&claims.jti, user_id, expiration, pool).await {
+                        warn!(target: "auth", error = %e, "Failed to persist revoked token to database");
+                    }
+                }
+                return;
+            }
+        }
+        
+        // Fallback: revoke by token hash for legacy tokens
         let token_hash = hash_token(token);
         self.revoked_tokens.write().await.insert(token_hash.clone(), (user_id.to_string(), expiration));
 
-        // Persist to database if pool is available
         if let Some(pool) = &self.pool {
             if let Err(e) = self.revoke_token_in_db(&token_hash, user_id, expiration, pool).await {
                 warn!(target: "auth", error = %e, "Failed to persist revoked token to database");
@@ -276,6 +306,26 @@ impl AuthService {
         .await
         .map_err(|e| format!("Failed to insert revoked token: {e}"))?;
         Ok(())
+    }
+
+    /// Check if a token has been revoked by its JTI
+    /// Checks in-memory cache first, then database if pool is configured
+    pub async fn is_jti_revoked(&self, jti: &str) -> bool {
+        let tokens = self.revoked_tokens.read().await;
+        if let Some((_, exp)) = tokens.get(jti) {
+            return *exp > Utc::now().timestamp();
+        }
+        drop(tokens);
+
+        // Check database if not found in memory
+        if let Some(pool) = &self.pool {
+            if let Ok(Some((user_id, exp))) = self.check_token_revoked_in_db(jti, pool).await {
+                // Cache for future lookups
+                self.revoked_tokens.write().await.insert(jti.to_string(), (user_id, exp));
+                return true;
+            }
+        }
+        false
     }
 
     /// Check if a token has been revoked
@@ -378,6 +428,7 @@ impl AuthService {
     pub fn generate_token(&self, user_id: String) -> Result<(String, u64), String> {
         let now = Utc::now().timestamp() as u64;
         let expiration = now + TOKEN_EXPIRATION_SECONDS as u64;
+        let jti = uuid::Uuid::new_v4().to_string();
 
         let claims = TokenClaims {
             sub: user_id,
@@ -385,6 +436,7 @@ impl AuthService {
             aud: "chat-app".to_string(),
             iat: now,
             exp: expiration,
+            jti,
             scopes: DEFAULT_SCOPES.iter().map(|s| s.to_string()).collect(),
         };
 
@@ -431,12 +483,23 @@ impl AuthService {
         }
     }
 
+    /// Decode a token without verification (for extracting claims like JTI)
+    /// This should only be used when the token is already trusted (e.g., after verification)
+    #[allow(deprecated)]
+    pub fn decode_token_without_verification(&self, token: &str) -> Result<TokenClaims, String> {
+        let mut validation = Validation::new(Algorithm::HS256);
+        validation.insecure_disable_signature_validation();
+        validation.set_audience(&["chat-app"]);
+        validation.set_issuer(&["chat-app"]);
+
+        match decode::<TokenClaims>(token, &DecodingKey::from_secret(&[]), &validation) {
+            Ok(data) => Ok(data.claims),
+            Err(e) => Err(format!("Failed to decode token: {}", e)),
+        }
+    }
+
     /// Verify and decode a JWT token
     pub async fn verify_token(&self, token: &str) -> Result<TokenClaims, String> {
-        if self.is_token_revoked(token).await {
-            return Err("Token has been revoked".to_string());
-        }
-
         let key = DecodingKey::from_secret(self.jwt_secret.as_bytes());
         let mut validation = Validation::new(Algorithm::HS256);
         validation.set_audience(&["chat-app"]);
@@ -458,6 +521,16 @@ impl AuthService {
                 return Err(error_detail.to_string());
             }
         };
+
+        // Check if JTI has been revoked (primary check for new tokens)
+        if !claims.jti.is_empty() && self.is_jti_revoked(&claims.jti).await {
+            return Err("Token has been revoked".to_string());
+        }
+
+        // Fallback: check by token hash for legacy tokens without JTI
+        if claims.jti.is_empty() && self.is_token_revoked(token).await {
+            return Err("Token has been revoked".to_string());
+        }
 
         // Check if token was issued before user's invalidation timestamp
         if self.is_token_issued_before_invalidation(&claims.sub, claims.iat).await {

@@ -116,8 +116,18 @@ pub async fn logout_handler(
     }
 
     if let Some(token) = ctx.auth_token {
-        auth_service.revoke_token(&token, &user_id).await;
-        info!("Token revoked for user: {user_id}");
+        // Try to decode token and revoke by JTI for better efficiency
+        // Fall back to token hash revocation if decoding fails
+        match auth_service.decode_token_without_verification(&token) {
+            Ok(claims) if !claims.jti.is_empty() => {
+                auth_service.revoke_token_by_jti(&claims.jti, &user_id).await;
+                info!("Token revoked by JTI for user: {user_id}");
+            }
+            _ => {
+                auth_service.revoke_token(&token, &user_id).await;
+                info!("Token revoked by hash for user: {user_id}");
+            }
+        }
     }
 
     connection_manager.disconnect_user(&user_id).await;
