@@ -275,6 +275,7 @@ pub fn create_routes(
                     .and(warp::body::content_length_limit(MAX_BODY_SIZE))
                     .and(warp::header::exact("Content-Type", "application/json"))
                     .and(warp::body::json())
+                    .and(warp::header::optional::<String>("X-CSRF-Token"))
                     .and(state_filter.clone())
                     .and_then(handle_refresh),
             ),
@@ -803,6 +804,7 @@ async fn handle_logout(
 /// Handle token refresh request
 async fn handle_refresh(
     req: handlers::refresh::RefreshRequest,
+    csrf_token: Option<String>,
     state: ServerState,
 ) -> Result<impl Reply, Rejection> {
     info!("Token refresh request");
@@ -812,6 +814,7 @@ async fn handle_refresh(
         state.config.jwt_secret,
         state.csrf_service,
         state.auth_service,
+        csrf_token,
     )
     .await
 }

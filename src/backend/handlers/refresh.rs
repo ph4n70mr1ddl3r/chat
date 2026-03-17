@@ -26,7 +26,23 @@ pub async fn refresh_token_handler(
     _jwt_secret: String,
     csrf_service: CsrfService,
     shared_auth_service: Arc<AuthService>,
+    csrf_token: Option<String>,
 ) -> Result<impl Reply, Rejection> {
+    let csrf_token = match csrf_token {
+        Some(token) => token,
+        None => {
+            warn!("Missing CSRF token for token refresh request");
+            return Ok(reply::with_status(
+                reply::json(&ErrorBody {
+                    code: "FORBIDDEN".to_string(),
+                    message: "CSRF token required".to_string(),
+                    details: None,
+                }),
+                warp::http::StatusCode::FORBIDDEN,
+            ));
+        }
+    };
+
     let claims = match shared_auth_service.verify_token(&req.token).await {
         Ok(claims) => claims,
         Err(e) => {
@@ -41,6 +57,18 @@ pub async fn refresh_token_handler(
             ));
         }
     };
+
+    if let Err(e) = csrf_service.validate_token(&csrf_token, &claims.sub) {
+        warn!("CSRF validation failed for token refresh: {:?}", e);
+        return Ok(reply::with_status(
+            reply::json(&ErrorBody {
+                code: "FORBIDDEN".to_string(),
+                message: "Invalid or expired CSRF token".to_string(),
+                details: None,
+            }),
+            warp::http::StatusCode::FORBIDDEN,
+        ));
+    }
 
     match queries::find_user_by_id(&pool, &claims.sub).await {
         Ok(Some(user)) => {

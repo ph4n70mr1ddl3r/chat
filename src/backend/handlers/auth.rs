@@ -190,22 +190,23 @@ pub async fn signup_handler(
         Ok(hash) => hash,
         Err(e) => {
             warn!("Password hashing failed for '{}': {e}", sanitize_for_log(&req.username));
-            // If username was taken, return generic error; otherwise return validation error
+            // Return generic error to prevent information leakage
             return Ok(error_response!(
-                if username_taken { "INTERNAL_ERROR" } else { "VALIDATION_ERROR" },
-                if username_taken { "An error occurred while processing your request" } else { &e },
-                if username_taken { warp::http::StatusCode::INTERNAL_SERVER_ERROR } else { warp::http::StatusCode::BAD_REQUEST }
+                "INTERNAL_ERROR",
+                "An error occurred while processing your request",
+                warp::http::StatusCode::INTERNAL_SERVER_ERROR
             ));
         }
     };
 
     // Now check if username was taken (after password hashing to prevent timing attack)
+    // Return same generic error as other failure cases to prevent username enumeration
     if username_taken {
         warn!("Signup failed: username taken ({})", sanitize_for_log(&req.username));
         return Ok(error_response!(
-            "CONFLICT",
-            "Unable to create account",
-            warp::http::StatusCode::CONFLICT
+            "INTERNAL_ERROR",
+            "An error occurred while processing your request",
+            warp::http::StatusCode::INTERNAL_SERVER_ERROR
         ));
     }
 

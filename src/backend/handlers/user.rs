@@ -136,7 +136,7 @@ pub async fn search_users(
         return Ok(reply::with_status(
             reply::json(&ErrorBody {
                 code: "INVALID_QUERY".to_string(),
-                message: format!("Search query must be at most {MAX_SEARCH_QUERY_LENGTH} characters"),
+                message: "Search query exceeds maximum length".to_string(),
                 details: None,
             }),
             warp::http::StatusCode::BAD_REQUEST,
