@@ -2,15 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 
-#[allow(dead_code)]
-pub const MAX_JSON_DEPTH: usize = 32;
-
-#[allow(dead_code)]
-pub const MAX_BATCH_SIZE: usize = 100;
-
-#[allow(dead_code)]
-pub const MAX_DATA_SIZE: usize = 64 * 1024;
-
 /// Message status lifecycle
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

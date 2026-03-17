@@ -13,6 +13,7 @@
 
 use crate::services::AuthService;
 use chat_shared::protocol::TokenClaims;
+use std::sync::Arc;
 use warp::http::StatusCode;
 
 /// Extract JWT token from Sec-WebSocket-Protocol header
@@ -33,15 +34,13 @@ pub fn extract_token_from_protocol_header(header_value: &str) -> Option<String> 
 
 /// WebSocket handshake handler
 pub struct HandshakeValidator {
-    auth_service: AuthService,
+    auth_service: Arc<AuthService>,
 }
 
 impl HandshakeValidator {
     #[must_use]
-    pub fn new(jwt_secret: String) -> Self {
-        Self {
-            auth_service: AuthService::new(jwt_secret),
-        }
+    pub fn new(auth_service: Arc<AuthService>) -> Self {
+        Self { auth_service }
     }
 
     /// Validate WebSocket upgrade request and extract user claims
@@ -98,9 +97,14 @@ impl HandshakeValidator {
 mod tests {
     use super::*;
 
+    fn create_test_validator() -> HandshakeValidator {
+        let auth_service = Arc::new(AuthService::new("test_secret".to_string()));
+        HandshakeValidator::new(auth_service)
+    }
+
     #[test]
     fn test_handshake_validator_new() {
-        let validator = HandshakeValidator::new("test_secret".to_string());
+        let validator = create_test_validator();
         assert!(!validator
             .auth_service
             .generate_token("user123".to_string())
@@ -111,7 +115,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_handshake_validator_valid_token() {
-        let validator = HandshakeValidator::new("test_secret".to_string());
+        let validator = create_test_validator();
         let (token, _) = validator
             .auth_service
             .generate_token("user123".to_string())
@@ -128,7 +132,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_handshake_validator_missing_token() {
-        let validator = HandshakeValidator::new("test_secret".to_string());
+        let validator = create_test_validator();
         let result = validator.validate_upgrade(None).await;
 
         assert!(result.is_err());
@@ -139,7 +143,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_handshake_validator_invalid_token() {
-        let validator = HandshakeValidator::new("test_secret".to_string());
+        let validator = create_test_validator();
         let protocol_header = "jwt.invalid.token.here";
         let result = validator.validate_upgrade(Some(protocol_header)).await;
 
@@ -151,13 +155,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_handshake_validator_wrong_secret() {
-        let validator1 = HandshakeValidator::new("secret1".to_string());
+        let auth_service1 = Arc::new(AuthService::new("secret1".to_string()));
+        let validator1 = HandshakeValidator::new(auth_service1);
         let (token, _) = validator1
             .auth_service
             .generate_token("user123".to_string())
             .unwrap();
 
-        let validator2 = HandshakeValidator::new("secret2".to_string());
+        let auth_service2 = Arc::new(AuthService::new("secret2".to_string()));
+        let validator2 = HandshakeValidator::new(auth_service2);
         let protocol_header = format!("jwt.{}", token);
         let result = validator2.validate_upgrade(Some(&protocol_header)).await;
 

@@ -240,16 +240,11 @@ pub async fn delete_account(
     };
 
     if let Err(e) = csrf_service.validate_token(&csrf_token, &user_id) {
-        let error_msg = match e {
-            crate::services::csrf::CsrfValidationError::Expired => "CSRF token expired",
-            crate::services::csrf::CsrfValidationError::UserMismatch => "CSRF token user mismatch",
-            crate::services::csrf::CsrfValidationError::InvalidToken => "Invalid CSRF token",
-        };
-        warn!("{} for delete account request", error_msg);
+        warn!("CSRF validation failed for delete account request: {:?}", e);
         return Ok(reply::with_status(
             reply::json(&ErrorBody {
                 code: "FORBIDDEN".to_string(),
-                message: error_msg.to_string(),
+                message: "Invalid or expired CSRF token".to_string(),
                 details: None,
             }),
             warp::http::StatusCode::FORBIDDEN,
@@ -349,16 +344,11 @@ pub async fn change_password(
     };
 
     if let Err(e) = csrf_service.validate_token(&csrf_token, &user_id) {
-        let error_msg = match e {
-            crate::services::csrf::CsrfValidationError::Expired => "CSRF token expired",
-            crate::services::csrf::CsrfValidationError::UserMismatch => "CSRF token user mismatch",
-            crate::services::csrf::CsrfValidationError::InvalidToken => "Invalid CSRF token",
-        };
-        warn!("{} for change password request", error_msg);
+        warn!("CSRF validation failed for change password request: {:?}", e);
         return Ok(reply::with_status(
             reply::json(&ErrorBody {
                 code: "FORBIDDEN".to_string(),
-                message: error_msg.to_string(),
+                message: "Invalid or expired CSRF token".to_string(),
                 details: None,
             }),
             warp::http::StatusCode::FORBIDDEN,

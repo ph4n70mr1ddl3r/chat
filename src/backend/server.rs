@@ -476,7 +476,7 @@ async fn handle_websocket_upgrade(
 ) -> Result<impl Reply, Rejection> {
     info!("WebSocket connection request received");
 
-    let validator = HandshakeValidator::new(state.config.jwt_secret.clone());
+    let validator = HandshakeValidator::new(state.auth_service.clone());
     match validator.validate_upgrade(protocol_header.as_deref()).await {
         Ok(claims) => {
             info!(
