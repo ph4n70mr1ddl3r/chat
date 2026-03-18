@@ -2,6 +2,7 @@
 //!
 //! Implements POST /auth/signup and POST /auth/login endpoints
 
+use chat_shared::protocol::TokenClaims;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tracing::{info, warn};
@@ -18,7 +19,7 @@ use std::sync::Arc;
 /// Pre-computed dummy bcrypt hash for timing-attack resistant authentication.
 /// This ensures password hashing always runs even when user doesn't exist,
 /// preventing timing-based user enumeration attacks.
-const DUMMY_BCRYPT_HASH_FOR_TIMING: &str = "$2b$12$LQv8wJ1ZQ7H8G8bS5h8QeO0o1iHtKrN6CWmYrfVrY1BuBbbfvVVW9";
+pub const DUMMY_BCRYPT_HASH_FOR_TIMING: &str = "$2b$12$LQv8wJ1ZQ7H8G8bS5h8QeO0o1iHtKrN6CWmYrfVrY1BuBbbfvVVW9";
 
 macro_rules! error_response {
     ($code:expr, $message:expr, $status:expr) => {
@@ -71,13 +72,14 @@ pub struct LogoutContext {
 /// Returns a warp rejection if the CSRF token is missing, invalid, or expired.
 #[allow(clippy::too_many_lines)]
 pub async fn logout_handler(
-    user_id: String,
+    claims: TokenClaims,
     ctx: LogoutContext,
     connection_manager: Arc<ConnectionManager>,
     auth_service: Arc<crate::services::AuthService>,
     csrf_service: CsrfService,
     pool: SqlitePool,
 ) -> Result<impl Reply, Rejection> {
+    let user_id = &claims.sub;
     info!("Logout request for user: {user_id}");
 
     let Some(csrf_token) = ctx.csrf_token else {
@@ -89,7 +91,7 @@ pub async fn logout_handler(
         ));
     };
 
-    if let Err(e) = csrf_service.validate_token(&csrf_token, &user_id) {
+    if let Err(e) = csrf_service.validate_token(&csrf_token, user_id) {
         let error_msg = match e {
             crate::services::csrf::CsrfValidationError::Expired => "CSRF token expired",
             crate::services::csrf::CsrfValidationError::UserMismatch => "CSRF token user mismatch",
@@ -116,22 +118,18 @@ pub async fn logout_handler(
         warn!("Failed to log logout event: {e}");
     }
 
-    if let Some(token) = ctx.auth_token {
-        // Try to decode token and revoke by JTI for better efficiency
-        // Fall back to token hash revocation if decoding fails
-        match auth_service.decode_token_without_verification(&token) {
-            Ok(claims) if !claims.jti.is_empty() => {
-                auth_service.revoke_token_by_jti(&claims.jti, &user_id).await;
-                info!("Token revoked by JTI for user: {user_id}");
-            }
-            _ => {
-                auth_service.revoke_token(&token, &user_id).await;
-                info!("Token revoked by hash for user: {user_id}");
-            }
-        }
+    // Revoke by JTI if present (more efficient than hash-based revocation)
+    // The claims are already verified by middleware, so we can trust them
+    if !claims.jti.is_empty() {
+        auth_service.revoke_token_by_jti(&claims.jti, user_id).await;
+        info!("Token revoked by JTI for user: {user_id}");
+    } else if let Some(token) = ctx.auth_token {
+        // Fallback: revoke by token hash for legacy tokens without JTI
+        auth_service.revoke_token(&token, user_id).await;
+        info!("Token revoked by hash for user: {user_id}");
     }
 
-    connection_manager.disconnect_user(&user_id).await;
+    connection_manager.disconnect_user(user_id).await;
 
     Ok(reply::with_status(
         reply::json(&serde_json::json!({ "message": "Logged out successfully" })),

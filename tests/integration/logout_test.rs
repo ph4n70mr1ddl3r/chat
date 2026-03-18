@@ -11,29 +11,26 @@ use crate::fixtures::setup_test_db;
 /// Then: The logout should complete successfully
 #[tokio::test]
 async fn test_logout_endpoint() {
-    // Note: Since JWTs are stateless and we don't have a blacklist yet,
-    // the logout endpoint mainly disconnects WebSockets (which is hard to test in API test)
-    // and logs the event.
-    // We verify the endpoint returns 200 OK.
-
-    // This test is minimal as connection manager state is internal to the running server.
-    // Ideally we would mock ConnectionManager but it's part of the server binary.
-    
-    // We can test that the auth_log is created?
-    // The handlers need `pool`.
-    // But `logout_handler` is in `backend::handlers::auth`.
-    // It takes `ConnectionManager`.
-    
-    // As an integration test for the handler logic:
     use chat_backend::handlers::auth::logout_handler;
     use chat_backend::handlers::websocket::ConnectionManager;
+    use chat_backend::services::{AuthService, CsrfService};
     use std::sync::Arc;
-    
+
     let pool = setup_test_db().await;
     let cm = Arc::new(ConnectionManager::new());
-    
-    let result = logout_handler("user123".to_string(), cm, pool).await;
-    
+    let auth_service = Arc::new(AuthService::new("test-secret".to_string()));
+    let csrf_service = CsrfService::new("csrf-secret");
+
+    let (token, _) = auth_service.generate_token("user123".to_string()).unwrap();
+    let claims = auth_service.verify_token(&token).await.unwrap();
+
+    let ctx = chat_backend::handlers::auth::LogoutContext {
+        csrf_token: Some("test-csrf".to_string()),
+        auth_token: Some(token),
+        ip_address: Some("127.0.0.1".to_string()),
+    };
+
+    let result = logout_handler(claims, ctx, cm, auth_service, csrf_service, pool).await;
+
     assert!(result.is_ok());
-    // In a real warp test we'd check status code, but here we just check Result
 }

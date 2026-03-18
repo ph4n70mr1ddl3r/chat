@@ -3,6 +3,7 @@
 //! Validates JWT tokens from Authorization header and extracts user ID
 
 use crate::services::auth_service::AuthService;
+use chat_shared::protocol::TokenClaims;
 use std::sync::Arc;
 use warp::{
     filters::header::headers_cloned,
@@ -33,22 +34,43 @@ pub fn with_auth(
         )
 }
 
+/// Extract and validate JWT token from Authorization header
+///
+/// Returns full `TokenClaims` if valid.
+#[must_use]
+pub fn with_auth_claims(
+    auth_service: Arc<AuthService>,
+) -> impl Filter<Extract = (TokenClaims,), Error = Rejection> + Clone {
+    headers_cloned()
+        .and(warp::any().map(move || auth_service.clone()))
+        .and_then(
+            |headers: HeaderMap, auth_service: Arc<AuthService>| async move {
+                extract_claims(&headers, &auth_service)
+                    .await
+                    .ok_or_else(|| reject::custom(Unauthorized))
+            },
+        )
+}
+
 /// Extract user ID from Authorization header
 ///
 /// Expected format: "Bearer <token>"
 async fn extract_user_id(headers: &HeaderMap, auth_service: &AuthService) -> Option<String> {
+    extract_claims(headers, auth_service).await.map(|c| c.sub)
+}
+
+/// Extract full claims from Authorization header
+///
+/// Expected format: "Bearer <token>"
+async fn extract_claims(headers: &HeaderMap, auth_service: &AuthService) -> Option<TokenClaims> {
     let auth_header = headers.get(AUTHORIZATION)?;
     let auth_str = auth_header.to_str().ok()?;
 
     // Extract token by stripping "Bearer " prefix safely
     let token = auth_str.strip_prefix("Bearer ")?;
 
-    // Verify token and extract user_id
-    auth_service
-        .verify_token(token)
-        .await
-        .ok()
-        .map(|claims| claims.sub)
+    // Verify token and extract claims
+    auth_service.verify_token(token).await.ok()
 }
 
 #[cfg(test)]
@@ -69,6 +91,24 @@ mod tests {
 
         let result = extract_user_id(&headers, &auth_service).await;
         assert_eq!(result, Some("user123".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_extract_claims_valid() {
+        let auth_service = AuthService::new("test_secret".to_string());
+        let (token, _) = auth_service.generate_token("user123".to_string()).unwrap();
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            AUTHORIZATION,
+            HeaderValue::from_str(&format!("Bearer {}", token)).unwrap(),
+        );
+
+        let claims = extract_claims(&headers, &auth_service).await;
+        assert!(claims.is_some());
+        let claims = claims.unwrap();
+        assert_eq!(claims.sub, "user123");
+        assert!(!claims.jti.is_empty());
     }
 
     #[tokio::test]

@@ -1,10 +1,10 @@
 use crate::db::queries;
 use crate::handlers::websocket::{ClientConnection, ConnectionManager, ErrorResponse};
-use crate::models::MAX_MESSAGE_LENGTH;
 use crate::services::{
     conversation_service::ConversationService, message_queue::MessageQueueService,
     message_service::MessageService,
 };
+use crate::validators::validate_message_content;
 use chat_shared::protocol::{MessageEnvelope, TextMessageData};
 use serde_json::json;
 use sqlx::SqlitePool;
@@ -115,27 +115,9 @@ impl MessageHandler {
         let data: TextMessageData = serde_json::from_value(envelope.data.clone())
             .map_err(|e| format!("Invalid message data: {e}"))?;
 
-        // Validate message content
-        if data.content.trim().is_empty() {
-            return Ok(vec![ErrorResponse::invalid_message(
-                "Message content cannot be empty",
-            )]);
-        }
-        if data.content.len() > MAX_MESSAGE_LENGTH {
-            return Ok(vec![ErrorResponse::invalid_message(&format!(
-                "Message content exceeds {MAX_MESSAGE_LENGTH} character limit"
-            ))]);
-        }
-        
-        // Validate characters in content
-        let has_invalid_chars = data
-            .content
-            .chars()
-            .any(|c| c.is_control() && c != '\n' && c != '\r' && c != '\t');
-        if has_invalid_chars {
-            return Ok(vec![ErrorResponse::invalid_message(
-                "Message contains invalid control characters",
-            )]);
+        // Validate message content using consolidated validator
+        if let Err(e) = validate_message_content(&data.content) {
+            return Ok(vec![ErrorResponse::invalid_message(&e)]);
         }
 
         // Prevent self-messaging

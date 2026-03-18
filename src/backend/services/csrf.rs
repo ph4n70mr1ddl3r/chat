@@ -6,9 +6,21 @@
 use chrono::Utc;
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
 
 const CSRF_TOKEN_VALIDITY_SECS: i64 = 3600;
+
+/// Derive a CSRF-specific secret from the JWT secret.
+/// This follows the principle of key separation - each cryptographic purpose
+/// should use a distinct key to prevent cross-protocol attacks.
+#[must_use]
+pub fn derive_csrf_secret(jwt_secret: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(b"csrf-key-derivation-v1:");
+    hasher.update(jwt_secret.as_bytes());
+    format!("csrf-{:x}", hasher.finalize())
+}
 
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
@@ -39,11 +51,19 @@ impl CsrfClaims {
 }
 
 impl CsrfService {
+    /// Create a new CSRF service with a direct secret
     pub fn new(secret: &str) -> Self {
         Self {
             encoding_key: EncodingKey::from_secret(secret.as_bytes()),
             decoding_key: DecodingKey::from_secret(secret.as_bytes()),
         }
+    }
+
+    /// Create a new CSRF service from a JWT secret.
+    /// Derives a separate CSRF secret to follow key separation best practices.
+    #[must_use]
+    pub fn from_jwt_secret(jwt_secret: &str) -> Self {
+        Self::new(&derive_csrf_secret(jwt_secret))
     }
 
     pub fn generate_token(&self, user_id: &str) -> Result<String, String> {
@@ -141,5 +161,36 @@ mod tests {
             service.validate_token(&token, "wrong_user"),
             Err(CsrfValidationError::UserMismatch)
         );
+    }
+
+    #[test]
+    fn test_derive_csrf_secret() {
+        let jwt_secret = "my-jwt-secret";
+        let csrf_secret = derive_csrf_secret(jwt_secret);
+
+        // Should produce a different secret
+        assert_ne!(jwt_secret, csrf_secret);
+
+        // Should be deterministic
+        assert_eq!(csrf_secret, derive_csrf_secret(jwt_secret));
+
+        // Different JWT secrets should produce different CSRF secrets
+        let csrf_secret2 = derive_csrf_secret("different-jwt-secret");
+        assert_ne!(csrf_secret, csrf_secret2);
+    }
+
+    #[test]
+    fn test_from_jwt_secret_key_separation() {
+        let jwt_secret = "my-jwt-secret";
+        let service = CsrfService::from_jwt_secret(jwt_secret);
+
+        // Should work with the derived secret
+        let token = service.generate_token("user123").unwrap();
+        assert!(service.is_valid(&token, "user123"));
+
+        // A service created with the raw JWT secret should NOT validate tokens
+        // from the derived-secret service (proves key separation)
+        let service_with_jwt_secret = CsrfService::new(jwt_secret);
+        assert!(!service_with_jwt_secret.is_valid(&token, "user123"));
     }
 }

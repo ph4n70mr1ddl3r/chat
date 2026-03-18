@@ -46,13 +46,12 @@ pub struct HttpClient {
 }
 
 impl HttpClient {
+    #[deprecated(
+        since = "0.2.0",
+        note = "Use `try_new` instead which properly handles client creation errors"
+    )]
     pub fn new(base_url: String) -> Self {
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(30))
-            .connect_timeout(Duration::from_secs(10))
-            .build()
-            .expect("Failed to create HTTP client");
-        Self { base_url, client }
+        Self::try_new(base_url).expect("Failed to create HTTP client")
     }
 
     pub fn try_new(base_url: String) -> Result<Self, String> {

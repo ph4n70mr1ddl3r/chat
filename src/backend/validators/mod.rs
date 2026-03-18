@@ -22,6 +22,9 @@ const MAX_EMAIL_LOCAL_LENGTH: usize = 64;
 /// Maximum email domain length
 const MAX_EMAIL_DOMAIN_LENGTH: usize = 255;
 
+/// Maximum message content length
+pub const MAX_MESSAGE_CONTENT_LENGTH: usize = 5000;
+
 /// Validate UUID format
 ///
 /// Returns Ok(()) if the string is a valid UUID, Err with a message otherwise.
@@ -173,6 +176,35 @@ pub fn validate_email(email: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Validate message content
+///
+/// Rules:
+/// - Not empty (after trimming whitespace)
+/// - Maximum 5000 characters
+/// - No control characters except newline, carriage return, and tab
+pub fn validate_message_content(content: &str) -> Result<(), String> {
+    if content.trim().is_empty() {
+        return Err("Message content cannot be empty".to_string());
+    }
+
+    if content.len() > MAX_MESSAGE_CONTENT_LENGTH {
+        return Err(format!(
+            "Message content exceeds {} character limit",
+            MAX_MESSAGE_CONTENT_LENGTH
+        ));
+    }
+
+    let has_invalid_chars = content
+        .chars()
+        .any(|c| c.is_control() && c != '\n' && c != '\r' && c != '\t');
+
+    if has_invalid_chars {
+        return Err("Message contains invalid control characters".to_string());
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -286,5 +318,31 @@ mod tests {
         // Unicode characters should be rejected
         assert!(validate_username("usérname").is_err());
         assert!(validate_username("用户名").is_err());
+    }
+
+    #[test]
+    fn test_validate_message_content_valid() {
+        assert!(validate_message_content("Hello, world!").is_ok());
+        assert!(validate_message_content("Line 1\nLine 2").is_ok());
+        assert!(validate_message_content("Tab\there").is_ok());
+    }
+
+    #[test]
+    fn test_validate_message_content_empty() {
+        assert!(validate_message_content("").is_err());
+        assert!(validate_message_content("   ").is_err());
+        assert!(validate_message_content("\n\n").is_err());
+    }
+
+    #[test]
+    fn test_validate_message_content_too_long() {
+        let long_content = "a".repeat(MAX_MESSAGE_CONTENT_LENGTH + 1);
+        assert!(validate_message_content(&long_content).is_err());
+    }
+
+    #[test]
+    fn test_validate_message_content_invalid_chars() {
+        assert!(validate_message_content("null\0byte").is_err());
+        assert!(validate_message_content("bell\u{0007}char").is_err());
     }
 }

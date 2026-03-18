@@ -497,7 +497,16 @@ impl AuthService {
     ///
     /// Calling this on an untrusted token could allow an attacker to inject
     /// arbitrary claims into your system.
-    #[allow(deprecated)]
+    ///
+    /// # Deprecation
+    ///
+    /// This method is deprecated for security reasons. Consider using verified token
+    /// claims from `verify_token()` instead. If you must use this, ensure the token
+    /// has been pre-verified.
+    #[deprecated(
+        since = "0.2.0",
+        note = "This method bypasses signature verification. Use verified claims from verify_token() when possible."
+    )]
     pub fn decode_token_without_verification(&self, token: &str) -> Result<TokenClaims, String> {
         #[cfg(debug_assertions)]
         tracing::warn!(

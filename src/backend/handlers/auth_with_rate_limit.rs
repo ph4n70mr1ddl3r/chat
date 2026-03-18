@@ -3,7 +3,7 @@
 //! Wraps the auth handlers with rate limiting and logging
 
 use crate::db::queries::{self, AuthEventType};
-use crate::handlers::auth::{AuthResponse, LoginRequest};
+use crate::handlers::auth::{AuthResponse, LoginRequest, DUMMY_BCRYPT_HASH_FOR_TIMING};
 use crate::handlers::ErrorBody;
 use crate::middleware::RateLimiter;
 use crate::services::{AuthService, CsrfService};
@@ -46,11 +46,23 @@ pub async fn login_with_rate_limit(
         ));
     }
 
-    // Find user by username
-    let user = match queries::find_user_by_username(&pool, &req.username).await {
-        Ok(Some(user)) => user,
+    // Find user by username - use timing-attack resistant pattern
+    // Always verify password even when user doesn't exist to prevent timing-based enumeration
+    let (user, hash_to_verify) = match queries::find_user_by_username(&pool, &req.username).await {
+        Ok(Some(user)) if user.is_deleted() => {
+            // Return the hash for timing consistency but no user
+            (None, user.password_hash)
+        }
+        Ok(Some(user)) => {
+            let cloned = user.clone();
+            (Some(cloned), user.password_hash)
+        }
         Ok(None) => {
-            warn!("Login failed: user not found ({})", sanitize_for_log(&req.username));
+            // Use dummy hash to ensure password verification runs in constant time
+            (None, DUMMY_BCRYPT_HASH_FOR_TIMING.to_string())
+        }
+        Err(e) => {
+            warn!("Database error during login: {}", e);
 
             let _ = queries::insert_auth_log(
                 &pool,
@@ -58,21 +70,10 @@ pub async fn login_with_rate_limit(
                 Some(&req.username),
                 AuthEventType::LoginFailed,
                 None,
-                Some("User not found"),
+                Some("Database error"),
             )
             .await;
 
-            return Ok(reply::with_status(
-                reply::json(&ErrorBody {
-                    code: "AUTH_ERROR".to_string(),
-                    message: "Invalid credentials".to_string(),
-                    details: None,
-                }),
-                warp::http::StatusCode::UNAUTHORIZED,
-            ));
-        }
-        Err(e) => {
-            warn!("Database error during login: {}", e);
             return Ok(reply::with_status(
                 reply::json(&ErrorBody {
                     code: "DATABASE_ERROR".to_string(),
@@ -84,37 +85,11 @@ pub async fn login_with_rate_limit(
         }
     };
 
-    // Check if user is deleted
-    if user.is_deleted() {
-        warn!("Login failed: deleted account ({})", sanitize_for_log(&req.username));
-
-        let _ = queries::insert_auth_log(
-            &pool,
-            &ip_address,
-            Some(&req.username),
-            AuthEventType::LoginFailed,
-            None,
-            Some("Account deleted"),
-        )
-        .await;
-
-        return Ok(reply::with_status(
-            reply::json(&ErrorBody {
-                code: "AUTH_ERROR".to_string(),
-                message: "Invalid credentials".to_string(),
-                details: None,
-            }),
-            warp::http::StatusCode::UNAUTHORIZED,
-        ));
-    }
-
-    // Verify password
-    match AuthService::verify_password(&req.password, &user.password_hash) {
-        Ok(true) => {
-            // Password is correct - proceed with token generation
-        }
-        Ok(false) => {
-            warn!("Login failed: invalid password ({})", sanitize_for_log(&req.username));
+    // Always verify password to maintain constant time (prevents user enumeration via timing)
+    let password_valid = match AuthService::verify_password(&req.password, &hash_to_verify) {
+        Ok(valid) => valid,
+        Err(e) => {
+            warn!("Password verification error for '{}': {}", sanitize_for_log(&req.username), e);
 
             let _ = queries::insert_auth_log(
                 &pool,
@@ -122,7 +97,7 @@ pub async fn login_with_rate_limit(
                 Some(&req.username),
                 AuthEventType::LoginFailed,
                 None,
-                Some("Invalid password"),
+                Some("Password verification error"),
             )
             .await;
 
@@ -135,18 +110,31 @@ pub async fn login_with_rate_limit(
                 warp::http::StatusCode::UNAUTHORIZED,
             ));
         }
-        Err(e) => {
-            warn!("Password verification code: {}", e);
-            return Ok(reply::with_status(
-                reply::json(&ErrorBody {
-                    code: "AUTH_ERROR".to_string(),
-                    message: "Authentication failed".to_string(),
-                    details: None,
-                }),
-                warp::http::StatusCode::INTERNAL_SERVER_ERROR,
-            ));
-        }
-    }
+    };
+
+    // Check both password validity AND user existence
+    let Some(user) = user.filter(|_: &crate::models::User| password_valid) else {
+        warn!("Login failed: invalid credentials ({})", sanitize_for_log(&req.username));
+
+        let _ = queries::insert_auth_log(
+            &pool,
+            &ip_address,
+            Some(&req.username),
+            AuthEventType::LoginFailed,
+            None,
+            Some("Invalid credentials"),
+        )
+        .await;
+
+        return Ok(reply::with_status(
+            reply::json(&ErrorBody {
+                code: "AUTH_ERROR".to_string(),
+                message: "Invalid credentials".to_string(),
+                details: None,
+            }),
+            warp::http::StatusCode::UNAUTHORIZED,
+        ));
+    };
 
     // Generate token
     let auth_service = AuthService::new(jwt_secret);

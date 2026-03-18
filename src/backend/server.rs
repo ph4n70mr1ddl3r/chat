@@ -207,6 +207,7 @@ pub fn create_routes(
     let auth_rate_limit_filter = rate_limit::rate_limit_filter(state.auth_rate_limiter.clone());
 
     let with_auth = auth_middleware::with_auth(state.auth_service.clone());
+    let with_auth_claims = auth_middleware::with_auth_claims(state.auth_service.clone());
 
     // Health endpoint
     let health_route = warp::path!("health")
@@ -260,7 +261,7 @@ pub fn create_routes(
                 warp::post()
                     .and(warp::path("logout"))
                     .and(warp::path::end())
-                    .and(with_auth.clone())
+                    .and(with_auth_claims.clone())
                     .and(warp::header::optional::<String>("X-CSRF-Token"))
                     .and(warp::header::optional::<String>("Authorization"))
                     .and(rate_limit_filter.clone())
@@ -780,19 +781,19 @@ async fn handle_login(
 
 /// Handle logout request
 async fn handle_logout(
-    user_id: String,
+    claims: chat_shared::protocol::TokenClaims,
     csrf_token: Option<String>,
     auth_header: Option<String>,
     remote_addr: Option<SocketAddr>,
     state: ServerState,
 ) -> Result<impl Reply, Rejection> {
-    info!("Logout request for user: {}", user_id);
+    info!("Logout request for user: {}", claims.sub);
     let ip = client_ip(remote_addr, None);
     let auth_token = auth_header.and_then(|h| {
         h.strip_prefix("Bearer ").map(ToString::to_string)
     });
     auth::logout_handler(
-        user_id,
+        claims,
         auth::LogoutContext {
             csrf_token,
             auth_token,
