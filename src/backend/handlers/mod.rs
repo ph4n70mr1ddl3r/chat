@@ -95,7 +95,7 @@ impl ApiError {
 impl From<ChatError> for ApiError {
     fn from(err: ChatError) -> Self {
         match err {
-            ChatError::AuthError(msg) => Self::unauthorized(msg),
+            ChatError::AuthError(msg) | ChatError::TokenInvalid(msg) => Self::unauthorized(msg),
             ChatError::MessageError(msg) | ChatError::ValidationError(msg) => {
                 Self::bad_request(msg)
             }
@@ -105,7 +105,6 @@ impl From<ChatError> for ApiError {
             ChatError::Conflict(msg) => Self::conflict(msg),
             ChatError::RateLimited(msg) => Self::too_many_requests(msg),
             ChatError::TokenExpired => Self::unauthorized("Token has expired"),
-            ChatError::TokenInvalid(msg) => Self::unauthorized(msg),
             ChatError::Timeout => Self::new(StatusCode::REQUEST_TIMEOUT, "TIMEOUT", "Request timed out"),
             _ => Self::internal("An error occurred"),
         }
@@ -123,7 +122,8 @@ pub struct ErrorBody {
     pub details: Option<Value>,
 }
 
-/// Create a Warp rejection carrying an ApiError.
+/// Create a Warp rejection carrying an `ApiError`.
+#[must_use]
 pub fn rejection(error: ApiError) -> warp::reject::Rejection {
     warp::reject::custom(error)
 }

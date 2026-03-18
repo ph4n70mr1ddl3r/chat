@@ -123,7 +123,7 @@ pub async fn delete_user_conversations(pool: &SqlitePool, user_id: &str) -> Resu
 
 /// Update conversation stats after a new message.
 ///
-/// Updates last_message_at, message_count, and updated_at.
+/// Updates `last_message_at`, `message_count`, and `updated_at`.
 ///
 /// # Errors
 ///

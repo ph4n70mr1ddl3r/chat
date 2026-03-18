@@ -18,6 +18,7 @@ pub struct RequestContext {
 }
 
 impl RequestContext {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             request_id: Uuid::new_v4().to_string(),
@@ -25,13 +26,13 @@ impl RequestContext {
         }
     }
 
+    #[must_use]
     pub fn from_headers(headers: &HeaderMap) -> Self {
         let request_id = headers
             .get(REQUEST_ID_HEADER)
             .and_then(|v| v.to_str().ok())
             .filter(|s| !s.is_empty() && s.len() <= 100 && s.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_'))
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| Uuid::new_v4().to_string());
+            .map_or_else(|| Uuid::new_v4().to_string(), ToString::to_string);
 
         let client_ip = Self::extract_client_ip(headers);
 
@@ -86,6 +87,7 @@ impl Default for RequestContext {
     }
 }
 
+#[must_use]
 pub fn with_request_context(
 ) -> impl Filter<Extract = (RequestContext,), Error = Rejection> + Clone {
     headers_cloned().and_then(|headers: HeaderMap| async move {

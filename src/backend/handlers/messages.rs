@@ -102,6 +102,10 @@ impl MessageHandler {
     /// 5. If online: broadcasts to recipient
     /// 6. If offline: queues for retry
     /// 7. Sends acknowledgement to sender
+    ///
+    /// # Errors
+    /// Returns an error string if message processing fails.
+    #[allow(clippy::too_many_lines)]
     pub async fn handle_message(
         &self,
         envelope: &MessageEnvelope,
@@ -224,7 +228,7 @@ impl MessageHandler {
                 .await
             {
                 // Deliver to recipient immediately
-                let delivery_message = Self::build_message_envelope(MessageParams {
+                let delivery_message = Self::build_message_envelope(&MessageParams {
                     message_id: &message.id,
                     sender_id: &sender.user_id,
                     sender_username: &sender.username,
@@ -299,11 +303,11 @@ impl MessageHandler {
     /// * `content` - Message text content
     /// * `conversation_id` - Conversation identifier
     /// * `status` - Message delivery status (e.g., "delivered", "sent")
-    fn build_message_envelope(params: MessageParams<'_>) -> MessageEnvelope {
+    fn build_message_envelope(params: &MessageParams<'_>) -> MessageEnvelope {
         MessageEnvelope {
             id: params.message_id.to_string(),
             msg_type: "message".to_string(),
-            timestamp: chrono::Utc::now().timestamp_millis() as u64,
+            timestamp: chrono::Utc::now().timestamp_millis().max(0) as u64,
             data: json!({
                 "senderId": params.sender_id,
                 "senderUsername": params.sender_username,
@@ -343,6 +347,10 @@ impl MessageHandler {
     ///
     /// Status hierarchy: pending < sent < delivered < read
     /// Only upgrades to higher status, never downgrades.
+    ///
+    /// # Errors
+    /// Returns an error string if batch size exceeds limit or database operations fail.
+    #[allow(clippy::too_many_lines)]
     pub async fn handle_sync_delivery_status(
         &self,
         user_id: &str,
@@ -362,9 +370,8 @@ impl MessageHandler {
         let mut synced_count = 0u32;
 
         for update in updates {
-            let current = match queries::find_message_by_id(&self.pool, &update.message_id).await {
-                Ok(Some(msg)) => msg,
-                _ => continue,
+            let Ok(Some(current)) = queries::find_message_by_id(&self.pool, &update.message_id).await else {
+                continue;
             };
 
             // Only the recipient can update message status (e.g., mark as read/delivered)
@@ -389,7 +396,7 @@ impl MessageHandler {
                 synced_count += 1;
 
                 let conv_id = current.conversation_id.clone();
-                let now_ms = chrono::Utc::now().timestamp_millis() as u64;
+                let now_ms = chrono::Utc::now().timestamp_millis().max(0) as u64;
                 let event = MessageEnvelope {
                     id: uuid::Uuid::new_v4().to_string(),
                     msg_type: "deliveryStatusUpdated".to_string(),
@@ -413,7 +420,7 @@ impl MessageHandler {
             }
         }
 
-        let now_ms = chrono::Utc::now().timestamp_millis() as u64;
+        let now_ms = chrono::Utc::now().timestamp_millis().max(0) as u64;
         let completion = MessageEnvelope {
             id: uuid::Uuid::new_v4().to_string(),
             msg_type: "syncDeliveryStatusCompleted".to_string(),

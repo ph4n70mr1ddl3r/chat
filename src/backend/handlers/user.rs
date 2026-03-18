@@ -202,6 +202,7 @@ pub async fn search_users(
 }
 
 /// Handle DELETE /user/me
+#[allow(clippy::too_many_lines)]
 pub async fn delete_account(
     user_id: String,
     request: DeleteAccountRequest,
@@ -226,19 +227,16 @@ pub async fn delete_account(
         ));
     }
 
-    let csrf_token = match csrf_token {
-        Some(token) => token,
-        None => {
-            warn!("Missing CSRF token for delete account request");
-            return Ok(reply::with_status(
-                reply::json(&ErrorBody {
-                    code: "FORBIDDEN".to_string(),
-                    message: "CSRF token required".to_string(),
-                    details: None,
-                }),
-                warp::http::StatusCode::FORBIDDEN,
-            ));
-        }
+    let Some(csrf_token) = csrf_token else {
+        warn!("Missing CSRF token for delete account request");
+        return Ok(reply::with_status(
+            reply::json(&ErrorBody {
+                code: "FORBIDDEN".to_string(),
+                message: "CSRF token required".to_string(),
+                details: None,
+            }),
+            warp::http::StatusCode::FORBIDDEN,
+        ));
     };
 
     if let Err(e) = csrf_service.validate_token(&csrf_token, &user_id) {
@@ -325,6 +323,7 @@ pub async fn delete_account(
 }
 
 /// Handle POST /user/change-password
+#[allow(clippy::too_many_lines)]
 pub async fn change_password(
     user_id: String,
     csrf_token: Option<String>,
@@ -333,19 +332,16 @@ pub async fn change_password(
     pool: SqlitePool,
     auth_service: Arc<AuthService>,
 ) -> Result<impl Reply, Rejection> {
-    let csrf_token = match csrf_token {
-        Some(token) => token,
-        None => {
-            warn!("Missing CSRF token for change password request");
-            return Ok(reply::with_status(
-                reply::json(&ErrorBody {
-                    code: "FORBIDDEN".to_string(),
-                    message: "CSRF token required".to_string(),
-                    details: None,
-                }),
-                warp::http::StatusCode::FORBIDDEN,
-            ));
-        }
+    let Some(csrf_token) = csrf_token else {
+        warn!("Missing CSRF token for change password request");
+        return Ok(reply::with_status(
+            reply::json(&ErrorBody {
+                code: "FORBIDDEN".to_string(),
+                message: "CSRF token required".to_string(),
+                details: None,
+            }),
+            warp::http::StatusCode::FORBIDDEN,
+        ));
     };
 
     if let Err(e) = csrf_service.validate_token(&csrf_token, &user_id) {

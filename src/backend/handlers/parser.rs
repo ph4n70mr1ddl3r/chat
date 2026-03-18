@@ -43,6 +43,7 @@ pub struct FrameParser;
 
 impl FrameParser {
     /// Parse incoming WebSocket frame
+    #[must_use]
     pub fn parse(msg: &WsMessage) -> ParseResult {
         if msg.is_text() {
             if let Ok(text) = msg.to_str() {
@@ -108,6 +109,9 @@ impl FrameParser {
     }
 
     /// Parse raw JSON string into message envelope (for testing)
+    ///
+    /// # Errors
+    /// Returns an error string if JSON parsing fails or envelope validation fails.
     pub fn parse_json(text: &str) -> Result<MessageEnvelope, String> {
         let envelope: MessageEnvelope =
             serde_json::from_str(text).map_err(|e| format!("Invalid JSON: {e}"))?;
@@ -119,11 +123,15 @@ impl FrameParser {
     }
 
     /// Extract message type from envelope
+    #[must_use]
     pub fn extract_message_type(envelope: &MessageEnvelope) -> &str {
         &envelope.msg_type
     }
 
     /// Validate text message data (content and recipient)
+    ///
+    /// # Errors
+    /// Returns an error string if validation fails.
     pub fn validate_text_message_data(
         envelope: &MessageEnvelope,
     ) -> Result<(String, String), String> {
@@ -146,6 +154,9 @@ impl FrameParser {
     }
 
     /// Validate typing indicator data
+    ///
+    /// # Errors
+    /// Returns an error string if validation fails.
     pub fn validate_typing_data(envelope: &MessageEnvelope) -> Result<String, String> {
         let data = &envelope.data;
 
@@ -159,6 +170,8 @@ impl FrameParser {
     }
 
     /// Create error response for invalid message
+    #[allow(clippy::needless_pass_by_value)]
+    #[must_use]
     pub fn create_error_response(
         code: &str,
         message: &str,
@@ -167,7 +180,7 @@ impl FrameParser {
         let error = json!({
             "id": uuid::Uuid::new_v4().to_string(),
             "type": "error",
-            "timestamp": chrono::Utc::now().timestamp_millis() as u64,
+            "timestamp": chrono::Utc::now().timestamp_millis().max(0) as u64,
             "data": {
                 "code": code,
                 "message": message,

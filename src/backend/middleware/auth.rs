@@ -17,7 +17,8 @@ impl reject::Reject for Unauthorized {}
 
 /// Extract and validate JWT token from Authorization header
 ///
-/// Returns user_id from token claims if valid
+/// Returns `user_id` from token claims if valid.
+#[must_use]
 pub fn with_auth(
     auth_service: Arc<AuthService>,
 ) -> impl Filter<Extract = (String,), Error = Rejection> + Clone {

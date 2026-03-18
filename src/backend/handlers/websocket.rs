@@ -98,14 +98,14 @@ impl ConnectionManager {
         self.total_connections.load(Ordering::SeqCst)
     }
 
-    /// Register a new connection for a user
+ /// Register a new connection for a user
     ///
     /// Adds a new WebSocket connection to the user's connection list.
-    /// A single user can have multiple concurrent connections (up to max_per_user).
-    /// Total connections are limited to max_total.
+    /// A single user can have multiple concurrent connections (up to `max_per_user`).
+    /// Total connections are limited to `max_total`.
     ///
     /// # Returns
-    /// RegisterResult indicating success or the reason for failure.
+    /// `RegisterResult` indicating success or the reason for failure.
     pub async fn register(
         &self,
         client: ClientConnection,
@@ -226,7 +226,7 @@ impl ConnectionManager {
             let mut delivered = 0;
             for conn in entries {
                 match conn.sender.try_send(message.clone()) {
-                    Ok(_) => delivered += 1,
+            Ok(_) => delivered += 1,
                     Err(e) => {
                         tracing::debug!(
                             target: "websocket",
@@ -328,7 +328,10 @@ impl MessageValidator {
         Ok(())
     }
 
-    /// Validate text message data
+ /// Validate text message data
+    ///
+    /// # Errors
+    /// Returns an error string if validation fails.
     pub fn validate_text_message(content: &str, recipient_id: &str) -> Result<(), String> {
         if content.is_empty() || content.len() > MAX_MESSAGE_LENGTH {
             return Err(format!(
@@ -345,7 +348,10 @@ impl MessageValidator {
         Ok(())
     }
 
-    /// Validate typing indicator
+ /// Validate typing indicator
+    ///
+    /// # Errors
+    /// Returns an error string if validation fails.
     pub fn validate_typing(recipient_id: &str) -> Result<(), String> {
         if recipient_id.is_empty() {
             return Err("Recipient ID cannot be empty".to_string());
@@ -377,7 +383,7 @@ impl ErrorResponse {
         let error = json!({
             "id": uuid::Uuid::new_v4().to_string(),
             "type": "error",
-            "timestamp": chrono::Utc::now().timestamp_millis() as u64,
+            "timestamp": chrono::Utc::now().timestamp_millis().max(0) as u64,
             "data": data,
         });
 

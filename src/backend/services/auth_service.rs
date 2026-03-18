@@ -25,9 +25,9 @@ fn hash_token(token: &str) -> String {
 /// Authentication service with token revocation support
 pub struct AuthService {
     jwt_secret: String,
-    /// Maps token_hash -> (user_id, expiration_timestamp)
+    /// Maps `token_hash` -> (`user_id`, `expiration_timestamp`)
     revoked_tokens: Arc<RwLock<HashMap<String, (String, i64)>>>,
-    /// Maps user_id -> timestamp (seconds since epoch) after which tokens are valid
+    /// Maps `user_id` -> timestamp (seconds since epoch) after which tokens are valid
     /// Used to invalidate all tokens for a user (e.g., on password change)
     tokens_valid_after: Arc<RwLock<HashMap<String, i64>>>,
     pool: Option<SqlitePool>,
@@ -138,6 +138,7 @@ impl AuthService {
     }
 
     /// Create a new authentication service with database persistence and periodic cleanup
+    #[must_use]
     pub fn with_pool_and_cleanup(jwt_secret: String, pool: SqlitePool) -> Self {
         let revoked_tokens = Arc::new(RwLock::new(HashMap::new()));
         let tokens_valid_after = Arc::new(RwLock::new(HashMap::new()));
@@ -202,6 +203,9 @@ impl AuthService {
     }
 
     /// Load revoked tokens from database into memory on startup
+    ///
+    /// # Errors
+    /// Returns an error string if the database query fails.
     pub async fn load_revoked_tokens(&self) -> Result<(), String> {
         let Some(pool) = &self.pool else {
             return Ok(());
@@ -376,7 +380,7 @@ impl AuthService {
 
     /// Hash a password with bcrypt
     ///
-    /// Returns the password_hash which includes salt internally.
+    /// Returns the `password_hash` which includes salt internally.
     ///
     /// # Errors
     /// Returns error if password validation fails or bcrypt hashing encounters an error.

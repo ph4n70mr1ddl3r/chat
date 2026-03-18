@@ -58,7 +58,7 @@ pub struct ServerConfig {
     pub is_ephemeral_secret: bool,
     /// Maximum WebSocket frame size in bytes (default 10KB).
     /// Note: This is the raw frame size limit for WebSocket messages.
-    /// The application-level message content limit is defined by MAX_MESSAGE_LENGTH (5000 chars)
+    /// The application-level message content limit is defined by `MAX_MESSAGE_LENGTH` (5000 chars)
     /// in src/backend/models/mod.rs. The frame size should be larger to accommodate JSON overhead.
     pub max_message_size: usize,
     pub allowed_origins: Vec<String>,
@@ -118,7 +118,7 @@ impl ServerConfig {
                     tracing::warn!("To avoid this warning, set a JWT_SECRET environment variable with at least 32 random characters.");
                     let mut secret = [0u8; 64];
                     getrandom::fill(&mut secret).map_err(|e| {
-                        anyhow::anyhow!("Failed to generate secure random secret: {}", e)
+                        anyhow::anyhow!("Failed to generate secure random secret: {e}")
                     })?;
                     (BASE64_STANDARD.encode(secret), true)
                 }
@@ -154,6 +154,7 @@ pub struct ServerState {
 }
 
 impl ServerState {
+    #[must_use]
     pub fn new(pool: SqlitePool, config: ServerConfig) -> Self {
         let connection_manager = Arc::new(websocket::ConnectionManager::new());
         let pool_for_services = pool.clone();
@@ -195,6 +196,7 @@ impl ServerState {
 }
 
 /// Create all routes combined into a single filter
+#[allow(clippy::too_many_lines)]
 pub fn create_routes(
     state: ServerState,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -539,6 +541,7 @@ async fn lookup_username(pool: &SqlitePool, user_id: &str) -> String {
 }
 
 /// Handle WebSocket connection after upgrade
+#[allow(clippy::too_many_lines)]
 async fn handle_websocket_connection(socket: WebSocket, state: ServerState, claims: TokenClaims) {
     let user_id = claims.sub.clone();
     info!("WebSocket connection established for user: {}", user_id);
@@ -606,10 +609,12 @@ async fn handle_websocket_connection(socket: WebSocket, state: ServerState, clai
     
     tokio::spawn(async move {
         tokio::select! {
-            _ = cancel_rx => {
-                info!("Forwarding task cancelled for user: {}", user_id_for_cancel);
+            res = cancel_rx => {
+                if res.is_ok() {
+                    info!("Forwarding task cancelled for user: {}", user_id_for_cancel);
+                }
             }
-            _ = async {
+            () = async {
                 while let Some(msg) = rx.recv().await {
                     let mut sender = ws_tx_forward.lock().await;
                     if sender.send(msg).await.is_err() {
@@ -784,7 +789,7 @@ async fn handle_logout(
     info!("Logout request for user: {}", user_id);
     let ip = client_ip(remote_addr, None);
     let auth_token = auth_header.and_then(|h| {
-        h.strip_prefix("Bearer ").map(|s| s.to_string())
+        h.strip_prefix("Bearer ").map(ToString::to_string)
     });
     auth::logout_handler(
         user_id,
@@ -878,11 +883,13 @@ fn client_ip(remote_addr: Option<SocketAddr>, forwarded_for: Option<&str>) -> St
     }
     
     remote_addr
-        .map(|addr| addr.ip().to_string())
-        .unwrap_or_else(|| {
-            tracing::warn!("Request missing remote address");
-            "unknown".to_string()
-        })
+        .map_or_else(
+            || {
+                tracing::warn!("Request missing remote address");
+                "unknown".to_string()
+            },
+            |addr| addr.ip().to_string(),
+        )
 }
 
 fn enforce_frame_size(
@@ -987,7 +994,7 @@ pub async fn start_server(
         .message_queue
         .load_pending_messages()
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to load pending messages: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to load pending messages: {e}"))?;
     state.message_queue.start().await;
 
     let routes = create_routes(state);

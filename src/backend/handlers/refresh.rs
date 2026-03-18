@@ -20,6 +20,7 @@ pub struct RefreshRequest {
 }
 
 /// Handle POST /auth/refresh
+#[allow(clippy::too_many_lines)]
 pub async fn refresh_token_handler(
     req: RefreshRequest,
     pool: SqlitePool,
@@ -28,19 +29,16 @@ pub async fn refresh_token_handler(
     shared_auth_service: Arc<AuthService>,
     csrf_token: Option<String>,
 ) -> Result<impl Reply, Rejection> {
-    let csrf_token = match csrf_token {
-        Some(token) => token,
-        None => {
-            warn!("Missing CSRF token for token refresh request");
-            return Ok(reply::with_status(
-                reply::json(&ErrorBody {
-                    code: "FORBIDDEN".to_string(),
-                    message: "CSRF token required".to_string(),
-                    details: None,
-                }),
-                warp::http::StatusCode::FORBIDDEN,
-            ));
-        }
+    let Some(csrf_token) = csrf_token else {
+        warn!("Missing CSRF token for token refresh request");
+        return Ok(reply::with_status(
+            reply::json(&ErrorBody {
+                code: "FORBIDDEN".to_string(),
+                message: "CSRF token required".to_string(),
+                details: None,
+            }),
+            warp::http::StatusCode::FORBIDDEN,
+        ));
     };
 
     let claims = match shared_auth_service.verify_token(&req.token).await {
@@ -156,10 +154,11 @@ pub async fn refresh_token_handler(
 }
 
 /// Extract Bearer token from Authorization header
+#[must_use]
 pub fn extract_bearer_token(auth_header: &str) -> Option<String> {
     auth_header
         .strip_prefix("Bearer ")
-        .map(|token| token.to_string())
+        .map(ToString::to_string)
 }
 
 #[cfg(test)]

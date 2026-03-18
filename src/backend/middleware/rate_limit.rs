@@ -115,7 +115,7 @@ impl RateLimiter {
             if elapsed >= self.window_duration {
                 0
             } else {
-                (self.window_duration - elapsed).as_secs().max(1)
+                self.window_duration.checked_sub(elapsed).unwrap_or_default().as_secs().max(1)
             }
         } else {
             0
@@ -127,8 +127,8 @@ impl RateLimiter {
     /// This operation is atomic within a single lock acquisition to prevent
     /// race conditions where multiple concurrent requests could bypass the limit
     ///
-    /// Returns Ok(()) if the request is allowed and has been recorded,
-    /// Err(RateLimitExceeded) if the IP has exceeded the rate limit
+    /// # Errors
+    /// Returns `RateLimitExceeded` if the IP has exceeded the rate limit.
     pub async fn check_and_record(&self, ip: &str) -> Result<(), RateLimitExceeded> {
         let mut entries = self.entries.lock().await;
 
@@ -259,8 +259,7 @@ impl RateLimiter {
 
         if ips.is_empty() {
             return remote_ip
-                .map(|a| a.ip().to_string())
-                .unwrap_or_else(|| "unknown".to_string());
+                .map_or_else(|| "unknown".to_string(), |a| a.ip().to_string());
         }
 
         let should_trust_header = remote_ip
@@ -289,6 +288,7 @@ impl RateLimiter {
 }
 
 /// Warp filter to enforce rate limits based on remote IP address
+#[must_use]
 pub fn rate_limit_filter(
     limiter: Arc<RateLimiter>,
 ) -> impl Filter<Extract = (), Error = Rejection> + Clone {

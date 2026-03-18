@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Maximum length for message content in characters.
-/// Note: The WebSocket frame size limit (configured in ServerConfig::max_message_size)
+/// Note: The WebSocket frame size limit (configured in `ServerConfig::max_message_size`)
 /// should be larger than this to accommodate JSON serialization overhead and metadata.
 /// A 5000-character limit with ~10KB frame size allows for JSON structure overhead.
 pub const MAX_MESSAGE_LENGTH: usize = 5000;
@@ -31,7 +31,7 @@ pub mod msg_type {
 /// User account
 ///
 /// Represents a registered user in the chat system.
-/// bcrypt includes salt internally in the password_hash.
+/// bcrypt includes salt internally in the `password_hash`.
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct User {
     pub id: String,
@@ -46,6 +46,7 @@ pub struct User {
 }
 
 impl User {
+    #[must_use]
     pub fn new(username: String, password_hash: String) -> Self {
         let now = chrono::Utc::now().timestamp_millis();
         Self {
@@ -87,6 +88,7 @@ pub struct Conversation {
 }
 
 impl Conversation {
+    #[must_use]
     pub fn new(user1_id: String, user2_id: String) -> Self {
         let now = chrono::Utc::now().timestamp_millis();
         Self {
@@ -102,6 +104,9 @@ impl Conversation {
     }
 
     /// Validate that conversation is between different users and ordered correctly
+    ///
+    /// # Errors
+    /// Returns an error string if validation fails.
     pub fn validate(&self) -> Result<(), String> {
         if self.user1_id == self.user2_id {
             return Err("Cannot create conversation with self".to_string());
@@ -129,6 +134,7 @@ pub struct Message {
 }
 
 impl Message {
+    #[must_use]
     pub fn new(
         conversation_id: String,
         sender_id: String,
@@ -151,6 +157,9 @@ impl Message {
     }
 
     /// Validate message content
+    ///
+    /// # Errors
+    /// Returns an error string if validation fails.
     pub fn validate(&self) -> Result<(), String> {
         let char_count = self.content.chars().count();
         if char_count > MAX_MESSAGE_LENGTH {
