@@ -15,9 +15,10 @@ use crate::utils::sanitize_for_log;
 use crate::validators;
 use std::sync::Arc;
 
-/// Pre-computed dummy bcrypt hash for timing-attack resistant signup.
-/// This ensures password hashing always runs even when username exists.
-const DUMMY_BCRYPT_HASH_FOR_SIGNUP: &str = "$2b$12$LQv8wJ1ZQ7H8G8bS5h8QeO0o1iHtKrN6CWmYrfVrY1BuBbbfvVVW9";
+/// Pre-computed dummy bcrypt hash for timing-attack resistant authentication.
+/// This ensures password hashing always runs even when user doesn't exist,
+/// preventing timing-based user enumeration attacks.
+const DUMMY_BCRYPT_HASH_FOR_TIMING: &str = "$2b$12$LQv8wJ1ZQ7H8G8bS5h8QeO0o1iHtKrN6CWmYrfVrY1BuBbbfvVVW9";
 
 macro_rules! error_response {
     ($code:expr, $message:expr, $status:expr) => {
@@ -316,7 +317,7 @@ pub async fn login_handler(
             (Some(cloned), user.password_hash)
         }
         Ok(None) => {
-            (None, DUMMY_BCRYPT_HASH_FOR_SIGNUP.to_string())
+            (None, DUMMY_BCRYPT_HASH_FOR_TIMING.to_string())
         }
         Err(e) => {
             warn!(

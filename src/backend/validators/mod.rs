@@ -14,7 +14,7 @@ const MAX_USERNAME_LENGTH: usize = 50;
 const MIN_PASSWORD_LENGTH: usize = 8;
 
 /// Maximum password length
-const MAX_PASSWORD_LENGTH: usize = 128;
+pub const MAX_PASSWORD_LENGTH: usize = 128;
 
 /// Maximum email local part length
 const MAX_EMAIL_LOCAL_LENGTH: usize = 64;

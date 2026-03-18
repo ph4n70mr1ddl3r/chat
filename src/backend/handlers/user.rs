@@ -5,14 +5,13 @@
 use crate::db::queries;
 use crate::handlers::ErrorBody;
 use crate::services::{AuthService, CsrfService, UserService};
+use crate::validators::{self, MAX_PASSWORD_LENGTH};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use tracing::warn;
 use warp::{reply, Rejection, Reply};
-use crate::validators;
 
-const MAX_PASSWORD_LENGTH: usize = 128;
 const MAX_SEARCH_QUERY_LENGTH: usize = 100;
 
 /// User profile response
