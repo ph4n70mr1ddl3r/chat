@@ -33,6 +33,9 @@ struct DatabaseStatus {
 }
 
 /// GET /health - lightweight readiness check
+///
+/// # Errors
+/// Returns a rejection if the response cannot be serialized.
 pub async fn health(state: ServerState) -> Result<impl Reply, Rejection> {
     let uptime = state.start_time.elapsed().as_secs();
     let (status, warning) = if state.config.is_ephemeral_secret {
@@ -60,6 +63,9 @@ pub async fn health(state: ServerState) -> Result<impl Reply, Rejection> {
 }
 
 /// GET /status - basic server diagnostics with database connectivity
+///
+/// # Errors
+/// Returns a rejection if database connectivity fails or response cannot be serialized.
 pub async fn status(state: ServerState) -> Result<impl Reply, Rejection> {
     let uptime = state.start_time.elapsed().as_secs();
     let timestamp = chrono::Utc::now().timestamp_millis();

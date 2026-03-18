@@ -121,7 +121,7 @@ mod tests {
             .generate_token("user123".to_string())
             .unwrap();
 
-        let protocol_header = format!("jwt.{}", token);
+        let protocol_header = format!("jwt.{token}");
         let result = validator.validate_upgrade(Some(&protocol_header)).await;
 
         assert!(result.is_ok());
@@ -164,7 +164,7 @@ mod tests {
 
         let auth_service2 = Arc::new(AuthService::new("secret2".to_string()));
         let validator2 = HandshakeValidator::new(auth_service2);
-        let protocol_header = format!("jwt.{}", token);
+        let protocol_header = format!("jwt.{token}");
         let result = validator2.validate_upgrade(Some(&protocol_header)).await;
 
         assert!(result.is_err());

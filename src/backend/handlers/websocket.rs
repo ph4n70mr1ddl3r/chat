@@ -36,7 +36,7 @@ impl ClientConnection {
     #[must_use]
     pub fn new(user_id: String, username: String) -> Self {
         let connection_id = uuid::Uuid::new_v4().to_string();
-        let connected_at = chrono::Utc::now().timestamp_millis() as u64;
+        let connected_at = chrono::Utc::now().timestamp_millis().max(0).cast_unsigned();
 
         Self {
             user_id,
@@ -121,6 +121,7 @@ impl ConnectionManager {
             }
             // Try to atomically increment. If another thread incremented first,
             // compare_exchange will fail and we retry the loop.
+            #[allow(clippy::single_match)]
             match self.total_connections.compare_exchange(
                 current,
                 current + 1,
@@ -128,7 +129,7 @@ impl ConnectionManager {
                 Ordering::SeqCst,
             ) {
                 Ok(_) => break,
-                Err(_) => continue, // Retry if another thread modified the counter
+                Err(_) => {} // Retry if another thread modified the counter
             }
         }
 
@@ -226,7 +227,7 @@ impl ConnectionManager {
             let mut delivered = 0;
             for conn in entries {
                 match conn.sender.try_send(message.clone()) {
-            Ok(_) => delivered += 1,
+                    Ok(()) => delivered += 1,
                     Err(e) => {
                         tracing::debug!(
                             target: "websocket",
@@ -286,7 +287,13 @@ pub struct MessageValidator;
 
 impl MessageValidator {
     /// Validate message envelope structure
+    ///
+    /// # Errors
+    /// Returns an error string if validation fails.
     pub fn validate_envelope(envelope: &MessageEnvelope) -> Result<(), String> {
+        const I64_MAX_U64: u64 = i64::MAX as u64;
+        const MIN_VALID_TIMESTAMP_MS: i64 = 946_684_800_000; // Year 2000 in milliseconds
+
         if envelope.id.is_empty() {
             return Err("Message ID cannot be empty".to_string());
         }
@@ -313,13 +320,11 @@ impl MessageValidator {
         }
 
         let now = chrono::Utc::now().timestamp_millis();
-        const I64_MAX_U64: u64 = i64::MAX as u64;
-        const MIN_VALID_TIMESTAMP_MS: i64 = 946_684_800_000; // Year 2000 in milliseconds
 
         if envelope.timestamp > I64_MAX_U64 {
             return Err("Timestamp value too large".to_string());
         }
-        let ts_i64 = envelope.timestamp as i64;
+        let ts_i64 = envelope.timestamp.cast_signed();
 
         // Reject unreasonably old timestamps (before year 2000)
         if ts_i64 < MIN_VALID_TIMESTAMP_MS {
@@ -390,7 +395,7 @@ impl ErrorResponse {
         let error = json!({
             "id": uuid::Uuid::new_v4().to_string(),
             "type": "error",
-            "timestamp": chrono::Utc::now().timestamp_millis().max(0) as u64,
+            "timestamp": chrono::Utc::now().timestamp_millis().max(0).cast_unsigned(),
             "data": data,
         });
 

@@ -58,6 +58,9 @@ pub struct ChangePasswordRequest {
 }
 
 /// Handle GET /user/me
+///
+/// # Errors
+/// Returns a rejection if the user is not found or database access fails.
 pub async fn get_current_user(user_id: String, pool: SqlitePool) -> Result<impl Reply, Rejection> {
     // Fetch user from database
     let user = match queries::find_user_by_id(&pool, &user_id).await {
@@ -115,6 +118,9 @@ pub async fn get_current_user(user_id: String, pool: SqlitePool) -> Result<impl 
 /// Searches for users by username prefix (case-insensitive)
 /// Excludes current user and deleted users
 /// Returns up to `limit` results (max 50, default 10)
+///
+/// # Errors
+/// Returns a rejection if the query is invalid or database access fails.
 pub async fn search_users(
     user_id: String,
     query: SearchQuery,
@@ -201,6 +207,9 @@ pub async fn search_users(
 }
 
 /// Handle DELETE /user/me
+///
+/// # Errors
+/// Returns a rejection if password validation fails, CSRF validation fails, or database access fails.
 #[allow(clippy::too_many_lines)]
 pub async fn delete_account(
     user_id: String,
@@ -322,6 +331,9 @@ pub async fn delete_account(
 }
 
 /// Handle POST /user/change-password
+///
+/// # Errors
+/// Returns a rejection if password validation fails, CSRF validation fails, or database access fails.
 #[allow(clippy::too_many_lines)]
 pub async fn change_password(
     user_id: String,

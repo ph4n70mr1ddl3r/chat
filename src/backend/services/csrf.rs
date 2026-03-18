@@ -52,6 +52,7 @@ impl CsrfClaims {
 
 impl CsrfService {
     /// Create a new CSRF service with a direct secret
+    #[must_use]
     pub fn new(secret: &str) -> Self {
         Self {
             encoding_key: EncodingKey::from_secret(secret.as_bytes()),
@@ -66,6 +67,10 @@ impl CsrfService {
         Self::new(&derive_csrf_secret(jwt_secret))
     }
 
+    /// Generate a CSRF token for a user
+    ///
+    /// # Errors
+    /// Returns an error string if token encoding fails.
     pub fn generate_token(&self, user_id: &str) -> Result<String, String> {
         let now = Utc::now().timestamp();
         let nonce = uuid::Uuid::new_v4().to_string();
@@ -78,9 +83,13 @@ impl CsrfService {
         };
 
         encode(&Header::default(), &claims, &self.encoding_key)
-            .map_err(|e| format!("CSRF token encoding failed: {}", e))
+            .map_err(|e| format!("CSRF token encoding failed: {e}"))
     }
 
+    /// Validate a CSRF token
+    ///
+    /// # Errors
+    /// Returns a `CsrfValidationError` if token validation fails.
     pub fn validate_token(&self, token: &str, user_id: &str) -> Result<(), CsrfValidationError> {
         let mut validation = Validation::new(Algorithm::HS256);
         validation.set_required_spec_claims(&["sub", "iat", "exp"]);
@@ -116,6 +125,7 @@ impl CsrfService {
     }
 
     /// Convenience method for backward compatibility
+    #[must_use]
     pub fn is_valid(&self, token: &str, user_id: &str) -> bool {
         self.validate_token(token, user_id).is_ok()
     }

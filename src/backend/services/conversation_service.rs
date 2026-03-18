@@ -13,6 +13,7 @@ pub struct ConversationService {
 
 impl ConversationService {
     /// Create a new conversation service
+    #[must_use]
     pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
     }
@@ -20,8 +21,11 @@ impl ConversationService {
     /// Create or get existing conversation between two users
     ///
     /// Enforces one-to-one constraint (prevents duplicate conversations)
-    /// Prevents self-chat (user1_id != user2_id)
-    /// Returns (conversation, was_created: bool)
+    /// Prevents self-chat (`user1_id` != `user2_id`)
+    /// Returns `(conversation, was_created: bool)`
+    ///
+    /// # Errors
+    /// Returns an error string if self-chat is attempted, validation fails, or database operations fail.
     pub async fn create_or_get_conversation(
         &self,
         user1_id: String,
@@ -54,8 +58,11 @@ impl ConversationService {
 
     /// Get all conversations for a user
     ///
-    /// Returns conversations sorted by last_message_at (most recent first)
+    /// Returns conversations sorted by `last_message_at` (most recent first)
     /// Supports pagination via limit and offset
+    ///
+    /// # Errors
+    /// Returns an error string if database access fails.
     pub async fn get_user_conversations(
         &self,
         user_id: &str,
@@ -68,6 +75,9 @@ impl ConversationService {
     /// Get conversation by ID
     ///
     /// Validates that the user is a participant
+    ///
+    /// # Errors
+    /// Returns an error string if user is not a participant or database access fails.
     pub async fn get_conversation_by_id(
         &self,
         conversation_id: &str,

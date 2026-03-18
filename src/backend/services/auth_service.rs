@@ -296,7 +296,7 @@ impl AuthService {
     async fn is_token_issued_before_invalidation(&self, user_id: &str, token_iat: u64) -> bool {
         let tokens_valid_after = self.tokens_valid_after.read().await;
         if let Some(&valid_after_secs) = tokens_valid_after.get(user_id) {
-            return (token_iat as i64) < valid_after_secs;
+            return token_iat.cast_signed() < valid_after_secs;
         }
         false
     }
@@ -389,11 +389,11 @@ impl AuthService {
     /// Returns error if password validation fails or bcrypt hashing encounters an error.
     pub fn hash_password(password: &str) -> Result<String, String> {
         // Validate password first
-        validators::validate_password(password).map_err(|e| e.to_string())?;
+        validators::validate_password(password).map_err(|e| e.clone())?;
 
         // Hash with bcrypt (DEFAULT_COST = 12)
         let hashed =
-            hash(password, DEFAULT_COST).map_err(|e| format!("Failed to hash password: {}", e))?;
+            hash(password, DEFAULT_COST).map_err(|e| format!("Failed to hash password: {e}"))?;
 
         Ok(hashed)
     }
@@ -402,8 +402,11 @@ impl AuthService {
     ///
     /// Returns Ok(true) if password matches, Ok(false) if not.
     /// Returns Err for any error case (e.g., invalid hash format).
-    /// Note: bcrypt::verify() internally uses constant-time comparison to prevent
+    /// Note: `bcrypt::verify()` internally uses constant-time comparison to prevent
     /// timing attacks, so no additional protection is needed here.
+    ///
+    /// # Errors
+    /// Returns an error string if password verification fails due to invalid hash format.
     pub fn verify_password(password: &str, hash: &str) -> Result<bool, String> {
         verify(password, hash).map_err(|e| {
             tracing::debug!("Password verification error: {}", e);
@@ -412,9 +415,12 @@ impl AuthService {
     }
 
     /// Create a new user with validated password
+    ///
+    /// # Errors
+    /// Returns an error string if password validation fails.
     pub async fn create_user(&self, username: String, password: String) -> Result<User, String> {
         // Validate password
-        validators::validate_password(&password).map_err(|e| e.to_string())?;
+        validators::validate_password(&password).map_err(|e| e.clone())?;
 
         // Hash password
         let password_hash = Self::hash_password(&password)?;
@@ -432,8 +438,11 @@ impl AuthService {
     }
 
     /// Generate JWT token for a user
+    ///
+    /// # Errors
+    /// Returns an error string if token encoding fails.
     pub fn generate_token(&self, user_id: String) -> Result<(String, u64), String> {
-        let now = Utc::now().timestamp() as u64;
+        let now = Utc::now().timestamp().max(0).cast_unsigned();
         let expiration = now + TOKEN_EXPIRATION_SECONDS as u64;
         let jti = uuid::Uuid::new_v4().to_string();
 
@@ -444,17 +453,20 @@ impl AuthService {
             iat: now,
             exp: expiration,
             jti,
-            scopes: DEFAULT_SCOPES.iter().map(|s| s.to_string()).collect(),
+            scopes: DEFAULT_SCOPES.iter().map(std::string::ToString::to_string).collect(),
         };
 
         let key = EncodingKey::from_secret(self.jwt_secret.as_bytes());
 
         encode(&Header::default(), &claims, &key)
             .map(|token| (token, TOKEN_EXPIRATION_SECONDS as u64))
-            .map_err(|e| format!("Failed to generate token: {}", e))
+            .map_err(|e| format!("Failed to generate token: {e}"))
     }
 
     /// Verify user login credentials with structured logging around outcomes.
+    ///
+    /// # Errors
+    /// Returns an error string if password verification fails.
     pub fn verify_login(&self, username: &str, password: &str, hash: &str) -> Result<bool, String> {
         match Self::verify_password(password, hash) {
             Ok(true) => {
@@ -510,6 +522,10 @@ impl AuthService {
         since = "0.2.0",
         note = "This method bypasses signature verification. Use verified claims from verify_token() when possible."
     )]
+    /// Decode token without verification
+    ///
+    /// # Errors
+    /// Returns an error string if token decoding fails.
     pub fn decode_token_without_verification(&self, token: &str) -> Result<TokenClaims, String> {
         #[cfg(debug_assertions)]
         tracing::warn!(
@@ -529,11 +545,14 @@ impl AuthService {
 
         match decode::<TokenClaims>(token, &DecodingKey::from_secret(&[]), &validation) {
             Ok(data) => Ok(data.claims),
-            Err(e) => Err(format!("Failed to decode token: {}", e)),
+            Err(e) => Err(format!("Failed to decode token: {e}")),
         }
     }
 
     /// Verify and decode a JWT token
+    ///
+    /// # Errors
+    /// Returns an error string if token verification fails.
     pub async fn verify_token(&self, token: &str) -> Result<TokenClaims, String> {
         let key = DecodingKey::from_secret(self.jwt_secret.as_bytes());
         let mut validation = Validation::new(Algorithm::HS256);

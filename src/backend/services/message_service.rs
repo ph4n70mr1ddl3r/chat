@@ -26,6 +26,9 @@ impl MessageService {
     ///
     /// Validates message content and recipient, then stores with 'pending' status
     /// Returns the created message
+    ///
+    /// # Errors
+    /// Returns an error string if validation fails, sender/recipient not found, or database operations fail.
     pub async fn send_message(
         &self,
         conversation_id: String,
@@ -46,8 +49,7 @@ impl MessageService {
                 content_length = content.len()
             );
             return Err(format!(
-                "Message content must be between 1 and {} characters",
-                MAX_MESSAGE_LENGTH
+                "Message content must be between 1 and {MAX_MESSAGE_LENGTH} characters"
             ));
         }
 
@@ -108,6 +110,9 @@ impl MessageService {
     /// Send message with client-provided UUID (idempotency)
     ///
     /// If message with same ID exists, returns existing message (prevents duplicates)
+    ///
+    /// # Errors
+    /// Returns an error string if validation fails, sender/recipient not found, or database operations fail.
     pub async fn send_message_with_id(
         &self,
         message_id: String,
@@ -129,8 +134,7 @@ impl MessageService {
                 content_length = content.len()
             );
             return Err(format!(
-                "Message content must be between 1 and {} characters",
-                MAX_MESSAGE_LENGTH
+                "Message content must be between 1 and {MAX_MESSAGE_LENGTH} characters"
             ));
         }
 
@@ -210,8 +214,11 @@ impl MessageService {
 
     /// Get messages for a conversation
     ///
-    /// Returns messages ordered by created_at DESC (newest first)
+    /// Returns messages ordered by `created_at` DESC (newest first)
     /// Supports pagination via limit and offset
+    ///
+    /// # Errors
+    /// Returns an error string if conversation not found or user is not a participant.
     pub async fn get_conversation_messages(
         &self,
         conversation_id: &str,
@@ -233,6 +240,9 @@ impl MessageService {
     /// Search messages within a conversation
     ///
     /// Returns matching messages with context
+    ///
+    /// # Errors
+    /// Returns an error string if user is not a participant or database access fails.
     pub async fn search_messages_in_conversation(
         &self,
         conversation_id: &str,
@@ -255,6 +265,9 @@ impl MessageService {
     /// Get pending messages (for offline delivery retry)
     ///
     /// Returns messages with 'pending' or 'failed' status
+    ///
+    /// # Errors
+    /// Returns an error string if database access fails.
     pub async fn get_pending_messages(&self, recipient_id: &str) -> Result<Vec<Message>, String> {
         queries::get_pending_messages(&self.pool, recipient_id).await
     }
@@ -262,6 +275,9 @@ impl MessageService {
     /// Update message status
     ///
     /// Transitions: pending -> sent -> delivered (or failed)
+    ///
+    /// # Errors
+    /// Returns an error string if database update fails.
     pub async fn update_message_status(
         &self,
         message_id: &str,
@@ -270,7 +286,7 @@ impl MessageService {
         let result = queries::update_message_status(&self.pool, message_id, status.as_str()).await;
 
         match &result {
-            Ok(_) => info!(
+            Ok(()) => info!(
                 target: "message",
                 event = "message.status",
                 message_id = %message_id,
@@ -292,12 +308,15 @@ impl MessageService {
 
     /// Mark message as delivered
     ///
-    /// Sets delivered_at timestamp and status to 'delivered'
+    /// Sets `delivered_at` timestamp and status to 'delivered'
+    ///
+    /// # Errors
+    /// Returns an error string if database update fails.
     pub async fn mark_delivered(&self, message_id: &str) -> Result<(), String> {
         let result = queries::mark_message_delivered(&self.pool, message_id).await;
 
         match &result {
-            Ok(_) => info!(
+            Ok(()) => info!(
                 target: "message",
                 event = "message.delivered",
                 message_id = %message_id,
@@ -320,9 +339,9 @@ impl MessageService {
     /// Returns weight of a status for comparison.
     /// Higher weights represent "more delivered" states.
     /// Status hierarchy: pending < sent < delivered < read
+    #[must_use]
     pub fn status_weight(status: &str) -> u32 {
         match status {
-            status::PENDING => 0,
             status::SENT => 1,
             status::DELIVERED => 2,
             status::READ => 3,

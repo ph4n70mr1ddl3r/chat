@@ -20,6 +20,9 @@ pub struct RefreshRequest {
 }
 
 /// Handle POST /auth/refresh
+///
+/// # Errors
+/// Returns a rejection if token verification fails or CSRF validation fails.
 #[allow(clippy::too_many_lines)]
 pub async fn refresh_token_handler(
     req: RefreshRequest,

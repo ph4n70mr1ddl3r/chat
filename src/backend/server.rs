@@ -78,6 +78,10 @@ impl ServerConfig {
 }
 
 impl ServerConfig {
+    /// Load configuration from environment variables
+    ///
+    /// # Errors
+    /// Returns an error if CORS wildcard is specified or required environment variables are missing.
     pub fn from_env() -> anyhow::Result<Self> {
         let origins = std::env::var("CORS_ALLOWED_ORIGINS")
             .ok()
@@ -198,7 +202,7 @@ impl ServerState {
 /// Create all routes combined into a single filter
 #[allow(clippy::too_many_lines)]
 pub fn create_routes(
-    state: ServerState,
+    state: &ServerState,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     let state_clone_for_filter = state.clone();
     let state_filter = warp::any().map(move || state_clone_for_filter.clone());
@@ -979,6 +983,9 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Rejection> {
 }
 
 /// Start the HTTP server
+///
+/// # Errors
+/// Returns an error if the server fails to bind to the specified port or if configuration loading fails.
 pub async fn start_server(
     port: u16,
     pool: SqlitePool,
@@ -998,7 +1005,7 @@ pub async fn start_server(
         .map_err(|e| anyhow::anyhow!("Failed to load pending messages: {e}"))?;
     state.message_queue.start().await;
 
-    let routes = create_routes(state);
+    let routes = create_routes(&state);
 
     let bind_addr: IpAddr = std::env::var("BIND_ADDR")
         .ok()
@@ -1053,7 +1060,7 @@ mod tests {
     async fn test_health_endpoint() {
         let pool = init_test_pool().await;
         let state = ServerState::new(pool, ServerConfig::test_config());
-        let routes = create_routes(state);
+        let routes = create_routes(&state);
 
         let resp = request().method("GET").path("/health").reply(&routes).await;
 
@@ -1068,7 +1075,7 @@ mod tests {
     async fn test_websocket_upgrade_without_token() {
         let pool = init_test_pool().await;
         let state = ServerState::new(pool, ServerConfig::test_config());
-        let routes = create_routes(state);
+        let routes = create_routes(&state);
 
         let resp = request()
             .method("GET")
@@ -1087,7 +1094,7 @@ mod tests {
     async fn test_websocket_upgrade_with_invalid_token() {
         let pool = init_test_pool().await;
         let state = ServerState::new(pool, ServerConfig::test_config());
-        let routes = create_routes(state);
+        let routes = create_routes(&state);
 
         let resp = request()
             .method("GET")
@@ -1107,7 +1114,7 @@ mod tests {
     async fn test_not_found() {
         let pool = init_test_pool().await;
         let state = ServerState::new(pool, ServerConfig::test_config());
-        let routes = create_routes(state);
+        let routes = create_routes(&state);
 
         let resp = request()
             .method("GET")
@@ -1122,7 +1129,7 @@ mod tests {
     async fn test_status_endpoint() {
         let pool = init_test_pool().await;
         let state = ServerState::new(pool, ServerConfig::test_config());
-        let routes = create_routes(state);
+        let routes = create_routes(&state);
 
         let resp = request().method("GET").path("/status").reply(&routes).await;
 
@@ -1136,7 +1143,7 @@ mod tests {
         let pool = init_test_pool().await;
         let mut state = ServerState::new(pool, ServerConfig::test_config());
         state.global_rate_limiter = Arc::new(rate_limit::RateLimiter::new(1, 60));
-        let routes = create_routes(state);
+        let routes = create_routes(&state);
 
         let first = request().method("GET").path("/health").reply(&routes).await;
         assert_eq!(first.status(), StatusCode::OK);
@@ -1153,7 +1160,7 @@ mod tests {
         state.global_rate_limiter = Arc::new(rate_limit::RateLimiter::new(10, 60));
         // Allow 1 attempt (block when attempts >= 1, so block on 2nd)
         state.auth_rate_limiter = Arc::new(rate_limit::RateLimiter::new(1, 60));
-        let routes = create_routes(state);
+        let routes = create_routes(&state);
 
         let login_req = auth::LoginRequest {
             username: "ghost".to_string(),
@@ -1184,7 +1191,7 @@ mod tests {
     async fn test_security_headers_present() {
         let pool = init_test_pool().await;
         let state = ServerState::new(pool, ServerConfig::test_config());
-        let routes = create_routes(state);
+        let routes = create_routes(&state);
 
         let resp = request().method("GET").path("/health").reply(&routes).await;
         let headers = resp.headers();
@@ -1225,7 +1232,7 @@ mod tests {
             max_message_size: 10 * 1024,
         };
         let state = ServerState::new(pool, config);
-        let routes = create_routes(state);
+        let routes = create_routes(&state);
 
         let resp = request()
             .method("OPTIONS")

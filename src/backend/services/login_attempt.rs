@@ -41,6 +41,7 @@ impl Drop for LoginAttemptService {
 }
 
 impl LoginAttemptService {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             attempts: Arc::new(RwLock::new(HashMap::new())),
@@ -51,6 +52,7 @@ impl LoginAttemptService {
         }
     }
 
+    #[must_use]
     pub fn with_config(max_attempts: u32, lockout_duration_secs: u64, attempt_window_secs: u64) -> Self {
         Self {
             attempts: Arc::new(RwLock::new(HashMap::new())),
@@ -61,6 +63,7 @@ impl LoginAttemptService {
         }
     }
 
+    #[must_use]
     pub fn with_cleanup() -> Self {
         let attempts: Arc<RwLock<HashMap<String, LoginAttempt>>> = Arc::new(RwLock::new(HashMap::new()));
         let attempts_clone = attempts.clone();

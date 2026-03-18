@@ -80,8 +80,8 @@ impl MessageQueueService {
                 }
 
                 tokio::select! {
-                    _ = sleep(Duration::from_millis(500)) => {
-                        let now = chrono::Utc::now().timestamp() as u64;
+                    () = sleep(Duration::from_millis(500)) => {
+                        let now = chrono::Utc::now().timestamp().max(0).cast_unsigned();
                         let mut queue_lock = queue.write().await;
 
                         let mut ready_by_recipient: HashMap<String, Vec<QueuedMessage>> = HashMap::new();
@@ -152,7 +152,7 @@ impl MessageQueueService {
             message_id,
             recipient_id: recipient_id.clone(),
             retry_count: 0,
-            next_retry_at: chrono::Utc::now().timestamp() as u64,
+            next_retry_at: chrono::Utc::now().timestamp().max(0).cast_unsigned(),
         };
 
         let mut queue = self.queue.write().await;
@@ -199,7 +199,7 @@ impl MessageQueueService {
         let envelope = MessageEnvelope {
             id: message.id.clone(),
             msg_type: "message".to_string(),
-            timestamp: chrono::Utc::now().timestamp_millis() as u64,
+            timestamp: chrono::Utc::now().timestamp_millis().max(0).cast_unsigned(),
             data: json!({
                 "senderId": sender.id,
                 "senderUsername": sender.username,
@@ -212,7 +212,7 @@ impl MessageQueueService {
 
         let outbound = WsMessage::text(
             serde_json::to_string(&envelope)
-                .map_err(|e| format!("Failed to serialize message: {}", e))?,
+                .map_err(|e| format!("Failed to serialize message: {e}"))?,
         );
 
         let delivered = connection_manager
@@ -227,7 +227,7 @@ impl MessageQueueService {
         let ack = MessageEnvelope {
             id: uuid::Uuid::new_v4().to_string(),
             msg_type: "ack".to_string(),
-            timestamp: chrono::Utc::now().timestamp_millis() as u64,
+            timestamp: chrono::Utc::now().timestamp_millis().max(0).cast_unsigned(),
             data: json!({
                 "status": "delivered",
                 "messageId": message.id,
@@ -236,7 +236,7 @@ impl MessageQueueService {
             }),
         };
         let ack_msg = WsMessage::text(
-            serde_json::to_string(&ack).map_err(|e| format!("Failed to serialize ack: {}", e))?,
+            serde_json::to_string(&ack).map_err(|e| format!("Failed to serialize ack: {e}"))?,
         );
         let _ = connection_manager.send_to_user(&sender.id, ack_msg).await;
 
@@ -261,7 +261,7 @@ impl MessageQueueService {
             )
             .await
             {
-                Ok(_) => {
+                Ok(()) => {
                     total_queued.fetch_sub(1, Ordering::SeqCst);
                 }
                 Err(reason) => {
@@ -285,7 +285,7 @@ impl MessageQueueService {
         let delay_seconds = RETRY_SCHEDULE[retry_index];
 
         queued_msg.retry_count += 1;
-        queued_msg.next_retry_at = chrono::Utc::now().timestamp() as u64 + delay_seconds;
+        queued_msg.next_retry_at = chrono::Utc::now().timestamp().max(0).cast_unsigned() + delay_seconds;
 
         let mut queue_lock = queue.write().await;
         let user_queue = queue_lock
@@ -301,6 +301,9 @@ impl MessageQueueService {
     }
 
     /// Load pending messages from database on startup
+    ///
+    /// # Errors
+    /// Returns an error string if database access fails.
     pub async fn load_pending_messages(&self) -> Result<(), String> {
         let pending_messages = queries::get_all_pending_messages(&self.pool).await?;
 
@@ -318,7 +321,7 @@ impl MessageQueueService {
                 message_id: message.id,
                 recipient_id: message.recipient_id.clone(),
                 retry_count: 0,
-                next_retry_at: chrono::Utc::now().timestamp() as u64,
+                next_retry_at: chrono::Utc::now().timestamp().max(0).cast_unsigned(),
             };
 
             user_queue.push(queued_msg);
