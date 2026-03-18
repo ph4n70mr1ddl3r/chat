@@ -208,6 +208,8 @@ pub async fn delete_account(
     csrf_token: Option<String>,
     csrf_service: CsrfService,
     pool: SqlitePool,
+    auth_service: Arc<AuthService>,
+    connection_manager: Arc<crate::handlers::websocket::ConnectionManager>,
 ) -> Result<impl Reply, Rejection> {
     if request.password.is_empty() || request.password.len() > MAX_PASSWORD_LENGTH {
         return Ok(reply::with_status(
@@ -312,6 +314,9 @@ pub async fn delete_account(
             warp::http::StatusCode::INTERNAL_SERVER_ERROR,
         ));
     }
+
+    auth_service.revoke_all_tokens_for_user(&user_id).await;
+    connection_manager.disconnect_user(&user_id).await;
 
     Ok(reply::with_status(
         reply::json(&serde_json::json!({ "message": "Account deleted successfully" })),

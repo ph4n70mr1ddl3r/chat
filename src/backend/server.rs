@@ -834,7 +834,15 @@ async fn handle_delete_account(
     req: user::DeleteAccountRequest,
     state: ServerState,
 ) -> Result<impl Reply, Rejection> {
-    user::delete_account(user_id, req, csrf_token, state.csrf_service, state.pool).await
+    user::delete_account(
+        user_id,
+        req,
+        csrf_token,
+        state.csrf_service,
+        state.pool,
+        state.auth_service,
+        state.connection_manager,
+    ).await
 }
 
 /// Handle POST /user/change-password

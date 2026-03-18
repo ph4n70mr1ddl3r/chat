@@ -79,6 +79,18 @@ impl MessageService {
 
         // Insert into database
         let created_message = queries::insert_message(&self.pool, &message).await?;
+        
+        let now = chrono::Utc::now().timestamp_millis();
+        if let Err(e) = queries::update_conversation_stats(&self.pool, &conversation_id, now).await {
+            warn!(
+                target: "message",
+                event = "conversation.stats.update_failed",
+                conversation_id = %conversation_id,
+                error = %e,
+                "Failed to update conversation stats"
+            );
+        }
+        
         info!(
             target: "message",
             event = "message.send",
@@ -158,6 +170,15 @@ impl MessageService {
         let inserted = queries::insert_message_or_ignore(&self.pool, &message).await?;
 
         if inserted {
+            if let Err(e) = queries::update_conversation_stats(&self.pool, &conversation_id, now).await {
+                warn!(
+                    target: "message",
+                    event = "conversation.stats.update_failed",
+                    conversation_id = %conversation_id,
+                    error = %e,
+                    "Failed to update conversation stats"
+                );
+            }
             info!(
                 target: "message",
                 event = "message.send",

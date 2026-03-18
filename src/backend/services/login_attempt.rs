@@ -174,7 +174,7 @@ impl LoginAttemptService {
 
 impl Default for LoginAttemptService {
     fn default() -> Self {
-        Self::new()
+        Self::with_cleanup()
     }
 }
 

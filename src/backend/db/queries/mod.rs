@@ -17,7 +17,7 @@ pub mod users;
 pub use auth::{get_failed_attempts, insert_auth_log, AuthEventType};
 pub use conversations::{
     get_conversation_by_id, get_conversation_by_users,
-    get_user_conversations, insert_conversation,
+    get_user_conversations, insert_conversation, update_conversation_stats,
 };
 pub use messages::{
     find_message_by_id, get_all_pending_messages,

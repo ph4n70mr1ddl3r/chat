@@ -111,24 +111,34 @@ impl ConnectionManager {
         client: ClientConnection,
         sender: Sender<WsMessage>,
     ) -> RegisterResult {
-        // Fast path: check limit with atomic counter first (lock-free)
-        // Use SeqCst to ensure we see the most recent writes from other threads
-        let current_total = self.total_connections.load(Ordering::SeqCst);
-        if current_total >= self.max_total {
-            return RegisterResult::MaxConnectionsReached;
+        // Atomically increment the counter, but only if under limit.
+        // This prevents the TOCTOU race condition where multiple threads
+        // could pass the initial check before acquiring the lock.
+        loop {
+            let current = self.total_connections.load(Ordering::SeqCst);
+            if current >= self.max_total {
+                return RegisterResult::MaxConnectionsReached;
+            }
+            // Try to atomically increment. If another thread incremented first,
+            // compare_exchange will fail and we retry the loop.
+            match self.total_connections.compare_exchange(
+                current,
+                current + 1,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            ) {
+                Ok(_) => break,
+                Err(_) => continue, // Retry if another thread modified the counter
+            }
         }
 
         let mut conns = self.connections.write().await;
 
-        // Double-check under lock to prevent race condition
-        // Use SeqCst for proper synchronization with other threads
-        let total_count = self.total_connections.load(Ordering::SeqCst);
-        if total_count >= self.max_total {
-            return RegisterResult::MaxConnectionsReached;
-        }
-
+        // Check per-user limit under lock
         if let Some(user_conns) = conns.get(&client.user_id) {
             if user_conns.len() >= self.max_per_user {
+                // Roll back the increment
+                self.total_connections.fetch_sub(1, Ordering::SeqCst);
                 return RegisterResult::MaxUserConnectionsReached;
             }
         }
@@ -138,9 +148,6 @@ impl ConnectionManager {
             .entry(client.user_id.clone())
             .or_insert_with(Vec::new)
             .push(ManagedConnection { client, sender });
-
-        // Use SeqCst to ensure the increment is visible to all threads
-        self.total_connections.fetch_add(1, Ordering::SeqCst);
 
         RegisterResult::Success { connection_id }
     }

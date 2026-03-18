@@ -120,3 +120,28 @@ pub async fn delete_user_conversations(pool: &SqlitePool, user_id: &str) -> Resu
 
     Ok(())
 }
+
+/// Update conversation stats after a new message.
+///
+/// Updates last_message_at, message_count, and updated_at.
+///
+/// # Errors
+///
+/// Returns an error string if the database operation fails.
+pub async fn update_conversation_stats(
+    pool: &SqlitePool,
+    conversation_id: &str,
+    now: i64,
+) -> Result<(), String> {
+    sqlx::query(
+        "UPDATE conversations SET last_message_at = ?, message_count = message_count + 1, updated_at = ? WHERE id = ?"
+    )
+    .bind(now)
+    .bind(now)
+    .bind(conversation_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Failed to update conversation stats: {e}"))?;
+
+    Ok(())
+}
