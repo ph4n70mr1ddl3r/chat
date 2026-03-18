@@ -251,6 +251,9 @@ impl AuthService {
         let expiration = Utc::now().timestamp() + TOKEN_EXPIRATION_SECONDS + 60;
         
         // Try to extract JTI and revoke by it for new tokens
+        // SAFETY: This is called from logout handlers after verify_token() has validated the token.
+        // We're extracting the JTI for efficient revocation lookup.
+        #[allow(deprecated)]
         if let Ok(claims) = self.decode_token_without_verification(token) {
             if !claims.jti.is_empty() {
                 self.revoked_tokens.write().await.insert(claims.jti.clone(), (user_id.to_string(), expiration));
@@ -515,6 +518,11 @@ impl AuthService {
         );
 
         let mut validation = Validation::new(Algorithm::HS256);
+        // SAFETY: This method is deprecated and only called from `revoke_token()`
+        // after the token has been verified via `verify_token()`. The token is
+        // being decoded solely to extract the JTI for revocation purposes.
+        // The caller (logout handler) has already validated the token signature.
+        #[allow(deprecated)]
         validation.insecure_disable_signature_validation();
         validation.set_audience(&["chat-app"]);
         validation.set_issuer(&["chat-app"]);

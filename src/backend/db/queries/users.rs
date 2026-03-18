@@ -96,6 +96,11 @@ pub async fn find_users_by_ids(
         return Err("Too many user IDs requested (max 1000)".to_string());
     }
 
+    // SAFETY: Dynamic query construction is safe here because:
+    // 1. Placeholders are fixed "?" strings, not user input
+    // 2. All user_id values are bound as parameters via the query builder
+    // 3. Each user_id is validated as a valid UUID before being bound
+    // This prevents SQL injection while allowing efficient batch lookups.
     let placeholders: String = user_ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
     let query = format!(
         "{SQL_SELECT_USER_FIELDS} FROM users WHERE id IN ({placeholders})"

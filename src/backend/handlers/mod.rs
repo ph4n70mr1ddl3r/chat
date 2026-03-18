@@ -7,7 +7,6 @@ pub mod dispatcher;
 pub mod handshake;
 pub mod heartbeat;
 pub mod messages;
-pub mod parser;
 pub mod refresh;
 pub mod router;
 pub mod server;
@@ -106,10 +105,14 @@ impl From<ChatError> for ApiError {
             ChatError::RateLimited(msg) => Self::too_many_requests(msg),
             ChatError::TokenExpired => Self::unauthorized("Token has expired"),
             ChatError::Timeout => Self::new(StatusCode::REQUEST_TIMEOUT, "TIMEOUT", "Request timed out"),
-            // Note: ChatError is #[non_exhaustive], so this wildcard is required for forward compatibility.
-            // Unknown variants are treated as internal errors to avoid exposing implementation details.
-            // Consider adding logging here if unexpected variants are encountered.
-            _ => Self::internal("An error occurred"),
+            _ => {
+                tracing::warn!(
+                    target: "api",
+                    error_type = std::any::type_name_of_val(&err),
+                    "Encountered unknown ChatError variant, treating as internal error"
+                );
+                Self::internal("An error occurred")
+            }
         }
     }
 }
