@@ -168,12 +168,21 @@ pub async fn signup_handler(
         ));
     }
 
-    let username_taken = match queries::find_user_by_username(&pool, &req.username).await {
+    // Perform database lookup AND password hashing concurrently to prevent timing attacks.
+    // This ensures consistent response time whether username exists or not,
+    // eliminating any timing side-channel that could be used for username enumeration.
+    let lookup_future = queries::find_user_by_username(&pool, &req.username);
+    let username = req.username.clone();
+    let hash_future = async move { AuthService::hash_password(&req.password) };
+
+    let (lookup_result, password_hash_result) = tokio::join!(lookup_future, hash_future);
+
+    let username_taken = match lookup_result {
         Ok(Some(_)) => true,
         Err(e) => {
             warn!(
                 "Database error during user lookup for '{}': {e}",
-                sanitize_for_log(&req.username)
+                sanitize_for_log(&username)
             );
             return Ok(error_response!(
                 "INTERNAL_ERROR",
@@ -184,13 +193,10 @@ pub async fn signup_handler(
         Ok(None) => false,
     };
 
-    // Always perform password hashing to prevent timing attacks
-    // This ensures consistent response time whether username exists or not
-    let password_hash = match AuthService::hash_password(&req.password) {
+    let password_hash = match password_hash_result {
         Ok(hash) => hash,
         Err(e) => {
-            warn!("Password hashing failed for '{}': {e}", sanitize_for_log(&req.username));
-            // Return generic error to prevent information leakage
+            warn!("Password hashing failed for '{}': {e}", sanitize_for_log(&username));
             return Ok(error_response!(
                 "INTERNAL_ERROR",
                 "An error occurred while processing your request",
@@ -199,10 +205,10 @@ pub async fn signup_handler(
         }
     };
 
-    // Now check if username was taken (after password hashing to prevent timing attack)
-    // Return same generic error as other failure cases to prevent username enumeration
+    // Check if username was taken - return same generic error as other failure cases
+    // to prevent username enumeration
     if username_taken {
-        warn!("Signup failed: username taken ({})", sanitize_for_log(&req.username));
+        warn!("Signup failed: username taken ({})", sanitize_for_log(&username));
         return Ok(error_response!(
             "INTERNAL_ERROR",
             "An error occurred while processing your request",

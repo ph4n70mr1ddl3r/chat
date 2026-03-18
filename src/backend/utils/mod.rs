@@ -87,9 +87,12 @@ pub fn sanitize_for_log(s: &str) -> String {
 /// Escape SQL LIKE wildcards to prevent wildcard injection.
 ///
 /// Escapes backslash, percent, and underscore characters which have
-/// special meaning in SQL LIKE patterns.
+/// special meaning in SQL LIKE patterns. Also removes null bytes
+/// which could cause issues with some database drivers.
 #[must_use]
 pub fn escape_like_pattern(s: &str) -> String {
+    // Remove null bytes which could cause issues with some database drivers
+    let s: String = s.chars().filter(|c| *c != '\0').collect();
     s.replace('\\', "\\\\")
         .replace('%', "\\%")
         .replace('_', "\\_")

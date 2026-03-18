@@ -314,10 +314,17 @@ impl MessageValidator {
 
         let now = chrono::Utc::now().timestamp_millis();
         const I64_MAX_U64: u64 = i64::MAX as u64;
+        const MIN_VALID_TIMESTAMP_MS: i64 = 946_684_800_000; // Year 2000 in milliseconds
+
         if envelope.timestamp > I64_MAX_U64 {
             return Err("Timestamp value too large".to_string());
         }
         let ts_i64 = envelope.timestamp as i64;
+
+        // Reject unreasonably old timestamps (before year 2000)
+        if ts_i64 < MIN_VALID_TIMESTAMP_MS {
+            return Err("Timestamp value too small".to_string());
+        }
 
         let time_diff = (ts_i64 - now).abs();
 

@@ -488,9 +488,23 @@ impl AuthService {
     }
 
     /// Decode a token without verification (for extracting claims like JTI)
-    /// This should only be used when the token is already trusted (e.g., after verification)
+    ///
+    /// # Safety
+    ///
+    /// This method MUST NOT be called on untrusted tokens. It should only be
+    /// used when the token has already been verified through `verify_token()`.
+    /// The primary use case is extracting the JTI for token revocation during logout.
+    ///
+    /// Calling this on an untrusted token could allow an attacker to inject
+    /// arbitrary claims into your system.
     #[allow(deprecated)]
     pub fn decode_token_without_verification(&self, token: &str) -> Result<TokenClaims, String> {
+        #[cfg(debug_assertions)]
+        tracing::warn!(
+            target: "auth",
+            "decode_token_without_verification called - ensure token was pre-verified"
+        );
+
         let mut validation = Validation::new(Algorithm::HS256);
         validation.insecure_disable_signature_validation();
         validation.set_audience(&["chat-app"]);
@@ -513,13 +527,11 @@ impl AuthService {
         let claims = match decode::<TokenClaims>(token, &key, &validation) {
             Ok(data) => data.claims,
             Err(e) => {
+                // Use generic error message for most cases to prevent information leakage.
+                // Only expose "expired" status which is not security-sensitive.
                 let error_detail = match e.kind() {
                     jsonwebtoken::errors::ErrorKind::ExpiredSignature => "Token has expired",
-                    jsonwebtoken::errors::ErrorKind::InvalidSignature => "Invalid token signature",
-                    jsonwebtoken::errors::ErrorKind::InvalidToken => "Malformed token",
-                    jsonwebtoken::errors::ErrorKind::InvalidIssuer => "Invalid token issuer",
-                    jsonwebtoken::errors::ErrorKind::InvalidAudience => "Invalid token audience",
-                    _ => "Token verification failed",
+                    _ => "Invalid token",
                 };
                 warn!(target: "auth", event = "auth.token.verify_failed", error = ?e.kind(), "Token verification failed");
                 return Err(error_detail.to_string());

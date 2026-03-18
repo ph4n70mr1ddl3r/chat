@@ -11,6 +11,7 @@ use tokio::sync::RwLock;
 const MAX_FAILED_ATTEMPTS: u32 = 5;
 const LOCKOUT_DURATION_SECS: u64 = 900; // 15 minutes
 const ATTEMPT_WINDOW_SECS: u64 = 3600; // 1 hour
+const MAX_ENTRIES: usize = 50_000; // Maximum tracked usernames to prevent memory exhaustion
 
 #[derive(Debug, Clone)]
 struct LoginAttempt {
@@ -106,6 +107,44 @@ impl LoginAttemptService {
     pub async fn record_failed_attempt(&self, username: &str) {
         let mut attempts = self.attempts.write().await;
         let now = Instant::now();
+
+        // Evict old entries if at capacity to prevent memory exhaustion
+        if attempts.len() >= MAX_ENTRIES {
+            let attempt_window = self.attempt_window;
+            let before_count = attempts.len();
+            
+            // First, remove expired entries
+            attempts.retain(|_, attempt| {
+                if let Some(locked_until) = attempt.locked_until {
+                    if now < locked_until {
+                        return true;
+                    }
+                }
+                now.duration_since(attempt.last_attempt) <= attempt_window
+            });
+            
+            // If still over limit, evict oldest 10% of entries
+            if attempts.len() >= MAX_ENTRIES {
+                let eviction_count = (attempts.len() / 10).max(100);
+                let mut entries_vec: Vec<_> = attempts.iter().collect();
+                entries_vec.sort_by_key(|(_, a)| a.last_attempt);
+                let keys_to_remove: Vec<String> = entries_vec
+                    .into_iter()
+                    .take(eviction_count)
+                    .map(|(key, _)| key.clone())
+                    .collect();
+                for key in keys_to_remove {
+                    attempts.remove(&key);
+                }
+                tracing::debug!(
+                    target: "login_attempt",
+                    evicted = eviction_count,
+                    before = before_count,
+                    after = attempts.len(),
+                    "Evicted entries due to memory pressure"
+                );
+            }
+        }
         
         let entry = attempts.entry(username.to_lowercase()).or_insert(LoginAttempt {
             count: 0,

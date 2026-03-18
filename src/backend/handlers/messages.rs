@@ -370,6 +370,15 @@ impl MessageHandler {
         let mut synced_count = 0u32;
 
         for update in updates {
+            // Validate UUID format before database query to prevent unnecessary DB hits
+            if uuid::Uuid::parse_str(&update.message_id).is_err() {
+                tracing::debug!(
+                    "Invalid message ID format in sync request: {}",
+                    &update.message_id.chars().take(8).collect::<String>()
+                );
+                continue;
+            }
+
             let Ok(Some(current)) = queries::find_message_by_id(&self.pool, &update.message_id).await else {
                 continue;
             };
