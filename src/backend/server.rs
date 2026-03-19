@@ -1017,7 +1017,7 @@ pub async fn start_server(
         .load_pending_messages()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to load pending messages: {e}"))?;
-    state.message_queue.start().await;
+    state.message_queue.start();
 
     let routes = create_routes(&state);
 

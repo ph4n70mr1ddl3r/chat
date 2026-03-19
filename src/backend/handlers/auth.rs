@@ -407,10 +407,12 @@ mod tests {
             username: "alice".to_string(),
             token: "eyJhbGc...".to_string(),
             expires_in: 3600,
+            csrf_token: "csrf_token_123".to_string(),
         };
 
         let json = serde_json::to_string(&response).expect("Failed to serialize AuthResponse");
         assert!(json.contains("user123"));
         assert!(json.contains("alice"));
+        assert!(json.contains("csrfToken"));
     }
 }
