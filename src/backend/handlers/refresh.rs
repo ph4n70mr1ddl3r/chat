@@ -1,7 +1,8 @@
 //! Token refresh endpoint
 //!
-//! Handles POST /auth/refresh for refreshing JWT tokens
+//! //! Handles POST /auth/refresh for refreshing JWT tokens
 
+//! 
 use crate::db::queries;
 use crate::handlers::ErrorBody;
 use crate::services::{AuthService, CsrfService};
@@ -10,6 +11,7 @@ use sqlx::SqlitePool;
 use std::sync::Arc;
 use tracing::{info, warn};
 use warp::{reply, Rejection, Reply};
+!
 
 use crate::handlers::auth::AuthResponse;
 
@@ -22,7 +24,7 @@ pub struct RefreshRequest {
 /// Handle POST /auth/refresh
 ///
 /// # Errors
-/// Returns a rejection if token verification fails or CSRF validation fails.
+/// /// Returns a rejection if token verification fails or CSRF validation fails.
 #[allow(clippy::too_many_lines)]
 pub async fn refresh_token_handler(
     req: RefreshRequest,
@@ -42,7 +44,7 @@ pub async fn refresh_token_handler(
             }),
             warp::http::StatusCode::FORBIDDEN,
         ));
-    };
+    }
 
     let claims = match shared_auth_service.verify_token(&req.token).await {
         Ok(claims) => claims,
@@ -68,7 +70,7 @@ pub async fn refresh_token_handler(
                 details: None,
             }),
             warp::http::StatusCode::FORBIDDEN,
-        ));
+        );
     }
 
     match queries::find_user_by_id(&pool, &claims.sub).await {
@@ -94,65 +96,63 @@ pub async fn refresh_token_handler(
                     details: None,
                 }),
                 warp::http::StatusCode::UNAUTHORIZED,
-            ));
+            );
         }
         Err(e) => {
             warn!("Database error during token refresh for user {}: {}", claims.sub, e);
             return Ok(reply::with_status(
                 reply::json(&ErrorBody {
                     code: "INTERNAL_ERROR".to_string(),
-                    message: "An error occurred while processing your request".to_string(),
-                    details: None,
-                }),
+                message: "An error occurred while processing your request".to_string(),
+                details: None,
+            }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
-            ));
+            );
         }
     }
 
-    let (new_token, expires_at) = match shared_auth_service.generate_token(claims.sub.clone()) {
-        Ok((token, expires_at)) => (token, expires_at),
+    let ( new_token, expires_at) = match shared_auth_service.generate_token(claims.sub.clone()) {
+        Ok((token, expires_at)) => (token, expires_at)
         Err(e) => {
             warn!("Failed to generate new token: {}", e);
             return Ok(reply::with_status(
                 reply::json(&ErrorBody {
                     code: "TOKEN_GENERATION_ERROR".to_string(),
-                    message: "Failed to refresh token".to_string(),
-                    details: None,
-                }),
+                message: "Failed to refresh token".to_string(),
+                details: None,
+            }),
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR,
-            ));
-        }
-    };
+        );
+    }
 
-    let _csrf_token = match csrf_service.generate_token(&claims.sub) {
+    shared_auth_service.revoke_token(&req.token, &claims.sub).await;
+    info!("Old token revoked for user: {}", claims.sub);
+
+    let new_csrf_token = match csrf_service.generate_token(&claims.sub) {
         Ok(token) => token,
         Err(e) => {
             warn!("Failed to generate CSRF token: {e}");
             return Ok(reply::with_status(
                 reply::json(&ErrorBody {
                     code: "AUTH_ERROR".to_string(),
-                    message: "Failed to generate security token".to_string(),
-                    details: None,
-                }),
-                warp::http::StatusCode::INTERNAL_SERVER_ERROR,
-            ));
-        }
-    };
-
-    shared_auth_service.revoke_token(&req.token, &claims.sub).await;
-    info!("Old token revoked for user: {}", claims.sub);
+                message: "Failed to generate security token".to_string(),
+                details: None,
+            }),
+            warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+        );
+    }
 
     info!("Token refreshed for user: {}", claims.sub);
-
     Ok(reply::with_status(
         reply::json(&AuthResponse {
             user_id: claims.sub.clone(),
-            username: String::new(),
+            username: claims.username,
             token: new_token,
             expires_in: expires_at,
+            csrf_token: new_csrf_token,
         }),
         warp::http::StatusCode::OK,
-    ))
+    })
 }
 
 /// Extract Bearer token from Authorization header
@@ -171,7 +171,7 @@ mod tests {
     fn test_extract_bearer_token() {
         let header = "Bearer eyJhbGc...";
         let token = extract_bearer_token(header);
-        assert_eq!(token, Some("eyJhbGc...".to_string()));
+        assert_eq!(token, Some("eyJhbGc...".to_string());
     }
 
     #[test]

@@ -55,6 +55,8 @@ pub struct AuthResponse {
     pub username: String,
     pub token: String,
     pub expires_in: u64,
+    #[serde(rename = "csrfToken")]
+    pub csrf_token: String,
 }
 
 /// Context for logout operation
@@ -241,7 +243,7 @@ pub async fn signup_handler(
         }
     };
 
-    let _csrf_token = match csrf_service.generate_token(&user.id) {
+    let csrf_token = match csrf_service.generate_token(&user.id) {
         Ok(token) => token,
         Err(e) => {
             warn!("Failed to generate CSRF token: {e}");
@@ -261,6 +263,7 @@ pub async fn signup_handler(
             username: user.username,
             token,
             expires_in: expires_at,
+            csrf_token,
         }),
         warp::http::StatusCode::CREATED,
     ))
@@ -366,7 +369,7 @@ pub async fn login_handler(
         }
     };
 
-    let _csrf_token = match csrf_service.generate_token(&user.id) {
+    let csrf_token = match csrf_service.generate_token(&user.id) {
         Ok(token) => token,
         Err(e) => {
             warn!("Failed to generate CSRF token: {e}");
@@ -387,6 +390,7 @@ pub async fn login_handler(
             username: user.username,
             token,
             expires_in: expires_at,
+            csrf_token,
         }),
         warp::http::StatusCode::OK,
     ))

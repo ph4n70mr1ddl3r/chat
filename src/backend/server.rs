@@ -170,9 +170,10 @@ impl ServerState {
         ));
         let user_service = Arc::new(crate::services::UserService::new(pool.clone()));
         let csrf_service = CsrfService::new(&config.jwt_secret);
-        let login_attempt_service = Arc::new(crate::services::LoginAttemptService::new());
-        let auth_service = Arc::new(crate::services::auth_service::AuthService::with_cleanup(
+        let login_attempt_service = Arc::new(crate::services::LoginAttemptService::with_cleanup());
+        let auth_service = Arc::new(crate::services::auth_service::AuthService::with_pool_and_cleanup(
             config.jwt_secret.clone(),
+            pool.clone(),
         ));
 
         let global_cleanup_handle = global_rate_limiter.start_periodic_cleanup();
