@@ -148,6 +148,17 @@ impl LoginAttemptService {
                 );
             }
         }
+
+        // Warn when approaching 80% capacity for proactive monitoring
+        if attempts.len() >= (MAX_ENTRIES * 8 / 10) {
+            tracing::warn!(
+                target: "login_attempt",
+                current = attempts.len(),
+                max = MAX_ENTRIES,
+                usage_pct = (attempts.len() * 100 / MAX_ENTRIES),
+                "Login attempt tracker approaching capacity"
+            );
+        }
         
         let entry = attempts.entry(username.to_lowercase()).or_insert(LoginAttempt {
             count: 0,

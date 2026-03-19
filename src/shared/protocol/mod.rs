@@ -129,6 +129,9 @@ pub struct TokenClaims {
     pub aud: String,
     /// Issued at
     pub iat: u64,
+    /// Not before (token is not valid before this time)
+    #[serde(default = "default_nbf")]
+    pub nbf: u64,
     /// Expires at
     pub exp: u64,
     /// JWT ID (unique identifier for this token)
@@ -147,6 +150,10 @@ fn default_jti() -> String {
     String::new()
 }
 
+fn default_nbf() -> u64 {
+    0
+}
+
 impl TokenClaims {
     /// Check if the token has expired
     #[must_use]
@@ -156,12 +163,12 @@ impl TokenClaims {
         self.exp < now
     }
 
-    /// Check if the token is valid (not expired and issued before now)
+    /// Check if the token is valid (not expired, not used before nbf, and issued before now)
     #[must_use]
     pub fn is_valid(&self) -> bool {
         #[allow(clippy::cast_sign_loss)]
         let now: u64 = chrono::Utc::now().timestamp().max(0) as u64;
-        self.iat <= now && self.exp > now
+        self.iat <= now && self.exp > now && self.nbf <= now
     }
 
     /// Check if the token has a specific scope

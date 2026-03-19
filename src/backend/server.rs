@@ -306,6 +306,7 @@ pub fn create_routes(
                     .and(with_auth.clone())
                     .and(warp::header::optional::<String>("X-CSRF-Token"))
                     .and(auth_rate_limit_filter.clone())
+                    .and(warp::body::content_length_limit(MAX_BODY_SIZE))
                     .and(warp::body::json())
                     .and(state_filter.clone())
                     .and_then(handle_delete_account),
@@ -459,8 +460,19 @@ fn build_cors(config: &ServerConfig) -> Cors {
         .max_age(86_400);
 
     if config.allowed_origins.is_empty() {
-        tracing::warn!("No CORS origins configured, allowing localhost only");
-        cors = cors.allow_origin("http://localhost:3000");
+        #[cfg(not(debug_assertions))]
+        {
+            tracing::error!("CORS_ALLOWED_ORIGINS must be set in production builds");
+            anyhow::bail!(
+                "CORS_ALLOWED_ORIGINS environment variable must be set in production. \
+                 Specify allowed origins as a comma-separated list (e.g., 'https://example.com,https://app.example.com')"
+            );
+        }
+        #[cfg(debug_assertions)]
+        {
+            tracing::warn!("No CORS origins configured, allowing localhost only");
+            cors = cors.allow_origin("http://localhost:3000");
+        }
     } else {
         for origin in &config.allowed_origins {
             cors = cors.allow_origin(origin.as_str());

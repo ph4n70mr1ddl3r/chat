@@ -451,6 +451,7 @@ impl AuthService {
             iss: "chat-app".to_string(),
             aud: "chat-app".to_string(),
             iat: now,
+            nbf: now,
             exp: expiration,
             jti,
             scopes: DEFAULT_SCOPES.iter().map(std::string::ToString::to_string).collect(),

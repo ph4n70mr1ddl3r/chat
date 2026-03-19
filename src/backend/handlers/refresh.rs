@@ -124,10 +124,10 @@ pub async fn refresh_token_handler(
         }
     };
 
-    let csrf_token = match csrf_service.generate_token(&claims.sub) {
+    let _csrf_token = match csrf_service.generate_token(&claims.sub) {
         Ok(token) => token,
         Err(e) => {
-            warn!("Failed to generate CSRF token: {}", e);
+            warn!("Failed to generate CSRF token: {e}");
             return Ok(reply::with_status(
                 reply::json(&ErrorBody {
                     code: "AUTH_ERROR".to_string(),
@@ -150,7 +150,6 @@ pub async fn refresh_token_handler(
             username: String::new(),
             token: new_token,
             expires_in: expires_at,
-            csrf_token,
         }),
         warp::http::StatusCode::OK,
     ))

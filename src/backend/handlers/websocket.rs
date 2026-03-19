@@ -121,6 +121,7 @@ impl ConnectionManager {
             }
             // Try to atomically increment. If another thread incremented first,
             // compare_exchange will fail and we retry the loop.
+            // Single match is acceptable: we only care about Ok case, Err triggers retry
             #[allow(clippy::single_match)]
             match self.total_connections.compare_exchange(
                 current,

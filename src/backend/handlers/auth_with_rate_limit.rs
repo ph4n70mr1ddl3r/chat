@@ -165,7 +165,7 @@ pub async fn login_with_rate_limit(
     )
     .await;
 
-    let csrf_token = match csrf_service.generate_token(&user.id) {
+    let _csrf_token = match csrf_service.generate_token(&user.id) {
         Ok(token) => token,
         Err(e) => {
             warn!("Failed to generate CSRF token: {}", e);
@@ -188,7 +188,6 @@ pub async fn login_with_rate_limit(
             username: user.username,
             token,
             expires_in: expires_at,
-            csrf_token,
         }),
         warp::http::StatusCode::OK,
     ))

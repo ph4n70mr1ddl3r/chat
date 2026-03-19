@@ -55,7 +55,6 @@ pub struct AuthResponse {
     pub username: String,
     pub token: String,
     pub expires_in: u64,
-    pub csrf_token: String,
 }
 
 /// Context for logout operation
@@ -242,7 +241,7 @@ pub async fn signup_handler(
         }
     };
 
-    let csrf_token = match csrf_service.generate_token(&user.id) {
+    let _csrf_token = match csrf_service.generate_token(&user.id) {
         Ok(token) => token,
         Err(e) => {
             warn!("Failed to generate CSRF token: {e}");
@@ -262,7 +261,6 @@ pub async fn signup_handler(
             username: user.username,
             token,
             expires_in: expires_at,
-            csrf_token,
         }),
         warp::http::StatusCode::CREATED,
     ))
@@ -368,7 +366,7 @@ pub async fn login_handler(
         }
     };
 
-    let csrf_token = match csrf_service.generate_token(&user.id) {
+    let _csrf_token = match csrf_service.generate_token(&user.id) {
         Ok(token) => token,
         Err(e) => {
             warn!("Failed to generate CSRF token: {e}");
@@ -389,7 +387,6 @@ pub async fn login_handler(
             username: user.username,
             token,
             expires_in: expires_at,
-            csrf_token,
         }),
         warp::http::StatusCode::OK,
     ))
@@ -406,12 +403,10 @@ mod tests {
             username: "alice".to_string(),
             token: "eyJhbGc...".to_string(),
             expires_in: 3600,
-            csrf_token: "csrf-token-123".to_string(),
         };
 
-        let json = serde_json::to_string(&response).unwrap();
+        let json = serde_json::to_string(&response).expect("Failed to serialize AuthResponse");
         assert!(json.contains("user123"));
         assert!(json.contains("alice"));
-        assert!(json.contains("csrf-token-123"));
     }
 }
