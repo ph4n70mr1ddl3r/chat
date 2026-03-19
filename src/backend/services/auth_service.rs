@@ -418,7 +418,7 @@ impl AuthService {
     ///
     /// # Errors
     /// Returns an error string if password validation fails.
-    pub async fn create_user(&self, username: String, password: String) -> Result<User, String> {
+    pub fn create_user(&self, username: String, password: String) -> Result<User, String> {
         // Validate password
         validators::validate_password(&password).map_err(|e| e.clone())?;
 
@@ -649,12 +649,11 @@ mod tests {
         assert!(!AuthService::verify_password("WrongPassword123!", &hash).unwrap());
     }
 
-    #[tokio::test]
-    async fn test_create_user() {
+    #[test]
+    fn test_create_user() {
         let auth = AuthService::new(uuid::Uuid::new_v4().to_string());
         let user = auth
-            .create_user("testuser".to_string(), "TestPass123!".to_string())
-            .await;
+            .create_user("testuser".to_string(), "TestPass123!".to_string());
 
         assert!(user.is_ok());
         let user = user.unwrap();

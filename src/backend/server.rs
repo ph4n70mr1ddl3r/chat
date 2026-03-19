@@ -67,6 +67,7 @@ pub struct ServerConfig {
 impl ServerConfig {
     /// Create a test configuration with a generated JWT secret
     #[cfg(test)]
+    #[must_use]
     pub fn test_config() -> Self {
         Self {
             jwt_secret: uuid::Uuid::new_v4().to_string(),

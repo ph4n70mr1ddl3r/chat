@@ -60,7 +60,7 @@ impl MessageQueueService {
     }
 
     /// Start the background worker for message delivery
-    pub async fn start(&self) {
+    pub fn start(&self) {
         if self.is_running.swap(true, Ordering::SeqCst) {
             return;
         }

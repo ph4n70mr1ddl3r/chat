@@ -574,7 +574,7 @@ mod tests {
         let envelope = MessageEnvelope {
             id: uuid::Uuid::new_v4().to_string(),
             msg_type: "message".to_string(),
-            timestamp: chrono::Utc::now().timestamp_millis() as u64,
+            timestamp: chrono::Utc::now().timestamp_millis().max(0).cast_unsigned(),
             data: serde_json::json!({}),
         };
 
@@ -584,9 +584,9 @@ mod tests {
     #[test]
     fn test_message_validator_empty_id() {
         let envelope = MessageEnvelope {
-            id: "".to_string(),
+            id: String::new(),
             msg_type: "message".to_string(),
-            timestamp: chrono::Utc::now().timestamp_millis() as u64,
+            timestamp: chrono::Utc::now().timestamp_millis().max(0).cast_unsigned(),
             data: serde_json::json!({}),
         };
 
@@ -598,7 +598,7 @@ mod tests {
         let envelope = MessageEnvelope {
             id: "msg-123".to_string(),
             msg_type: "invalid_type".to_string(),
-            timestamp: chrono::Utc::now().timestamp_millis() as u64,
+            timestamp: chrono::Utc::now().timestamp_millis().max(0).cast_unsigned(),
             data: serde_json::json!({}),
         };
 

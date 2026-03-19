@@ -31,11 +31,10 @@ pub type HandlerResult<T> = Result<T, String>;
 pub fn init_tracing(default_level: Option<&str>) {
     static TRACING: OnceLock<()> = OnceLock::new();
 
-    let _ = TRACING.get_or_init(|| {
+    let () = TRACING.get_or_init(|| {
         let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
             default_level
-                .map(EnvFilter::new)
-                .unwrap_or_else(|| EnvFilter::new("info"))
+                .map_or_else(|| EnvFilter::new("info"), EnvFilter::new)
         });
 
         fmt()

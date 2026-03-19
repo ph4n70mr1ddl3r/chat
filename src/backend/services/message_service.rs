@@ -351,6 +351,9 @@ impl MessageService {
     }
 
     /// Helper: Update message status with appropriate timestamp
+    ///
+    /// # Errors
+    /// Returns an error string if the database update fails.
     pub async fn update_message_status_with_timestamp(
         &self,
         message_id: &str,
@@ -381,7 +384,7 @@ impl MessageService {
                             error = %e,
                             "Failed to update message status"
                         );
-                        format!("Failed to update message {} to {}: {}", message_id, new_status, e)
+                        format!("Failed to update message {message_id} to {new_status}: {e}")
                     })?
                     .rows_affected()
             }
@@ -400,7 +403,7 @@ impl MessageService {
                             error = %e,
                             "Failed to update message status"
                         );
-                        format!("Failed to update message {} to {}: {}", message_id, new_status, e)
+                        format!("Failed to update message {message_id} to {new_status}: {e}")
                     })?
                     .rows_affected()
             }
@@ -425,6 +428,9 @@ impl MessageService {
     /// Only upgrades status (pending < sent < delivered < read), never downgrades.
     ///
     /// Returns list of updated messages for confirmation back to client.
+    ///
+    /// # Errors
+    /// Returns an error string if the batch size exceeds the limit or database operations fail.
     pub async fn sync_delivery_status(
         &self,
         user_id: &str,
@@ -441,9 +447,8 @@ impl MessageService {
         let mut updated_messages = Vec::new();
 
         for (message_id, new_status) in updates {
-            let current = match queries::find_message_by_id(&self.pool, &message_id).await {
-                Ok(Some(msg)) => msg,
-                _ => continue,
+            let Ok(Some(current)) = queries::find_message_by_id(&self.pool, &message_id).await else {
+                continue;
             };
 
             if current.sender_id != user_id && current.recipient_id != user_id {

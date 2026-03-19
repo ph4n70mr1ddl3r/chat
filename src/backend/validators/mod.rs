@@ -28,10 +28,13 @@ pub const MAX_MESSAGE_CONTENT_LENGTH: usize = 5000;
 /// Validate UUID format
 ///
 /// Returns Ok(()) if the string is a valid UUID, Err with a message otherwise.
+///
+/// # Errors
+/// Returns an error string if the UUID format is invalid.
 pub fn validate_uuid(id: &str) -> Result<(), String> {
     Uuid::parse_str(id)
         .map(|_| ())
-        .map_err(|e| format!("Invalid UUID: {}", e))
+        .map_err(|e| format!("Invalid UUID: {e}"))
 }
 
 /// Validate username
@@ -42,11 +45,13 @@ pub fn validate_uuid(id: &str) -> Result<(), String> {
 /// - Must start with alphanumeric or underscore
 /// - Can contain alphanumeric, underscore, hyphen, and dot
 /// - Case-sensitive
+///
+/// # Errors
+/// Returns an error string if the username violates any of the rules.
 pub fn validate_username(username: &str) -> Result<(), String> {
     if username.len() < MIN_USERNAME_LENGTH || username.len() > MAX_USERNAME_LENGTH {
         return Err(format!(
-            "Username must be between {} and {} characters",
-            MIN_USERNAME_LENGTH, MAX_USERNAME_LENGTH
+            "Username must be between {MIN_USERNAME_LENGTH} and {MAX_USERNAME_LENGTH} characters"
         ));
     }
 
@@ -81,20 +86,21 @@ pub fn validate_username(username: &str) -> Result<(), String> {
 /// - At least 1 lowercase letter
 /// - At least 1 digit
 /// - At least 1 special character (non-alphanumeric)
+///
+/// # Errors
+/// Returns an error string if the password violates any of the rules.
 pub fn validate_password(password: &str) -> Result<(), String> {
     let len = password.len();
 
     if len < MIN_PASSWORD_LENGTH {
         return Err(format!(
-            "Password must be at least {} characters",
-            MIN_PASSWORD_LENGTH
+            "Password must be at least {MIN_PASSWORD_LENGTH} characters"
         ));
     }
 
     if len > MAX_PASSWORD_LENGTH {
         return Err(format!(
-            "Password must be at most {} characters",
-            MAX_PASSWORD_LENGTH
+            "Password must be at most {MAX_PASSWORD_LENGTH} characters"
         ));
     }
 
@@ -138,6 +144,9 @@ pub fn validate_password(password: &str) -> Result<(), String> {
 }
 
 /// Validate email address (optional, for future use)
+///
+/// # Errors
+/// Returns an error string if the email format is invalid.
 pub fn validate_email(email: &str) -> Result<(), String> {
     if email.is_empty() {
         return Err("Email cannot be empty".to_string());
@@ -157,15 +166,13 @@ pub fn validate_email(email: &str) -> Result<(), String> {
 
     if local_part.len() > MAX_EMAIL_LOCAL_LENGTH {
         return Err(format!(
-            "Email local part is too long (max {} characters)",
-            MAX_EMAIL_LOCAL_LENGTH
+            "Email local part is too long (max {MAX_EMAIL_LOCAL_LENGTH} characters)"
         ));
     }
 
     if domain.len() > MAX_EMAIL_DOMAIN_LENGTH {
         return Err(format!(
-            "Email domain is too long (max {} characters)",
-            MAX_EMAIL_DOMAIN_LENGTH
+            "Email domain is too long (max {MAX_EMAIL_DOMAIN_LENGTH} characters)"
         ));
     }
 
@@ -182,6 +189,9 @@ pub fn validate_email(email: &str) -> Result<(), String> {
 /// - Not empty (after trimming whitespace)
 /// - Maximum 5000 characters
 /// - No control characters except newline, carriage return, and tab
+///
+/// # Errors
+/// Returns an error string if the message content violates any of the rules.
 pub fn validate_message_content(content: &str) -> Result<(), String> {
     if content.trim().is_empty() {
         return Err("Message content cannot be empty".to_string());
@@ -189,8 +199,7 @@ pub fn validate_message_content(content: &str) -> Result<(), String> {
 
     if content.len() > MAX_MESSAGE_CONTENT_LENGTH {
         return Err(format!(
-            "Message content exceeds {} character limit",
-            MAX_MESSAGE_CONTENT_LENGTH
+            "Message content exceeds {MAX_MESSAGE_CONTENT_LENGTH} character limit"
         ));
     }
 

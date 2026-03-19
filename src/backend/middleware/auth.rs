@@ -86,7 +86,7 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert(
             AUTHORIZATION,
-            HeaderValue::from_str(&format!("Bearer {}", token)).unwrap(),
+            HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
         );
 
         let result = extract_user_id(&headers, &auth_service).await;
@@ -101,7 +101,7 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert(
             AUTHORIZATION,
-            HeaderValue::from_str(&format!("Bearer {}", token)).unwrap(),
+            HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
         );
 
         let claims = extract_claims(&headers, &auth_service).await;
@@ -156,7 +156,7 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert(
             AUTHORIZATION,
-            HeaderValue::from_str(&format!("Bearer {}", token)).unwrap(),
+            HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
         );
 
         let result = extract_user_id(&headers, &auth2).await;

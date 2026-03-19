@@ -460,7 +460,7 @@ mod tests {
         let envelope = MessageEnvelope {
             id: uuid::Uuid::new_v4().to_string(),
             msg_type: "message".to_string(),
-            timestamp: chrono::Utc::now().timestamp_millis() as u64,
+            timestamp: chrono::Utc::now().timestamp_millis().max(0).cast_unsigned(),
             data: json!({
                 "recipient_id": user2.id,
                 "content": "Hello, Bob!",
@@ -500,7 +500,7 @@ mod tests {
         let envelope = MessageEnvelope {
             id: uuid::Uuid::new_v4().to_string(),
             msg_type: "message".to_string(),
-            timestamp: chrono::Utc::now().timestamp_millis() as u64,
+            timestamp: chrono::Utc::now().timestamp_millis().max(0).cast_unsigned(),
             data: json!({
                 "recipient_id": user2.id,
                 "content": "Hello, Bob!",
@@ -535,7 +535,7 @@ mod tests {
         let envelope = MessageEnvelope {
             id: message_id.clone(),
             msg_type: "message".to_string(),
-            timestamp: chrono::Utc::now().timestamp_millis() as u64,
+            timestamp: chrono::Utc::now().timestamp_millis().max(0).cast_unsigned(),
             data: json!({
                 "recipient_id": user2.id,
                 "content": "Hello, Bob!",

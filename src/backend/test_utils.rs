@@ -2,10 +2,13 @@
 
 use sqlx::SqlitePool;
 
-/// Initialize an in-memory SQLite database for testing
+/// Initialize an in-memory `SQLite` database for testing
 ///
 /// Creates a new connection pool and runs all migrations.
 /// This is useful for tests that need a fresh database.
+///
+/// # Panics
+/// Panics if database connection or migration fails.
 pub async fn setup_test_db() -> SqlitePool {
     let pool = sqlx::sqlite::SqlitePoolOptions::new()
         .connect("sqlite::memory:")

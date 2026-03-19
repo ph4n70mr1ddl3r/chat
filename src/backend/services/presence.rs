@@ -30,12 +30,18 @@ impl PresenceService {
     }
 
     /// Mark user online and broadcast to participants.
+    ///
+    /// # Errors
+    /// Returns an error string if the database update fails.
     pub async fn mark_online(&self, user_id: &str) -> Result<(), String> {
         queries::update_online_status(&self.pool, user_id, true).await?;
         self.broadcast_presence(user_id, true).await
     }
 
     /// Mark user offline and broadcast to participants.
+    ///
+    /// # Errors
+    /// Returns an error string if the database update fails.
     pub async fn mark_offline(&self, user_id: &str) -> Result<(), String> {
         queries::update_online_status(&self.pool, user_id, false).await?;
         self.broadcast_presence(user_id, false).await
@@ -43,12 +49,9 @@ impl PresenceService {
 
     /// Broadcast presence update to all users that share a conversation with this user.
     async fn broadcast_presence(&self, user_id: &str, is_online: bool) -> Result<(), String> {
-        let user = match queries::find_user_by_id(&self.pool, user_id).await? {
-            Some(user) => user,
-            None => {
-                warn!(user_id, "User not found during presence broadcast");
-                return Ok(());
-            }
+        let Some(user) = queries::find_user_by_id(&self.pool, user_id).await? else {
+            warn!(user_id, "User not found during presence broadcast");
+            return Ok(());
         };
 
         let conversations = queries::get_user_conversations(&self.pool, user_id, MAX_PRESENCE_BROADCAST_CONVERSATIONS, 0).await?;
@@ -80,7 +83,7 @@ impl PresenceService {
         let envelope = MessageEnvelope {
             id: uuid::Uuid::new_v4().to_string(),
             msg_type: "presence".to_string(),
-            timestamp: chrono::Utc::now().timestamp_millis() as u64,
+            timestamp: chrono::Utc::now().timestamp_millis().max(0).cast_unsigned(),
             data: json!(PresenceData {
                 user_id: user.id.clone(),
                 username: user.username.clone(),
@@ -88,13 +91,14 @@ impl PresenceService {
                 last_seen_at: user
                     .last_seen_at
                     .unwrap_or_else(|| chrono::Utc::now().timestamp_millis())
-                    as u64,
+                    .max(0)
+                    .cast_unsigned(),
             }),
         };
 
         let message = WsMessage::text(
             serde_json::to_string(&envelope)
-                .map_err(|e| format!("Failed to serialize presence: {}", e))?,
+                .map_err(|e| format!("Failed to serialize presence: {e}"))?,
         );
 
         self.connection_manager

@@ -55,11 +55,13 @@ pub struct UserService {
 
 impl UserService {
     /// Create a new service with 60s TTL cache
+    #[must_use]
     pub fn new(pool: SqlitePool) -> Self {
         Self::new_with_ttl(pool, Duration::from_secs(60))
     }
 
     /// Create a new service with custom TTL (useful for tests)
+    #[must_use]
     pub fn new_with_ttl(pool: SqlitePool, ttl: Duration) -> Self {
         Self {
             pool,
@@ -98,6 +100,9 @@ impl UserService {
     }
 
     /// Search users with cached results (per requester + query + limit)
+    ///
+    /// # Errors
+    /// Returns an error string if the database query fails.
     pub async fn search_users(
         &self,
         requester_id: &str,
