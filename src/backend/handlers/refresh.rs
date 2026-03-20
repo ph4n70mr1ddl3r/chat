@@ -128,7 +128,14 @@ pub async fn refresh_token_handler(
         }
     };
 
-    shared_auth_service.revoke_token(&req.token, &claims.sub).await;
+    // Revoke old token using verified JTI from claims
+    // The old token was verified above, so we can use its JTI for efficient revocation
+    if !claims.jti.is_empty() {
+        shared_auth_service.revoke_token_by_jti(&claims.jti, &claims.sub).await;
+    } else {
+        // Fallback for legacy tokens: revoke by hash
+        shared_auth_service.revoke_token_by_hash(&req.token, &claims.sub).await;
+    }
     info!("Old token revoked for user: {}", claims.sub);
 
     let new_csrf_token = match csrf_service.generate_token(&claims.sub) {

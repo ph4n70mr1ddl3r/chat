@@ -126,7 +126,7 @@ pub async fn logout_handler(
         info!("Token revoked by JTI for user: {user_id}");
     } else if let Some(token) = ctx.auth_token {
         // Fallback: revoke by token hash for legacy tokens without JTI
-        auth_service.revoke_token(&token, user_id).await;
+        auth_service.revoke_token_by_hash(&token, user_id).await;
         info!("Token revoked by hash for user: {user_id}");
     }
 

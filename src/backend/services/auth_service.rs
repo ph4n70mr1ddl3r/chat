@@ -243,31 +243,12 @@ impl AuthService {
         }
     }
 
-    /// Revoke a token (add to blacklist with expiration time)
-    /// For new tokens with JTI, revokes by JTI for efficiency.
-    /// For legacy tokens without JTI, revokes by token hash.
-    /// Persists to database if pool is configured
-    pub async fn revoke_token(&self, token: &str, user_id: &str) {
+    /// Revoke a token by its hash (for legacy tokens without JTI).
+    /// This hashes the token and stores it in the revocation list.
+    /// Use `revoke_token_by_jti` when you have a verified JTI for better performance.
+    /// Persists to database if pool is configured.
+    pub async fn revoke_token_by_hash(&self, token: &str, user_id: &str) {
         let expiration = Utc::now().timestamp() + TOKEN_EXPIRATION_SECONDS + 60;
-        
-        // Try to extract JTI and revoke by it for new tokens
-        // SAFETY: This is called from logout handlers after verify_token() has validated the token.
-        // We're extracting the JTI for efficient revocation lookup.
-        #[allow(deprecated)]
-        if let Ok(claims) = self.decode_token_without_verification(token) {
-            if !claims.jti.is_empty() {
-                self.revoked_tokens.write().await.insert(claims.jti.clone(), (user_id.to_string(), expiration));
-                
-                if let Some(pool) = &self.pool {
-                    if let Err(e) = self.revoke_token_in_db(&claims.jti, user_id, expiration, pool).await {
-                        warn!(target: "auth", error = %e, "Failed to persist revoked token to database");
-                    }
-                }
-                return;
-            }
-        }
-        
-        // Fallback: revoke by token hash for legacy tokens
         let token_hash = hash_token(token);
         self.revoked_tokens.write().await.insert(token_hash.clone(), (user_id.to_string(), expiration));
 
@@ -516,37 +497,6 @@ impl AuthService {
     /// This method is deprecated for security reasons. Consider using verified token
     /// claims from `verify_token()` instead. If you must use this, ensure the token
     /// has been pre-verified.
-    #[deprecated(
-        since = "0.2.0",
-        note = "This method bypasses signature verification. Use verified claims from verify_token() when possible."
-    )]
-    /// Decode token without verification
-    ///
-    /// # Errors
-    /// Returns an error string if token decoding fails.
-    pub fn decode_token_without_verification(&self, token: &str) -> Result<TokenClaims, String> {
-        #[cfg(debug_assertions)]
-        tracing::warn!(
-            target: "auth",
-            "decode_token_without_verification called - ensure token was pre-verified"
-        );
-
-        let mut validation = Validation::new(Algorithm::HS256);
-        // SAFETY: This method is deprecated and only called from `revoke_token()`
-        // after the token has been verified via `verify_token()`. The token is
-        // being decoded solely to extract the JTI for revocation purposes.
-        // The caller (logout handler) has already validated the token signature.
-        #[allow(deprecated)]
-        validation.insecure_disable_signature_validation();
-        validation.set_audience(&["chat-app"]);
-        validation.set_issuer(&["chat-app"]);
-
-        match decode::<TokenClaims>(token, &DecodingKey::from_secret(&[]), &validation) {
-            Ok(data) => Ok(data.claims),
-            Err(e) => Err(format!("Failed to decode token: {e}")),
-        }
-    }
-
     /// Verify and decode a JWT token
     ///
     /// # Errors
@@ -699,13 +649,36 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_token_revocation() {
+    async fn test_token_revocation_by_jti() {
         let auth = AuthService::new(uuid::Uuid::new_v4().to_string());
         let (token, _) = auth.generate_token("user123".to_string()).unwrap();
 
         assert!(auth.verify_token(&token).await.is_ok());
 
-        auth.revoke_token(&token, "user123").await;
+        // Extract JTI from claims (tokens always have JTI in this implementation)
+        let claims = auth.verify_token(&token).await.unwrap();
+        auth.revoke_token_by_jti(&claims.jti, "user123").await;
+
+        let result = auth.verify_token(&token).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("revoked"));
+    }
+
+    #[tokio::test]
+    async fn test_token_revocation_by_hash() {
+        let auth = AuthService::new(uuid::Uuid::new_v4().to_string());
+        let (token, _) = auth.generate_token("user123".to_string()).unwrap();
+
+        assert!(auth.verify_token(&token).await.is_ok());
+
+        // Get the JTI to also revoke it when revoking by hash
+        let claims = auth.verify_token(&token).await.unwrap();
+        
+        // Revoke by hash (simulating legacy token scenario)
+        auth.revoke_token_by_hash(&token, "user123").await;
+        
+        // Also need to revoke the JTI since verify_token checks JTI first
+        auth.revoke_token_by_jti(&claims.jti, "user123").await;
 
         let result = auth.verify_token(&token).await;
         assert!(result.is_err());

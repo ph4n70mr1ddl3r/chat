@@ -350,7 +350,11 @@ impl MessageService {
         }
     }
 
-    /// Helper: Update message status with appropriate timestamp
+    /// Helper: Update message status with appropriate timestamp (atomic)
+    ///
+    /// Uses atomic database update with WHERE clause to prevent race conditions.
+    /// Only updates if the new status has equal or higher weight than current status.
+    /// This ensures status monotonicity: pending < sent < delivered < read
     ///
     /// # Errors
     /// Returns an error string if the database update fails.
@@ -360,19 +364,54 @@ impl MessageService {
         new_status: &str,
     ) -> Result<(), String> {
         let now = chrono::Utc::now().timestamp_millis();
-
-        let query_str = match new_status {
-            status::READ => "UPDATE messages SET status = ?, read_at = ? WHERE id = ?",
-            status::DELIVERED => "UPDATE messages SET status = ?, delivered_at = ? WHERE id = ?",
-            _ => "UPDATE messages SET status = ? WHERE id = ?",
-        };
+        let new_weight = Self::status_weight(new_status);
 
         let rows_affected = match new_status {
-            status::READ | status::DELIVERED => {
-                sqlx::query(query_str)
+            status::READ => {
+                let query = "UPDATE messages SET status = ?, read_at = ? WHERE id = ? AND (
+                    CASE status
+                        WHEN 'pending' THEN 0
+                        WHEN 'sent' THEN 1
+                        WHEN 'delivered' THEN 2
+                        WHEN 'read' THEN 3
+                        ELSE 0
+                    END
+                ) <= ?";
+                sqlx::query(query)
                     .bind(new_status)
                     .bind(now)
                     .bind(message_id)
+                    .bind(new_weight)
+                    .execute(&self.pool)
+                    .await
+                    .map_err(|e| {
+                        warn!(
+                            target: "message",
+                            event = "message.status_update.failed",
+                            message_id = %message_id,
+                            status = %new_status,
+                            error = %e,
+                            "Failed to update message status"
+                        );
+                        format!("Failed to update message {message_id} to {new_status}: {e}")
+                    })?
+                    .rows_affected()
+            }
+            status::DELIVERED => {
+                let query = "UPDATE messages SET status = ?, delivered_at = ? WHERE id = ? AND (
+                    CASE status
+                        WHEN 'pending' THEN 0
+                        WHEN 'sent' THEN 1
+                        WHEN 'delivered' THEN 2
+                        WHEN 'read' THEN 3
+                        ELSE 0
+                    END
+                ) <= ?";
+                sqlx::query(query)
+                    .bind(new_status)
+                    .bind(now)
+                    .bind(message_id)
+                    .bind(new_weight)
                     .execute(&self.pool)
                     .await
                     .map_err(|e| {
@@ -389,9 +428,19 @@ impl MessageService {
                     .rows_affected()
             }
             _ => {
-                sqlx::query(query_str)
+                let query = "UPDATE messages SET status = ? WHERE id = ? AND (
+                    CASE status
+                        WHEN 'pending' THEN 0
+                        WHEN 'sent' THEN 1
+                        WHEN 'delivered' THEN 2
+                        WHEN 'read' THEN 3
+                        ELSE 0
+                    END
+                ) <= ?";
+                sqlx::query(query)
                     .bind(new_status)
                     .bind(message_id)
+                    .bind(new_weight)
                     .execute(&self.pool)
                     .await
                     .map_err(|e| {
@@ -410,12 +459,12 @@ impl MessageService {
         };
 
         if rows_affected == 0 {
-            warn!(
+            tracing::debug!(
                 target: "message",
-                event = "message.status_update.not_found",
+                event = "message.status_update.skipped",
                 message_id = %message_id,
                 status = %new_status,
-                "Message not found for status update"
+                "Status update skipped (message not found or status would downgrade)"
             );
         }
 
