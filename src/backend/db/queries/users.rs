@@ -132,12 +132,16 @@ pub async fn find_users_by_ids(
 ///
 /// # Errors
 ///
-/// Returns an error string if the database operation fails.
+/// Returns an error string if the user ID format is invalid or the database operation fails.
 pub async fn update_online_status(
     pool: &SqlitePool,
     user_id: &str,
     is_online: bool,
 ) -> Result<(), String> {
+    if Uuid::parse_str(user_id).is_err() {
+        return Err("Invalid user ID format".to_string());
+    }
+
     let now = chrono::Utc::now().timestamp_millis();
 
     sqlx::query("UPDATE users SET is_online = ?, last_seen_at = ?, updated_at = ? WHERE id = ?")

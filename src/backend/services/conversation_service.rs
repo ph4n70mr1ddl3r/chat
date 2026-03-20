@@ -24,6 +24,9 @@ impl ConversationService {
     /// Prevents self-chat (`user1_id` != `user2_id`)
     /// Returns `(conversation, was_created: bool)`
     ///
+    /// Uses INSERT OR IGNORE to handle race conditions - if another request
+    /// creates the same conversation concurrently, the existing one is returned.
+    ///
     /// # Errors
     /// Returns an error string if self-chat is attempted, validation fails, or database operations fail.
     pub async fn create_or_get_conversation(
@@ -43,17 +46,12 @@ impl ConversationService {
             (user2_id, user1_id)
         };
 
-        // Check if conversation already exists
-        if let Some(conversation) = queries::get_conversation_by_users(&self.pool, &u1, &u2).await?
-        {
-            return Ok((conversation, false));
-        }
-
         let conversation = Conversation::new(u1.clone(), u2.clone());
         conversation.validate()?;
 
-        let created = queries::insert_conversation(&self.pool, &conversation).await?;
-        Ok((created, true))
+        // INSERT OR IGNORE handles race condition atomically
+        let (result, was_created) = queries::insert_conversation(&self.pool, &conversation).await?;
+        Ok((result, was_created))
     }
 
     /// Get all conversations for a user

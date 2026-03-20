@@ -10,7 +10,9 @@ const SQL_SELECT_CONVERSATION_FIELDS: &str =
 
 /// Insert a new conversation
 ///
-/// Returns the conversation if successful.
+/// Returns `(conversation, was_inserted: bool)`.
+/// If a conversation with the same (user1_id, user2_id) already exists,
+/// returns `was_inserted = false` and the existing conversation.
 ///
 /// # Errors
 ///
@@ -18,9 +20,9 @@ const SQL_SELECT_CONVERSATION_FIELDS: &str =
 pub async fn insert_conversation(
     pool: &SqlitePool,
     conversation: &Conversation,
-) -> Result<Conversation, String> {
-    sqlx::query(
-        "INSERT INTO conversations (id, user1_id, user2_id, created_at, updated_at, last_message_at, message_count)
+) -> Result<(Conversation, bool), String> {
+    let result = sqlx::query(
+        "INSERT OR IGNORE INTO conversations (id, user1_id, user2_id, created_at, updated_at, last_message_at, message_count)
          VALUES (?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&conversation.id)
@@ -34,7 +36,14 @@ pub async fn insert_conversation(
     .await
     .map_err(|e| format!("Failed to insert conversation: {e}"))?;
 
-    Ok(conversation.clone())
+    if result.rows_affected() > 0 {
+        Ok((conversation.clone(), true))
+    } else {
+        let existing = get_conversation_by_users(pool, &conversation.user1_id, &conversation.user2_id)
+            .await?
+            .ok_or_else(|| "Conversation should exist after INSERT OR IGNORE failed".to_string())?;
+        Ok((existing, false))
+    }
 }
 
 /// Get conversation by user pair (`user1_id` < `user2_id`)
