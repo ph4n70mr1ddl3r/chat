@@ -8,7 +8,6 @@
 //! - POST /auth/login - user authentication
 //! - GET /conversations/* - conversation management (stubs for Phase 3+)
 
-use base64::prelude::*;
 use futures::{SinkExt, StreamExt};
 use sqlx::SqlitePool;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -464,8 +463,7 @@ fn build_cors(config: &ServerConfig) -> Cors {
     if config.allowed_origins.is_empty() {
         #[cfg(not(debug_assertions))]
         {
-            tracing::error!("CORS_ALLOWED_ORIGINS must be set in production builds");
-            anyhow::bail!(
+            panic!(
                 "CORS_ALLOWED_ORIGINS environment variable must be set in production. \
                  Specify allowed origins as a comma-separated list (e.g., 'https://example.com,https://app.example.com')"
             );
