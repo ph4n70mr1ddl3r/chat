@@ -418,14 +418,11 @@ impl AuthService {
     ///
     /// # Errors
     /// Returns an error string if password validation fails.
-    pub fn create_user(&self, username: String, password: String) -> Result<User, String> {
-        // Validate password
-        validators::validate_password(&password).map_err(|e| e.clone())?;
+    pub fn create_user(&self, username: String, password: &str) -> Result<User, String> {
+        validators::validate_password(password).map_err(|e| e.clone())?;
 
-        // Hash password
-        let password_hash = Self::hash_password(&password)?;
+        let password_hash = Self::hash_password(password)?;
 
-        // Create user (note: actual DB save happens in the handler)
         let user = User::new(username, password_hash);
         info!(
             target: "auth",
@@ -653,7 +650,7 @@ mod tests {
     fn test_create_user() {
         let auth = AuthService::new(uuid::Uuid::new_v4().to_string());
         let user = auth
-            .create_user("testuser".to_string(), "TestPass123!".to_string());
+            .create_user("testuser".to_string(), "TestPass123!");
 
         assert!(user.is_ok());
         let user = user.unwrap();

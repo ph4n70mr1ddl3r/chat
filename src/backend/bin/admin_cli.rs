@@ -19,31 +19,25 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// User management
     Users {
         #[command(subcommand)]
         subcommand: UsersSubcommand,
     },
-    /// Inspect messages in a conversation
     Inspect {
         conversation_id: String,
         #[arg(long, default_value = "50")]
         limit: u32,
     },
-    /// Server health
     Health,
-    /// Server stats
     Stats,
 }
 
 #[derive(Subcommand)]
 enum UsersSubcommand {
-    /// List users
     List {
         #[arg(long, default_value = "false")]
         deleted: bool,
     },
-    /// Delete a user
     Delete { username: String },
 }
 
@@ -72,6 +66,117 @@ impl From<chat_backend::models::User> for UserView {
     }
 }
 
+async fn list_users(pool: &sqlx::SqlitePool, include_deleted: bool) -> anyhow::Result<()> {
+    let query = if include_deleted {
+        "SELECT id, username, password_hash, created_at, updated_at, deleted_at, is_online, last_seen_at FROM users"
+    } else {
+        "SELECT id, username, password_hash, created_at, updated_at, deleted_at, is_online, last_seen_at FROM users WHERE deleted_at IS NULL"
+    };
+    let users: Vec<chat_backend::models::User> = sqlx::query_as(query)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to list users: {e}"))?;
+
+    let user_views: Vec<UserView> = users.into_iter().map(Into::into).collect();
+    println!("{}", serde_json::to_string_pretty(&json!(user_views))?);
+    Ok(())
+}
+
+async fn delete_user(pool: &sqlx::SqlitePool, username: &str) -> anyhow::Result<()> {
+    let user: Option<chat_backend::models::User> = sqlx::query_as(
+        "SELECT id, username, password_hash, created_at, updated_at, deleted_at, is_online, last_seen_at FROM users WHERE username = ?"
+    )
+    .bind(username)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("Failed to find user: {e}"))?;
+
+    if let Some(user) = user {
+        let now = chrono::Utc::now().timestamp_millis();
+        sqlx::query("UPDATE users SET deleted_at = ?, updated_at = ? WHERE id = ?")
+            .bind(now)
+            .bind(now)
+            .bind(&user.id)
+            .execute(pool)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to delete user: {e}"))?;
+
+        println!("User '{username}' soft-deleted");
+    } else {
+        eprintln!("User '{username}' not found");
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
+async fn inspect_conversation(pool: &sqlx::SqlitePool, conversation_id: &str, limit: u32) -> anyhow::Result<()> {
+    let messages: Vec<chat_backend::models::Message> = sqlx::query_as(
+        "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, status, is_anonymized FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ?"
+    )
+    .bind(conversation_id)
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("Failed to fetch messages: {e}"))?;
+
+    println!("{}", serde_json::to_string_pretty(&json!(messages))?);
+    Ok(())
+}
+
+async fn health_check(pool: &sqlx::SqlitePool, db_path: &std::path::Path) -> anyhow::Result<()> {
+    let user_count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM users WHERE deleted_at IS NULL")
+        .fetch_one(pool)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to query users: {e}"))?;
+    let message_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM messages")
+        .fetch_one(pool)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to query messages: {e}"))?;
+    let conversation_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM conversations")
+        .fetch_one(pool)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to query conversations: {e}"))?;
+
+    let health = json!({
+        "status": "healthy",
+        "database": db_path.display().to_string(),
+        "timestamp": chrono::Utc::now().timestamp_millis(),
+        "user_count": user_count.0,
+        "message_count": message_count.0,
+        "conversation_count": conversation_count.0,
+    });
+    println!("{}", serde_json::to_string_pretty(&health)?);
+    Ok(())
+}
+
+async fn show_stats(pool: &sqlx::SqlitePool, db_path: &std::path::Path) -> anyhow::Result<()> {
+    let user_count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM users WHERE deleted_at IS NULL")
+        .fetch_one(pool)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to query users: {e}"))?;
+    let message_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM messages")
+        .fetch_one(pool)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to query messages: {e}"))?;
+    let pending_messages: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM messages WHERE status = 'pending'")
+            .fetch_one(pool)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to query pending messages: {e}"))?;
+
+    let stats = json!({
+        "timestamp": chrono::Utc::now().timestamp_millis(),
+        "active_users": user_count.0,
+        "total_messages": message_count.0,
+        "pending_messages": pending_messages.0,
+        "database_size_bytes": fs::metadata(db_path)?.len(),
+    });
+    println!("{}", serde_json::to_string_pretty(&stats)?);
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
@@ -79,118 +184,14 @@ async fn main() -> anyhow::Result<()> {
 
     match args.command {
         Commands::Users { subcommand } => match subcommand {
-            UsersSubcommand::List { deleted } => {
-                let query = if deleted {
-                    "SELECT id, username, password_hash, created_at, updated_at, deleted_at, is_online, last_seen_at FROM users"
-                } else {
-                    "SELECT id, username, password_hash, created_at, updated_at, deleted_at, is_online, last_seen_at FROM users WHERE deleted_at IS NULL"
-                };
-                let users: Vec<chat_backend::models::User> = sqlx::query_as(query)
-                    .fetch_all(&pool)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to list users: {e}"))?;
-
-                let user_views: Vec<UserView> = users.into_iter().map(Into::into).collect();
-                let output = json!(user_views);
-                println!("{}", serde_json::to_string_pretty(&output)?);
-            }
-            UsersSubcommand::Delete { username } => {
-                // Find user by username
-                let user: Option<chat_backend::models::User> = sqlx::query_as(
-                    "SELECT id, username, password_hash, created_at, updated_at, deleted_at, is_online, last_seen_at FROM users WHERE username = ?"
-                )
-                    .bind(&username)
-                .fetch_optional(&pool)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to find user: {e}"))?;
-
-                if let Some(user) = user {
-                    let now = chrono::Utc::now().timestamp_millis();
-                    sqlx::query("UPDATE users SET deleted_at = ?, updated_at = ? WHERE id = ?")
-                        .bind(now)
-                        .bind(now)
-                        .bind(&user.id)
-                        .execute(&pool)
-                        .await
-                        .map_err(|e| anyhow::anyhow!("Failed to delete user: {e}"))?;
-
-                    println!("User '{username}' soft-deleted");
-                } else {
-                    eprintln!("User '{username}' not found");
-                    std::process::exit(1);
-                }
-            }
+            UsersSubcommand::List { deleted } => list_users(&pool, deleted).await?,
+            UsersSubcommand::Delete { username } => delete_user(&pool, &username).await?,
         },
-        Commands::Inspect {
-            conversation_id,
-            limit,
-        } => {
-            // Fetch messages in conversation
-            let messages: Vec<chat_backend::models::Message> = sqlx::query_as(
-                "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, status, is_anonymized FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ?"
-            )
-                .bind(&conversation_id)
-                .bind(limit)
-                .fetch_all(&pool)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to fetch messages: {e}"))?;
-
-            let output = json!(messages);
-            println!("{}", serde_json::to_string_pretty(&output)?);
+        Commands::Inspect { conversation_id, limit } => {
+            inspect_conversation(&pool, &conversation_id, limit).await?
         }
-        Commands::Health => {
-            // Simple health check: database connection and table counts
-            let user_count: (i64,) =
-                sqlx::query_as("SELECT COUNT(*) FROM users WHERE deleted_at IS NULL")
-                .fetch_one(&pool)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to query users: {e}"))?;
-            let message_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM messages")
-                .fetch_one(&pool)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to query messages: {e}"))?;
-            let conversation_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM conversations")
-                .fetch_one(&pool)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to query conversations: {e}"))?;
-
-            let health = json!({
-                "status": "healthy",
-                "database": args.db_path.display().to_string(),
-                "timestamp": chrono::Utc::now().timestamp_millis(),
-                "user_count": user_count.0,
-                "message_count": message_count.0,
-                "conversation_count": conversation_count.0,
-            });
-            println!("{}", serde_json::to_string_pretty(&health)?);
-        }
-        Commands::Stats => {
-            // Basic stats: active connections (not stored), throughput (not stored)
-            // For now, just show table sizes
-            let user_count: (i64,) =
-                sqlx::query_as("SELECT COUNT(*) FROM users WHERE deleted_at IS NULL")
-                .fetch_one(&pool)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to query users: {e}"))?;
-            let message_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM messages")
-                .fetch_one(&pool)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to query messages: {e}"))?;
-            let pending_messages: (i64,) =
-                sqlx::query_as("SELECT COUNT(*) FROM messages WHERE status = 'pending'")
-                    .fetch_one(&pool)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to query pending messages: {e}"))?;
-
-            let stats = json!({
-                "timestamp": chrono::Utc::now().timestamp_millis(),
-                "active_users": user_count.0,
-                "total_messages": message_count.0,
-                "pending_messages": pending_messages.0,
-                "database_size_bytes": fs::metadata(&args.db_path)?.len(),
-            });
-            println!("{}", serde_json::to_string_pretty(&stats)?);
-        }
+        Commands::Health => health_check(&pool, &args.db_path).await?,
+        Commands::Stats => show_stats(&pool, &args.db_path).await?,
     }
     Ok(())
 }
