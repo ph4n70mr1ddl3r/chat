@@ -111,7 +111,17 @@ pub async fn start_conversation(
     request: StartConversationRequest,
     pool: SqlitePool,
 ) -> Result<impl Reply, Rejection> {
-    // Validate other_user_id exists
+    if let Err((code, message)) = validate_uuid(&request.other_user_id, "user ID") {
+        return Ok(reply::with_status(
+            reply::json(&ErrorBody {
+                code,
+                message,
+                details: None,
+            }),
+            warp::http::StatusCode::BAD_REQUEST,
+        ));
+    }
+
     let other_user = match queries::find_user_by_id(&pool, &request.other_user_id).await {
         Ok(Some(user)) => user,
         Ok(None) => {

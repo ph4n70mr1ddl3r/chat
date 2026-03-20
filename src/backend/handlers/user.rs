@@ -355,12 +355,21 @@ pub async fn change_password(
         ));
     };
 
-    if let Err(e) = csrf_service.validate_token(&csrf_token, &user_id) {
+    const CSRF_FRESHNESS_SECS: i64 = 300;
+    if let Err(e) = csrf_service.validate_token_fresh(&csrf_token, &user_id, CSRF_FRESHNESS_SECS) {
+        let message = match e {
+            crate::services::csrf::CsrfValidationError::TokenTooOld => {
+                "CSRF token is too old. Please refresh the page and try again."
+            }
+            crate::services::csrf::CsrfValidationError::Expired => "CSRF token expired",
+            crate::services::csrf::CsrfValidationError::UserMismatch => "CSRF token user mismatch",
+            crate::services::csrf::CsrfValidationError::InvalidToken => "Invalid CSRF token",
+        };
         warn!("CSRF validation failed for change password request: {:?}", e);
         return Ok(reply::with_status(
             reply::json(&ErrorBody {
                 code: "FORBIDDEN".to_string(),
-                message: "Invalid or expired CSRF token".to_string(),
+                message: message.to_string(),
                 details: None,
             }),
             warp::http::StatusCode::FORBIDDEN,

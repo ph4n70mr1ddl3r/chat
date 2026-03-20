@@ -28,6 +28,9 @@ const MAX_QUEUED_MESSAGES_PER_USER: usize = 100;
 /// Maximum total queued messages across all recipients
 const MAX_TOTAL_QUEUED_MESSAGES: usize = 50_000;
 
+/// Maximum total bytes for queued messages (100MB)
+const MAX_TOTAL_QUEUED_BYTES: usize = 100 * 1024 * 1024;
+
 /// Message delivery queue entry
 #[derive(Debug, Clone)]
 struct QueuedMessage {
@@ -35,6 +38,7 @@ struct QueuedMessage {
     recipient_id: String,
     retry_count: usize,
     next_retry_at: u64,
+    content_len: usize,
 }
 
 /// Message queue service
@@ -44,6 +48,7 @@ pub struct MessageQueueService {
     connection_manager: Arc<ConnectionManager>,
     queue: Arc<RwLock<HashMap<String, Vec<QueuedMessage>>>>,
     total_queued: Arc<AtomicUsize>,
+    total_bytes: Arc<std::sync::atomic::AtomicU64>,
     is_running: Arc<AtomicBool>,
 }
 
@@ -55,6 +60,7 @@ impl MessageQueueService {
             connection_manager,
             queue: Arc::new(RwLock::new(HashMap::new())),
             total_queued: Arc::new(AtomicUsize::new(0)),
+            total_bytes: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             is_running: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -71,6 +77,7 @@ impl MessageQueueService {
         let message_service = MessageService::new(pool.clone());
         let is_running = self.is_running.clone();
         let total_queued = self.total_queued.clone();
+        let total_bytes = self.total_bytes.clone();
 
         tokio::spawn(async move {
             loop {
@@ -110,11 +117,12 @@ impl MessageQueueService {
                                     queue.clone(),
                                     queued_messages,
                                     total_queued.clone(),
+                                    total_bytes.clone(),
                                 )
                                 .await;
                             } else {
                                 for msg in queued_messages {
-                                    if !Self::requeue_message(queue.clone(), msg, total_queued.clone()).await {
+                                    if !Self::requeue_message(queue.clone(), msg, total_queued.clone(), total_bytes.clone()).await {
                                         tracing::warn!(
                                             "Dropped message for recipient {} due to queue overflow",
                                             recipient_id
@@ -136,7 +144,7 @@ impl MessageQueueService {
     /// Queue a message for delivery
     ///
     /// Returns `true` if message was queued successfully.
-    /// Returns `false` if the per-user queue or the global queue is full (message dropped).
+    /// Returns `false` if the per-user queue, the global queue, or byte limit is full (message dropped).
     pub async fn queue_message(&self, message_id: String, recipient_id: String) -> bool {
         let current_total = self.total_queued.load(Ordering::SeqCst);
         if current_total >= MAX_TOTAL_QUEUED_MESSAGES {
@@ -148,11 +156,27 @@ impl MessageQueueService {
             return false;
         }
 
+        let current_bytes = self.total_bytes.load(Ordering::SeqCst);
+        if current_bytes >= MAX_TOTAL_QUEUED_BYTES as u64 {
+            tracing::warn!(
+                "Global message queue byte limit reached ({} bytes), cannot queue new message for user {}",
+                current_bytes,
+                recipient_id
+            );
+            return false;
+        }
+
+        let content_len = match queries::find_message_by_id(&self.pool, &message_id).await {
+            Ok(Some(msg)) => msg.content.len(),
+            _ => 0,
+        };
+
         let queued_msg = QueuedMessage {
             message_id,
             recipient_id: recipient_id.clone(),
             retry_count: 0,
             next_retry_at: chrono::Utc::now().timestamp().max(0).cast_unsigned(),
+            content_len,
         };
 
         let mut queue = self.queue.write().await;
@@ -167,6 +191,7 @@ impl MessageQueueService {
         }
         user_queue.push(queued_msg);
         self.total_queued.fetch_add(1, Ordering::SeqCst);
+        self.total_bytes.fetch_add(content_len as u64, Ordering::SeqCst);
         true
     }
 
@@ -251,8 +276,10 @@ impl MessageQueueService {
         queue: Arc<RwLock<HashMap<String, Vec<QueuedMessage>>>>,
         messages: Vec<QueuedMessage>,
         total_queued: Arc<AtomicUsize>,
+        total_bytes: Arc<std::sync::atomic::AtomicU64>,
     ) {
         for queued_msg in messages {
+            let content_len = queued_msg.content_len;
             match Self::deliver_message(
                 pool,
                 message_service,
@@ -263,12 +290,14 @@ impl MessageQueueService {
             {
                 Ok(()) => {
                     total_queued.fetch_sub(1, Ordering::SeqCst);
+                    total_bytes.fetch_sub(content_len as u64, Ordering::SeqCst);
                 }
                 Err(reason) => {
                     if reason != "Recipient deleted" && reason != "Recipient not found" {
-                        Self::requeue_message(queue.clone(), queued_msg, total_queued.clone()).await;
+                        Self::requeue_message(queue.clone(), queued_msg, total_queued.clone(), total_bytes.clone()).await;
                     } else {
                         total_queued.fetch_sub(1, Ordering::SeqCst);
+                        total_bytes.fetch_sub(content_len as u64, Ordering::SeqCst);
                     }
                 }
             }
@@ -280,6 +309,7 @@ impl MessageQueueService {
         queue: Arc<RwLock<HashMap<String, Vec<QueuedMessage>>>>,
         mut queued_msg: QueuedMessage,
         total_queued: Arc<AtomicUsize>,
+        _total_bytes: Arc<std::sync::atomic::AtomicU64>,
     ) -> bool {
         let retry_index = queued_msg.retry_count.min(RETRY_SCHEDULE.len() - 1);
         let delay_seconds = RETRY_SCHEDULE[retry_index];
@@ -322,10 +352,12 @@ impl MessageQueueService {
                 recipient_id: message.recipient_id.clone(),
                 retry_count: 0,
                 next_retry_at: chrono::Utc::now().timestamp().max(0).cast_unsigned(),
+                content_len: message.content.len(),
             };
 
             user_queue.push(queued_msg);
             self.total_queued.fetch_add(1, Ordering::SeqCst);
+            self.total_bytes.fetch_add(message.content.len() as u64, Ordering::SeqCst);
         }
 
         Ok(())

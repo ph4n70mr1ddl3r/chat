@@ -44,6 +44,8 @@ pub async fn refresh_token_handler(
         ));
     };
 
+    const MIN_TOKEN_REMAINING_SECS: i64 = 300;
+
     let claims = match shared_auth_service.verify_token(&req.token).await {
         Ok(claims) => claims,
         Err(e) => {
@@ -58,6 +60,22 @@ pub async fn refresh_token_handler(
             ));
         }
     };
+
+    let remaining_secs = claims.exp as i64 - chrono::Utc::now().timestamp();
+    if remaining_secs < MIN_TOKEN_REMAINING_SECS {
+        warn!(
+            "Token refresh rejected: token too close to expiration ({}s remaining, need {}s)",
+            remaining_secs, MIN_TOKEN_REMAINING_SECS
+        );
+        return Ok(reply::with_status(
+            reply::json(&ErrorBody {
+                code: "TOKEN_TOO_OLD".to_string(),
+                message: "Token is too close to expiration to refresh. Please log in again.".to_string(),
+                details: None,
+            }),
+            warp::http::StatusCode::BAD_REQUEST,
+        ));
+    }
 
     if let Err(e) = csrf_service.validate_token(&csrf_token, &claims.sub) {
         warn!("CSRF validation failed for token refresh: {:?}", e);

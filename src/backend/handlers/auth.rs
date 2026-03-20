@@ -97,6 +97,7 @@ pub async fn logout_handler(
             crate::services::csrf::CsrfValidationError::Expired => "CSRF token expired",
             crate::services::csrf::CsrfValidationError::UserMismatch => "CSRF token user mismatch",
             crate::services::csrf::CsrfValidationError::InvalidToken => "Invalid CSRF token",
+            crate::services::csrf::CsrfValidationError::TokenTooOld => "CSRF token too old",
         };
         warn!("{error_msg} for logout request");
         return Ok(error_response!(
@@ -298,6 +299,7 @@ pub async fn login_handler(
             event = "auth.login.locked",
             "Login attempt on locked account"
         );
+        let _ = AuthService::verify_password(&req.password, DUMMY_BCRYPT_HASH_FOR_TIMING);
         return Ok(error_response!(
             "AUTH_ERROR",
             "Account temporarily locked due to too many failed attempts. Please try again later.",

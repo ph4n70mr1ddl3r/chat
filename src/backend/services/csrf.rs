@@ -28,6 +28,7 @@ pub enum CsrfValidationError {
     Expired,
     UserMismatch,
     InvalidToken,
+    TokenTooOld,
 }
 
 #[derive(Debug, Clone)]
@@ -103,6 +104,60 @@ impl CsrfService {
                         "CSRF token expired"
                     );
                     return Err(CsrfValidationError::Expired);
+                }
+                if !data.claims.validate_nonce() {
+                    tracing::warn!("CSRF token has invalid or missing nonce");
+                    return Err(CsrfValidationError::InvalidToken);
+                }
+                if !bool::from(data.claims.sub.as_bytes().ct_eq(user_id.as_bytes())) {
+                    tracing::warn!(
+                        expected_prefix = &user_id[..8.min(user_id.len())],
+                        "CSRF token user mismatch"
+                    );
+                    return Err(CsrfValidationError::UserMismatch);
+                }
+                Ok(())
+            }
+            Err(e) => {
+                tracing::warn!("CSRF token validation failed: {}", e);
+                Err(CsrfValidationError::InvalidToken)
+            }
+        }
+    }
+
+    /// Validate a CSRF token with freshness requirement for sensitive operations.
+    /// Requires the token to have been issued within the specified number of seconds.
+    ///
+    /// # Errors
+    /// Returns a `CsrfValidationError` if token validation fails or token is too old.
+    pub fn validate_token_fresh(
+        &self,
+        token: &str,
+        user_id: &str,
+        max_age_secs: i64,
+    ) -> Result<(), CsrfValidationError> {
+        let mut validation = Validation::new(Algorithm::HS256);
+        validation.set_required_spec_claims(&["sub", "iat", "exp"]);
+
+        match decode::<CsrfClaims>(token, &self.decoding_key, &validation) {
+            Ok(data) => {
+                let now = Utc::now().timestamp();
+                if data.claims.exp < now {
+                    tracing::warn!(
+                        user_id_prefix = &user_id[..8.min(user_id.len())],
+                        "CSRF token expired"
+                    );
+                    return Err(CsrfValidationError::Expired);
+                }
+                let token_age = now - data.claims.iat;
+                if token_age > max_age_secs {
+                    tracing::warn!(
+                        user_id_prefix = &user_id[..8.min(user_id.len())],
+                        token_age_secs = token_age,
+                        max_age_secs = max_age_secs,
+                        "CSRF token too old for sensitive operation"
+                    );
+                    return Err(CsrfValidationError::TokenTooOld);
                 }
                 if !data.claims.validate_nonce() {
                     tracing::warn!("CSRF token has invalid or missing nonce");
