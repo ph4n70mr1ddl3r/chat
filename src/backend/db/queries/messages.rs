@@ -3,6 +3,7 @@
 use crate::models::Message;
 use crate::utils::escape_like_pattern;
 use sqlx::SqlitePool;
+use uuid::Uuid;
 
 const SQL_SELECT_MESSAGE_FIELDS: &str =
     "SELECT id, conversation_id, sender_id, recipient_id, content, created_at, delivered_at, read_at, status, is_anonymized";
@@ -71,11 +72,15 @@ pub async fn insert_message(pool: &SqlitePool, message: &Message) -> Result<Mess
 ///
 /// # Errors
 ///
-/// Returns an error string if the database operation fails.
+/// Returns an error string if the message ID format is invalid or the database operation fails.
 pub async fn find_message_by_id(
     pool: &SqlitePool,
     message_id: &str,
 ) -> Result<Option<Message>, String> {
+    if Uuid::parse_str(message_id).is_err() {
+        return Err("Invalid message ID format".to_string());
+    }
+
     sqlx::query_as::<_, Message>(&format!(
         "{SQL_SELECT_MESSAGE_FIELDS} FROM messages WHERE id = ?"
     ))
@@ -89,13 +94,17 @@ pub async fn find_message_by_id(
 ///
 /// # Errors
 ///
-/// Returns an error string if the database operation fails.
+/// Returns an error string if the conversation ID format is invalid or the database operation fails.
 pub async fn get_messages_by_conversation(
     pool: &SqlitePool,
     conversation_id: &str,
     limit: u32,
     offset: u32,
 ) -> Result<Vec<Message>, String> {
+    if Uuid::parse_str(conversation_id).is_err() {
+        return Err("Invalid conversation ID format".to_string());
+    }
+
     let limit = limit.min(100);
     let offset = offset.min(10_000);
 
@@ -205,13 +214,17 @@ pub async fn anonymize_user_messages(pool: &SqlitePool, user_id: &str) -> Result
 ///
 /// # Errors
 ///
-/// Returns an error string if the database operation fails.
+/// Returns an error string if the conversation ID format is invalid or the database operation fails.
 pub async fn search_messages_in_conversation(
     pool: &SqlitePool,
     conversation_id: &str,
     query: &str,
     limit: u32,
 ) -> Result<Vec<Message>, String> {
+    if Uuid::parse_str(conversation_id).is_err() {
+        return Err("Invalid conversation ID format".to_string());
+    }
+
     let escaped = escape_like_pattern(query);
     let pattern = format!("%{escaped}%");
     let limit = limit.min(100);

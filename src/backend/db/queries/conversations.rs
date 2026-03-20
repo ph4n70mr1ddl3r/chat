@@ -2,6 +2,7 @@
 
 use crate::models::Conversation;
 use sqlx::SqlitePool;
+use uuid::Uuid;
 
 const SQL_SELECT_CONVERSATION_FIELDS: &str =
     "SELECT c.id, c.user1_id, c.user2_id, c.created_at, c.updated_at, c.last_message_at, c.message_count,
@@ -62,11 +63,15 @@ pub async fn get_conversation_by_users(
 ///
 /// # Errors
 ///
-/// Returns an error string if the database operation fails.
+/// Returns an error string if the conversation ID format is invalid or the database operation fails.
 pub async fn get_conversation_by_id(
     pool: &SqlitePool,
     conversation_id: &str,
 ) -> Result<Option<Conversation>, String> {
+    if Uuid::parse_str(conversation_id).is_err() {
+        return Err("Invalid conversation ID format".to_string());
+    }
+
     sqlx::query_as::<_, Conversation>(&format!(
         "{SQL_SELECT_CONVERSATION_FIELDS} FROM conversations c WHERE c.id = ?"
     ))
