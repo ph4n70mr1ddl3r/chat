@@ -8,6 +8,8 @@
 //! - POST /auth/login - user authentication
 //! - GET /conversations/* - conversation management (stubs for Phase 3+)
 
+use base64::prelude::{BASE64_STANDARD};
+use base64::Engine;
 use futures::{SinkExt, StreamExt};
 use sqlx::SqlitePool;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
